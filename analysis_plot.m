@@ -11,14 +11,20 @@ baseFolder = fileparts(thisFile);
 %% ====== 분석하고 싶은 output 설정 ======
 outs = struct([]);
 
-outs(1).name    = 'et_a01b0_iter300';
+outs(1).name    = 'et_a001b0_iter300';
 outs(1).iterNum = 300;
 
-outs(2).name    = 'et_a05b0_iter100';
-outs(2).iterNum = 100;
+outs(2).name    = 'et_a01b0_iter300';
+outs(2).iterNum = 300;
 
-% outs(3).name    = '...';
-% outs(3).iterNum = ...;
+outs(3).name    = 'et_a1b0_iter300';
+outs(3).iterNum = 300;
+
+outs(4).name    = 'et_a005b0_iter300';
+outs(4).iterNum = 300;
+
+outs(5).name    = 'et_a05b0_iter300';
+outs(5).iterNum = 300;
 
 %% ====== field name 정의 ======
 pelvisField  = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/value');
@@ -246,7 +252,7 @@ for o = 1:nOut
     scatter(All(o).metric.CMAPD_tot, All(o).metric.Speed, ms, All(o).metric.color, 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-hBase = scatter(baselineCMAPD, baselineSpeed, 120, 'k', 'filled', 'Marker', 'p');
+hBase = scatter(baselineCMAPD, baselineSpeed, 1000, 'k', 'filled', 'Marker', 'p');
 xlabel('CMAPD'); ylabel('Gait speed (m/s)');
 title('CMAPD vs Gait speed');
 set(gca,'FontSize',25);
@@ -262,7 +268,7 @@ for o = 1:nOut
     scatter(All(o).metric.CMAPD_tot, All(o).metric.deltaProp, ms, All(o).metric.color, 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-hBase = scatter(baselineCMAPD, 0, 120, 'k', 'filled', 'Marker', 'p');
+hBase = scatter(baselineCMAPD, 0, 1000, 'k', 'filled', 'Marker', 'p');
 xlabel('CMAPD'); ylabel('\Delta Propulsion (N·s)');
 title('CMAPD vs \Delta Propulsion');
 set(gca,'FontSize',25);
@@ -278,7 +284,7 @@ for o = 1:nOut
     scatter(All(o).metric.Speed, All(o).metric.deltaProp, ms, All(o).metric.color, 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-hBase = scatter(baselineSpeed, 0, 120, 'k', 'filled', 'Marker', 'p');
+hBase = scatter(baselineSpeed, 0, 1000, 'k', 'filled', 'Marker', 'p');
 xlabel('Gait speed (m/s)'); ylabel('\Delta Propulsion (N·s)');
 title('Gait speed vs \Delta Propulsion');
 set(gca,'FontSize',25);
@@ -299,7 +305,7 @@ title('Integral(F) vs CMAPD');
 set(gca,'FontSize',25);
 lg = {All.name};
 lg{end+1} = 'baseline';
-legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+legend([dummy;], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'inteF_CMAPD.png'), 'Resolution', 300);
 
 
