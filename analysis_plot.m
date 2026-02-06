@@ -102,6 +102,30 @@ for o = 1:numel(outs)
 
         All(o).iter(i).avgSpeed = avgSpeed;
 
+        % ---- Control ----
+        controlDir = fullfile(outDir, sprintf('result_%d', i), 'control_result');
+        ctrlPath   = fullfile(controlDir, 'control.sto');
+        fid = fopen(ctrlPath,'r');
+
+        line = fgetl(fid);
+        while ischar(line)
+            if startsWith(strtrim(line),'endheader'), break; end
+            line = fgetl(fid);
+        end
+
+        names = strsplit(strtrim(fgetl(fid)));
+        data  = fscanf(fid, '%f', [numel(names), Inf])';
+        fclose(fid);
+
+        idxT = find(strcmp(names,'time'),1);
+        idxU = find(strcmp(names,'AFO_r'),1);
+
+        tCtrl = data(:,idxT);
+        uCtrl = data(:,idxU);
+
+        All(o).iter(i).ctrl.t = tCtrl;
+        All(o).iter(i).ctrl.u = uCtrl;
+
     end
 end
 
@@ -145,64 +169,24 @@ dist0 = pelv0(end) - pelv0(1);
 baselineCMAPD = (trapz(tk0,g0) + trapz(tk0,s0)) / dist0;
 baselineSpeed = dist0 / (tk0(end) - tk0(1));
 
-%% ===== metrics per output =====
-for o = 1:numel(All)
-
-    iterNum = All(o).iterNum;
-
-    CMAPD_sol = nan(iterNum,1);
-    CMAPD_gast = nan(iterNum,1);
-    CMAPD_tot = nan(iterNum,1);
-    Speed = nan(iterNum,1);
-    deltaProp = nan(iterNum,1);
-
-    for i = 1:iterNum
-
-        % --- propulsion ---
-        t  = All(o).iter(i).grf.t(:);
-        vx = All(o).iter(i).grf.vx(:);
-        prop = trapz(t, max(vx,0));
-
-        deltaProp(i) = prop - baselineProp;
-
-        % --- CMAPD ---
-        tk   = All(o).iter(i).kin.t(:);
-        pelv = All(o).iter(i).kin.pelvisTx(:);
-        gAct = All(o).iter(i).kin.gastrocAct(:);
-        sAct = All(o).iter(i).kin.soleusAct(:);
-
-        dist = pelv(end) - pelv(1);
-        CMAPD_sol(i) = trapz(tk, sAct) / dist;
-        CMAPD_gast(i) = trapz(tk, gAct) / dist;
-        CMAPD_tot(i) = (trapz(tk, gAct) + trapz(tk, sAct)) / dist;
-
-        % --- speed ---
-        Speed(i) = All(o).iter(i).avgSpeed;
-    end
-
-    All(o).metric.CMAPD_sol = CMAPD_sol;
-    All(o).metric.CMAPD_gast = CMAPD_gast;
-    All(o).metric.CMAPD_tot = CMAPD_tot;
-    All(o).metric.Speed = Speed;
-    All(o).metric.deltaProp = deltaProp;
-end
-
 
 %% ===== metrics per output + gradient colors =====
 nOut = numel(All);
-baseColors = lines(nOut);          % output별 기준색
+baseColors = lines(nOut);           % output별 기준색
 minMix = 0.25;                      % 1번 iter의 "연함" 정도 (0~1, 클수록 더 하얘짐)
 ms = 30;                            % marker size
+optimalForce = 300;                 % AFO(PathActuator)의 optimal force
 
 for o = 1:nOut
 
     iterNum = All(o).iterNum;
 
-    CMAPD_sol = nan(iterNum,1);
+    CMAPD_sol  = nan(iterNum,1);
     CMAPD_gast = nan(iterNum,1);
-    CMAPD_tot = nan(iterNum,1);
-    Speed = nan(iterNum,1);
-    deltaProp(i) = prop - baselineProp;
+    CMAPD_tot  = nan(iterNum,1);
+    Speed      = nan(iterNum,1);
+    deltaProp  = nan(iterNum,1);
+    integralF  = nan(iterNum,1);
 
     % iter 그라데이션 색 (white -> baseColor)
     a = linspace(minMix, 1, iterNum)';          % 1: 연함, end: 진함
@@ -229,6 +213,11 @@ for o = 1:nOut
 
         % speed
         Speed(i) = All(o).iter(i).avgSpeed;
+
+        % integral(F) 
+        tc = All(o).iter(i).ctrl.t(:);
+        u  = All(o).iter(i).ctrl.u(:);
+        integralF(i) = trapz(tc, u * optimalForce);
     end
 
     All(o).metric.CMAPD_sol = CMAPD_sol;
@@ -236,64 +225,91 @@ for o = 1:nOut
     All(o).metric.CMAPD_tot = CMAPD_tot;
     All(o).metric.Speed = Speed;
     All(o).metric.deltaProp = deltaProp;
+    All(o).metric.integralF  = integralF;
     All(o).metric.color = iterColor;
 end
 
 
 %% ===== cluster plots =====
 
+FigureFolder = fullfile(baseFolder,'\analysis_fig');
+if ~exist(FigureFolder, 'dir')
+    mkdir(FigureFolder);
+end
+
 % legend용 더미 핸들
 dummy = gobjects(nOut,1);
 
 % 1) CMAPD vs Speed
-figure('Color','w','Position',[0 0 1200 800]);
-hold on; box on;
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    x = All(o).metric.CMAPD_tot;
-    y = All(o).metric.Speed;
-    c = All(o).metric.color;
-    scatter(x, y, ms, c, 'filled');
-    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:),'MarkerEdgeColor',baseColors(o,:));
+    scatter(All(o).metric.CMAPD_tot, All(o).metric.Speed, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-scatter(baselineCMAPD, baselineSpeed, 120, 'k', 'filled', 'Marker', 'p'); % baseline
-plot(nan,nan,'kp','MarkerFaceColor','k','MarkerEdgeColor','k');          % legend용
+hBase = scatter(baselineCMAPD, baselineSpeed, 120, 'k', 'filled', 'Marker', 'p');
 xlabel('CMAPD'); ylabel('Gait speed (m/s)');
 title('CMAPD vs Gait speed');
-set(gca,'FontSize',18);
-legend([dummy; gca().Children(1)], [string({All.name}) "baseline"], 'Location','best', 'Interpreter','none');
+set(gca,'FontSize',25);
+lg = {All.name};
+lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_Speed.png'), 'Resolution', 300);
 
 
 % 2) CMAPD vs delta(Propulsion)
-figure('Color','w','Position',[0 0 1200 800]);
-hold on; box on;
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    x = All(o).metric.CMAPD_tot;
-    y = All(o).metric.deltaProp;
-    c = All(o).metric.color;
-    scatter(x, y, ms, c, 'filled');
-    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:),'MarkerEdgeColor',baseColors(o,:));
+    scatter(All(o).metric.CMAPD_tot, All(o).metric.deltaProp, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-scatter(baselineCMAPD, 0, 120, 'k', 'filled', 'Marker', 'p');
-plot(nan,nan,'kp','MarkerFaceColor','k','MarkerEdgeColor','k');
+hBase = scatter(baselineCMAPD, 0, 120, 'k', 'filled', 'Marker', 'p');
 xlabel('CMAPD'); ylabel('\Delta Propulsion (N·s)');
 title('CMAPD vs \Delta Propulsion');
-set(gca,'FontSize',18);
-legend([dummy; gca().Children(1)], [string({All.name}) "baseline"], 'Location','best', 'Interpreter','none');
+set(gca,'FontSize',25);
+lg = {All.name};
+lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_Propulsion.png'), 'Resolution', 300);
 
 
 % 3) Speed vs delta(Propulsion)
-figure('Color','w','Position',[0 0 1200 800]);
-hold on; box on;
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    x = All(o).metric.Speed;
-    y = All(o).metric.deltaProp;
-    c = All(o).metric.color;
-    scatter(x, y, ms, c, 'filled');
-    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:),'MarkerEdgeColor',baseColors(o,:));
+    scatter(All(o).metric.Speed, All(o).metric.deltaProp, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-scatter(baselineSpeed, 0, 120, 'k', 'filled', 'Marker', 'p');
-plot(nan,nan,'kp','MarkerFaceColor','k','MarkerEdgeColor','k');
+hBase = scatter(baselineSpeed, 0, 120, 'k', 'filled', 'Marker', 'p');
 xlabel('Gait speed (m/s)'); ylabel('\Delta Propulsion (N·s)');
 title('Gait speed vs \Delta Propulsion');
-set(gca,'FontSize',18);
-legend([dummy; gca().Children(1)], [string({All.name}) "baseline"], 'Location','best', 'Interpreter','none');
+set(gca,'FontSize',25);
+lg = {All.name};
+lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'Speed_Propulsion.png'), 'Resolution', 300);
+
+
+% 4) integral(F) vs CMAPD
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    scatter(All(o).metric.integralF, All(o).metric.CMAPD_tot, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('Integral(F) (N·s)'); ylabel('CMAPD'); 
+title('Integral(F) vs CMAPD');
+set(gca,'FontSize',25);
+lg = {All.name};
+lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'inteF_CMAPD.png'), 'Resolution', 300);
+
+
+
+
+
+
+
+
+
+
+
+
