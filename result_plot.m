@@ -60,7 +60,6 @@ end
 
 t0       = grf0.time(:);
 vx0      = grf0.ground_force_r_vx(:);   % 컬럼 이름 환경에 맞게 확인
-t0_norm  = (t0 - t0(1)) / (t0(end) - t0(1));
 
 % ---------------- Guess baseline STO 읽기 (inline) --------------
 fid = fopen(guessInitSto,'r');
@@ -93,7 +92,6 @@ pelv0        = guess0.(pelvisField)(:);
 avgSpeed0    = (pelv0(end) - pelv0(1)) / (tg0(end) - tg0(1));
 gastrocAct0  = guess0.(gastrocField)(:);
 soleusAct0   = guess0.(soleusField)(:);
-tg0_norm     = (tg0 - tg0(1)) / (tg0(end) - tg0(1));
 
 %% iteration별 GRF control 읽기
 tGRF   = cell(iterNum, 1);
@@ -125,7 +123,7 @@ for i = 1:iterNum
     controlDir    = fullfile(iterRootDir, 'control_result');
     pkDir         = fullfile(iterRootDir, 'analy_result');
 
-    % ---------------- GRF STO 읽기 (inline) ----------------
+    % ---------------- GRF 데이터 가져오기 ----------------
     grfPath_i = fullfile(mocoResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', i)); % -> full stride
     fid = fopen(grfPath_i,'r');
     if fid == -1
@@ -158,7 +156,7 @@ for i = 1:iterNum
     tGRF{i} = ti;
     vxIter{i}   = vxi;
 
-    % ---------------- control STO 읽기 (inline) -------------
+    % ---------------- control 데이터 가져오기 -------------
     ctrlPath_i = fullfile(controlDir, 'control.sto');
     fid = fopen(ctrlPath_i,'r');
     if fid == -1
@@ -205,7 +203,7 @@ for i = 1:iterNum
     tNormData{i} = tci;
     etaIter{i}   = ui;
 
-    % ---------------- kinematics STO 읽기 ----------
+    % ---------------- kinematics 데이터 가져오기----------
     kinPath_i = fullfile(mocoResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i)); % -> full stride
     fid = fopen(kinPath_i,'r');
 
@@ -237,7 +235,7 @@ for i = 1:iterNum
     gastrocAct{i} = kin_i.(gastrocField)(:);
     soleusAct{i} = kin_i.(soleusField)(:);
 
-    % ---------------- cost 헤더 파싱 -----------------
+    % ---------------- cost 데이터 가져오기 -----------------
     costPath_i = fullfile(mocoResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i));
     if exist(costPath_i, 'file') == 2
         fid = fopen(costPath_i,'r');
@@ -274,11 +272,6 @@ for i = 1:iterNum
         objective_total(i)      = obj;
         objective_effort(i)     = objEff;
         objective_final_time(i) = objTime;
-
-        % objective가 비어있고 effort time만 있으면 합으로 채움
-        if isnan(objective_total(i)) && ~isnan(objective_effort(i)) && ~isnan(objective_final_time(i))
-            objective_total(i) = objective_effort(i) + objective_final_time(i);
-        end
     end
 end
 
@@ -321,17 +314,17 @@ colors(end,:) = red;
 figure('Color','w','Position',[0 0 1200 800]);
 hold on; box on;
 
-plot(t0_norm, vx0, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
+plot(t0, vx0, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
 
 for i = 1:iterNum
     plot(tGRF{i}, vxIter{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), LineWidth=1);
+        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
 end
 yline(0, '--');
 xlabel('Time (s)');
 ylabel('Force (N)');
 title(sprintf('%s, apGRF',OutputFolderName), 'Interpreter', 'none')
-set(gca, fontsize=25)
+set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '01_apGRF_right.png'), 'Resolution', 300);
 
 %% 2) Control plot (AFO_right)
@@ -340,13 +333,13 @@ hold on; box on;
 
 for i = 1:iterNum
     plot(tCtrl{i}, uIter{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), LineWidth=1);
+        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
 end
 
 xlabel('Time (s)');
 ylabel('Control (0~1)');
 title(sprintf('%s, AFO Optimal Control',OutputFolderName), 'Interpreter', 'none')
-set(gca, fontsize=25)
+set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '02_control_AFO_right.png'), 'Resolution', 300);
 
 %% 3) eta plot
@@ -357,14 +350,14 @@ plot(time_eta_baseline, eta_baseline, 'k', 'LineWidth', 4, 'DisplayName', 'basel
 
 for i = 1:iterNum
     plot(tNormData{i}, etaIter{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), LineWidth=1);
+        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
 end
 
 yline(0, '--');
 xlabel('Time (s)');
 ylabel('Eta');
 title(sprintf('%s, Propulsive Transfer Ratio',OutputFolderName), 'Interpreter', 'none')
-set(gca, fontsize=25)
+set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '03_eta_right.png'), 'Resolution', 300);
 
 %% 4) 평균 보행 속도 plot
@@ -382,41 +375,41 @@ ylabel('Avg Walking Speed (m/s)');
 xlim([-1 iterNum+1])
 final_stepTime = tKin{iterNum}(end);
 title(sprintf('%s, Final Step Time: %.4f',OutputFolderName, final_stepTime), 'Interpreter', 'none')
-set(gca, fontsize=25)
+set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '04_avg_walking_speed.png'), 'Resolution', 300);
 
 %% 5) gastroc activation plot
 figure('Color','w','Position',[0 0 1200 800]);
 hold on; box on;
 
-plot(tg0_norm, gastrocAct0, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
+plot(tg0, gastrocAct0, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
 
 for i = 1:iterNum
     plot(tKin{i}, gastrocAct{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), LineWidth=1);
+        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
 end
 
 xlabel('Time (s)');
 ylabel('Muscle Activation (0~1)');
 title(sprintf('%s, Gastroc Activation',OutputFolderName), 'Interpreter', 'none')
-set(gca, fontsize=25)
+set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '05_gastroc_r_activation.png'), 'Resolution', 300);
 
 %% 6) sol activation plot
 figure('Color','w','Position',[0 0 1200 800]);
 hold on; box on;
 
-plot(tg0_norm, soleusAct0, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
+plot(tg0, soleusAct0, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
 
 for i = 1:iterNum
     plot(tKin{i}, soleusAct{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), LineWidth=1);
+        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
 end
 
 xlabel('Time (s)');
 ylabel('Muscle Activation (0~1)');
 title(sprintf('%s, Soleus Activation',OutputFolderName), 'Interpreter', 'none')
-set(gca, fontsize=25)
+set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '06_soleus_r_activation.png'), 'Resolution', 300);
 
 %% 7) stride 비교
@@ -433,7 +426,7 @@ xlabel('Iteration');
 ylabel('Stride length (m)');
 xlim([-1 iterNum+1])
 title(sprintf('%s, Stride Length',OutputFolderName), 'Interpreter', 'none')
-set(gca, fontsize=25)
+set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '08_stride_length.png'), 'Resolution', 300);
 
 %% 8) cost 비교 (objective effort final_time total)
@@ -451,5 +444,6 @@ ylabel('Cost');
 xlim([-1 iterNum+1])
 title(sprintf('%s, Objective Cost',OutputFolderName), 'Interpreter', 'none')
 legend('Effort','FinalTime', 'Total', 'Location','best')
-set(gca, fontsize=25)
+set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '09_objective_cost.png'), 'Resolution', 300);
+
