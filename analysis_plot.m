@@ -26,6 +26,12 @@ outs(4).iterNum = 300;
 outs(5).name    = 'et_a1b0_iter300';
 outs(5).iterNum = 300;
 
+%% ====== Plot 저장 경로 설정 ======
+FigureFolder = fullfile(baseFolder,'\analysis_fig');
+if ~exist(FigureFolder, 'dir')
+    mkdir(FigureFolder);
+end
+
 %% ====== field name 정의 ======
 pelvisField  = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/value');
 gastrocField = matlab.lang.makeValidName('/gastroc_r/activation');
@@ -263,11 +269,6 @@ end
 
 
 %% ===== cluster plots =====
-
-FigureFolder = fullfile(baseFolder,'\analysis_fig');
-if ~exist(FigureFolder, 'dir')
-    mkdir(FigureFolder);
-end
 
 % legend용 더미 핸들
 dummy = gobjects(nOut,1);
