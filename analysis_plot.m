@@ -14,16 +14,16 @@ outs = struct([]);
 outs(1).name    = 'et_a001b0_iter300';
 outs(1).iterNum = 300;
 
-outs(2).name    = 'et_a01b0_iter300';
+outs(2).name    = 'et_a005b0_iter300';
 outs(2).iterNum = 300;
 
-outs(3).name    = 'et_a1b0_iter300';
+outs(3).name    = 'et_a01b0_iter300';
 outs(3).iterNum = 300;
 
-outs(4).name    = 'et_a005b0_iter300';
+outs(4).name    = 'et_a05b0_iter300';
 outs(4).iterNum = 300;
 
-outs(5).name    = 'et_a05b0_iter300';
+outs(5).name    = 'et_a1b0_iter300';
 outs(5).iterNum = 300;
 
 %% ====== field name 정의 ======
@@ -323,15 +323,15 @@ exportgraphics(gcf, fullfile(FigureFolder, 'Speed_Propulsion.png'), 'Resolution'
 % 4) integral(F) vs CMAPD
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.integralF, All(o).metric.CMAPD_tot, ms, All(o).metric.color, 'filled');
+    scatter(All(o).metric.CMAPD_tot, All(o).metric.integralF, ms, All(o).metric.color, 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-xlabel('Integral(F) (N·s)'); ylabel('CMAPD'); 
-title('Integral(F) vs CMAPD');
+xlabel('CMAPD'); ylabel('Integral(F) (N·s)'); 
+title('CMAPD vs Integral(F)');
 set(gca,'FontSize',25);
 lg = {All.name};
 legend([dummy;], lg, 'Location','best', 'Interpreter','none');
-exportgraphics(gcf, fullfile(FigureFolder, 'inteF_CMAPD.png'), 'Resolution', 300);
+exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_inteF.png'), 'Resolution', 300);
 
 
 % 5) elapsedTime vs walkingDist
@@ -341,7 +341,6 @@ for o = 1:nOut
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 hBase = scatter(baselineElapsed, baselineWalkingDist, 1000, 'k', 'filled', 'Marker', 'p');
-
 xlabel('Elapsed time (s)'); ylabel('Walking distance (m)');
 title('Elapsed time vs Walking distance');
 set(gca,'FontSize',25);
