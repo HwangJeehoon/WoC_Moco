@@ -11,9 +11,9 @@ end
 baseFolder = fileparts(thisFile);
 
 %% 기본 설정
-OutputFolderName = 'et_a01b0_iter300'; % 원하는 결과의 폴더 명
-figureFolderName = fullfile(OutputFolderName,'\fig');
-iterNum          = 100;
+OutputFolderName = 'et_a001b0_iter300'; % 원하는 결과의 폴더 명
+figureFolderName = fullfile(OutputFolderName,'\test');
+iterNum          = 300;
 
 OutputFolder   = fullfile(baseFolder, OutputFolderName);
 FigureFolder   = fullfile(baseFolder, figureFolderName);
@@ -29,10 +29,13 @@ pelvisField  = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/value
 gastrocField = matlab.lang.makeValidName('/gastroc_r/activation');
 soleusField  = matlab.lang.makeValidName('/soleus_r/activation');
 afoField     = matlab.lang.makeValidName('/AFO_r');
+pelvisSpeedField = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/speed');
 
-%% Baseline 읽기 및 시간 0~1 normalize
+Model_weight = 608.2092; % [N]
 
-% ---------------- GRF baseline STO 읽기 (inline) ----------------
+%% Baseline 읽기
+
+% ---------------- GRF baseline STO 읽기 ----------------
 fid = fopen(grfInitSto,'r');
 if fid == -1
     error('Cannot open %s', grfInitSto);
@@ -56,12 +59,11 @@ for k = 1:numel(names)
     fn = matlab.lang.makeValidName(names{k});
     grf0.(fn) = data(:,k);
 end
-% ---------------------------------------------------------------
 
 t0       = grf0.time(:);
 vx0      = grf0.ground_force_r_vx(:);   % 컬럼 이름 환경에 맞게 확인
 
-% ---------------- Guess baseline STO 읽기 (inline) --------------
+% ---------------- Kinematics baseline STO 읽기 --------------
 fid = fopen(guessInitSto,'r');
 if fid == -1
     error('Cannot open %s', guessInitSto);
@@ -85,15 +87,19 @@ for k = 1:numel(names)
     fn = matlab.lang.makeValidName(names{k});
     guess0.(fn) = data(:,k);
 end
-% ---------------------------------------------------------------
 
+% ------------------ Baseline 지표들 계산 ----------------------
 tg0          = guess0.time(:);
 pelv0        = guess0.(pelvisField)(:);
 avgSpeed0    = (pelv0(end) - pelv0(1)) / (tg0(end) - tg0(1));
 gastrocAct0  = guess0.(gastrocField)(:);
 soleusAct0   = guess0.(soleusField)(:);
+pelvSpeed0 = guess0.(pelvisSpeedField)(:);
+distance0 = pelv0(end) - pelv0(1);
 
 %% iteration별 GRF control 읽기
+
+% ----------- 변수 저장용 배열 사전정의-----------
 tGRF   = cell(iterNum, 1);
 vxIter     = cell(iterNum, 1);
 tCtrl  = cell(iterNum, 1);
@@ -110,10 +116,11 @@ soleusAct  = cell(iterNum, 1);
 afoKinIter  = cell(iterNum, 1);
 strideLength = zeros(iterNum, 1);
 
-% ----------- cost 저장용 배열 -----------
 objective_total      = nan(iterNum, 1);
 objective_effort     = nan(iterNum, 1);
 objective_final_time = nan(iterNum, 1);
+
+CoTIter = nan(iterNum, 1);
 % ---------------------------------------------
 
 for i = 1:iterNum
@@ -148,7 +155,6 @@ for i = 1:iterNum
         fn = matlab.lang.makeValidName(names{k});
         grf_i.(fn) = data(:,k);
     end
-    % -------------------------------------------------------
 
     ti        = grf_i.time(:);
     vxi       = grf_i.ground_force_r_vx(:);
@@ -181,7 +187,6 @@ for i = 1:iterNum
         fn = matlab.lang.makeValidName(names{k});
         ctrl_i.(fn) = data(:,k);
     end
-    % -------------------------------------------------------
 
     tci           = ctrl_i.time(:);
     ui            = ctrl_i.AFO_r(:);
@@ -189,8 +194,7 @@ for i = 1:iterNum
     tCtrl{i}  = tci;
     uIter{i}      = ui;
 
-    % data 파일
-    dataPath_i = fullfile(controlDir, 'data.csv');
+    dataPath_i = fullfile(controlDir, 'data.csv'); % data 파일
     data_i     = readtable(dataPath_i);
     tci        = data_i.stanceTime(:);
     ui         = data_i.eta(:);
@@ -225,7 +229,6 @@ for i = 1:iterNum
         fn = matlab.lang.makeValidName(names{k});
         kin_i.(fn) = data(:,k);
     end
-    % -------------------------------------------------------
 
     tk        = kin_i.time(:);
     tKin{i} = tk;
@@ -234,6 +237,11 @@ for i = 1:iterNum
     strideLength(i) = (pelv(end) - pelv(1))/2;
     gastrocAct{i} = kin_i.(gastrocField)(:);
     soleusAct{i} = kin_i.(soleusField)(:);
+
+    pelvSpeed = kin_i.(pelvisSpeedField)(:);
+    vFwd_onGRF = interp1(tk, pelvSpeed, ti, 'linear');
+    positive_apGRF     = max(vxi, 0);
+    CoTIter(i)      = trapz(ti, positive_apGRF .* vFwd_onGRF) / ((pelv(end) - pelv(1))*Model_weight); % CoT 계산
 
     % ---------------- cost 데이터 가져오기 -----------------
     costPath_i = fullfile(mocoResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i));
@@ -250,9 +258,7 @@ for i = 1:iterNum
         line = fgetl(fid);
         while ischar(line)
             s = strtrim(line);
-
-            % endheader 만나면 중단
-            if startsWith(s, 'endheader')
+            if startsWith(s, 'endheader') % endheader 만나면 중단
                 break;
             end
 
@@ -447,3 +453,21 @@ legend('Effort','FinalTime', 'Total', 'Location','best')
 set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '09_objective_cost.png'), 'Resolution', 300);
 
+%% 9) CoT plot
+figure('Color','w','Position',[0 0 1200 800]);
+hold on; box on;
+
+vFwd0_onGRF = interp1(tg0, pelvSpeed0, t0, 'linear');
+CoT0 = trapz(t0, max(vx0,0) .* vFwd0_onGRF) / (distance0*Model_weight);
+plot(0, CoT0, 'o-', 'Color',"black",'LineWidth', 10, 'DisplayName', 'baseline');
+
+iters = 1:iterNum;
+plot(iters, CoTIter, 'o-', 'LineWidth', 1.5, ...
+    'Color', [0 0.5 0.0], 'DisplayName', 'iter CoT');
+
+xlabel('Iteration');
+ylabel('CoT');
+xlim([-1 iterNum+1])
+title(sprintf('%s, Cost of Transport',OutputFolderName), 'Interpreter', 'none')
+set(gca, 'FontSize', 25)
+exportgraphics(gcf, fullfile(FigureFolder, '10_CoT.png'), 'Resolution', 300);
