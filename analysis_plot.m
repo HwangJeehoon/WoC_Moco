@@ -175,6 +175,9 @@ dist0 = pelv0(end) - pelv0(1);
 baselineCMAPD = (trapz(tk0,g0) + trapz(tk0,s0)) / dist0;
 baselineSpeed = dist0 / (tk0(end) - tk0(1));
 
+baselineElapsed = tk0(end) - tk0(1);
+baselineWalkingDist = dist0;
+
 
 %% ===== metrics per output + gradient colors =====
 nOut = numel(All);
@@ -193,6 +196,12 @@ for o = 1:nOut
     Speed      = nan(iterNum,1);
     deltaProp  = nan(iterNum,1);
     integralF  = nan(iterNum,1);
+
+    elapsedTime  = nan(iterNum,1);
+    walkingDist  = nan(iterNum,1);
+    peakApGRF    = nan(iterNum,1);
+    dP_over_dist = nan(iterNum,1);
+    dP_over_time = nan(iterNum,1);
 
     % iter 그라데이션 색 (white -> baseColor)
     a = linspace(minMix, 1, iterNum)';          % 1: 연함, end: 진함
@@ -224,6 +233,17 @@ for o = 1:nOut
         tc = All(o).iter(i).ctrl.t(:);
         u  = All(o).iter(i).ctrl.u(:);
         integralF(i) = trapz(tc, u * optimalForce);
+
+        % elapsed time, walking distance
+        elapsedTime(i) = tk(end) - tk(1);
+        walkingDist(i) = dist;
+
+        % peak apGRF
+        peakApGRF(i) = max(vx);
+
+        % normalized delta propulsion
+        dP_over_dist(i) = deltaProp(i) / dist;
+        dP_over_time(i) = deltaProp(i) / elapsedTime(i);
     end
 
     All(o).metric.CMAPD_sol = CMAPD_sol;
@@ -233,6 +253,12 @@ for o = 1:nOut
     All(o).metric.deltaProp = deltaProp;
     All(o).metric.integralF  = integralF;
     All(o).metric.color = iterColor;
+
+    All(o).metric.elapsedTime  = elapsedTime;
+    All(o).metric.walkingDist  = walkingDist;
+    All(o).metric.peakApGRF    = peakApGRF;
+    All(o).metric.dP_over_dist = dP_over_dist;
+    All(o).metric.dP_over_time = dP_over_time;
 end
 
 
@@ -304,18 +330,63 @@ xlabel('Integral(F) (N·s)'); ylabel('CMAPD');
 title('Integral(F) vs CMAPD');
 set(gca,'FontSize',25);
 lg = {All.name};
-lg{end+1} = 'baseline';
 legend([dummy;], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'inteF_CMAPD.png'), 'Resolution', 300);
 
 
+% 5) elapsedTime vs walkingDist
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    scatter(All(o).metric.elapsedTime, All(o).metric.walkingDist, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+hBase = scatter(baselineElapsed, baselineWalkingDist, 1000, 'k', 'filled', 'Marker', 'p');
+
+xlabel('Elapsed time (s)'); ylabel('Walking distance (m)');
+title('Elapsed time vs Walking distance');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'Elapsed_WalkingDist.png'), 'Resolution', 300);
 
 
+% 6) delta(propulsion) vs integral(F)
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    scatter(All(o).metric.deltaProp, All(o).metric.integralF, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('\Delta Propulsion (N·s)'); ylabel('Integral(F) (N·s)');
+title('\Delta Propulsion vs Integral(F)');
+set(gca,'FontSize',25);
+lg = {All.name};
+legend(dummy, lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'dProp_inteF.png'), 'Resolution', 300);
 
 
+% 7) Speed vs dP_over_dist
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    scatter(All(o).metric.Speed, All(o).metric.dP_over_dist, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('Gait speed (m/s)'); ylabel('\Delta Propulsion / distance (N·s/m)');
+title('Gait speed vs \Delta Propulsion / distance');
+set(gca,'FontSize',25);
+lg = {All.name};
+legend(dummy, lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'Speed_dP_over_dist.png'), 'Resolution', 300);
 
 
-
-
-
-
+% 8) Speed vs dP_over_dist
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    scatter(All(o).metric.Speed, All(o).metric.dP_over_time, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('Gait speed (m/s)'); ylabel('\Delta Propulsion / time (N)');
+title('Gait speed vs \Delta Propulsion / time');
+set(gca,'FontSize',25);
+lg = {All.name};
+legend(dummy, lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'Speed_dP_over_time.png'), 'Resolution', 300);
