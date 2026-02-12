@@ -27,7 +27,7 @@ outs(5).name    = 'et_a1b0_iter300';
 outs(5).iterNum = 300;
 
 %% ====== Plot 저장 경로 설정 ======
-FigureFolder = fullfile(baseFolder,'\analysis_fig');
+FigureFolder = fullfile(baseFolder,'\analysis_fig2');
 if ~exist(FigureFolder, 'dir')
     mkdir(FigureFolder);
 end
@@ -36,6 +36,7 @@ end
 pelvisField  = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/value');
 gastrocField = matlab.lang.makeValidName('/gastroc_r/activation');
 soleusField  = matlab.lang.makeValidName('/soleus_r/activation');
+pelvisSpeedField = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/speed');
 
 %% ====== 결과 저장 구조체 ======
 All = struct([]);
@@ -99,11 +100,13 @@ for o = 1:numel(outs)
         idxPx = find(strcmp(fn, pelvisField),1);
         idxGa = find(strcmp(fn, gastrocField),1);
         idxSa = find(strcmp(fn, soleusField),1);
+        idxVxPel = find(strcmp(fn, pelvisSpeedField),1);
 
         tKin = data(:,idxT);
         pelv = data(:,idxPx);
         gAct = data(:,idxGa);
         sAct = data(:,idxSa);
+        vPel = data(:,idxVxPel);
 
         avgSpeed = (pelv(end) - pelv(1)) / (tKin(end) - tKin(1));
 
@@ -111,8 +114,8 @@ for o = 1:numel(outs)
         All(o).iter(i).kin.pelvisTx   = pelv;
         All(o).iter(i).kin.gastrocAct = gAct;
         All(o).iter(i).kin.soleusAct  = sAct;
-
         All(o).iter(i).avgSpeed = avgSpeed;
+        All(o).iter(i).kin.pelvisTxSpeed = vPel;
 
         % ---- Control ----
         controlDir = fullfile(outDir, sprintf('result_%d', i), 'control_result');
@@ -176,6 +179,7 @@ tk0   = data(:, strcmp(fn,'time'));
 pelv0 = data(:, strcmp(fn, pelvisField));
 g0    = data(:, strcmp(fn, gastrocField));
 s0    = data(:, strcmp(fn, soleusField));
+vPel0 = data(:, strcmp(fn, pelvisSpeedField));
 
 dist0 = pelv0(end) - pelv0(1);
 baselineCMAPD = (trapz(tk0,g0) + trapz(tk0,s0)) / dist0;
@@ -184,6 +188,7 @@ baselineSpeed = dist0 / (tk0(end) - tk0(1));
 baselineElapsed = tk0(end) - tk0(1);
 baselineWalkingDist = dist0;
 
+baselineApWork = trapz(tk0, max(vx0,0) .* vPel0);
 
 %% ===== metrics per output + gradient colors =====
 nOut = numel(All);
@@ -208,6 +213,7 @@ for o = 1:nOut
     peakApGRF    = nan(iterNum,1);
     dP_over_dist = nan(iterNum,1);
     dP_over_time = nan(iterNum,1);
+    apWorkFromGRF = nan(iterNum,1);
 
     % iter 그라데이션 색 (white -> baseColor)
     a = linspace(minMix, 1, iterNum)';          % 1: 연함, end: 진함
@@ -250,6 +256,10 @@ for o = 1:nOut
         % normalized delta propulsion
         dP_over_dist(i) = deltaProp(i) / dist;
         dP_over_time(i) = deltaProp(i) / elapsedTime(i);
+
+        % apWork
+        vPel = All(o).iter(i).kin.pelvisTxSpeed(:);
+        apWorkFromGRF(i) = trapz(t, max(vx,0) .* vPel);
     end
 
     All(o).metric.CMAPD_sol = CMAPD_sol;
@@ -265,6 +275,7 @@ for o = 1:nOut
     All(o).metric.peakApGRF    = peakApGRF;
     All(o).metric.dP_over_dist = dP_over_dist;
     All(o).metric.dP_over_time = dP_over_time;
+    All(o).metric.apWork = apWorkFromGRF;
 end
 
 
@@ -321,7 +332,7 @@ legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Speed_Propulsion.png'), 'Resolution', 300);
 
 
-% 4) integral(F) vs CMAPD
+% 4) CMAPD vs integral(F)
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
     scatter(All(o).metric.CMAPD_tot, All(o).metric.integralF, ms, All(o).metric.color, 'filled');
@@ -390,3 +401,18 @@ set(gca,'FontSize',25);
 lg = {All.name};
 legend(dummy, lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Speed_dP_over_time.png'), 'Resolution', 300);
+
+
+% 9) CMAPD vs apWork
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    scatter(All(o).metric.CMAPD_tot, All(o).metric.apWork, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+hBase = scatter(baselineCMAPD, baselineApWork, 1000, 'k', 'filled', 'Marker', 'p');
+xlabel('CMAPD'); ylabel('Work (J)');
+title('CMAPD vs Positive AP Work');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_apWork.png'), 'Resolution', 300);
