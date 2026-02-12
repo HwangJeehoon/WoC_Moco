@@ -31,8 +31,6 @@ soleusField  = matlab.lang.makeValidName('/soleus_r/activation');
 afoField     = matlab.lang.makeValidName('/AFO_r');
 pelvisSpeedField = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/speed');
 
-Model_weight = 608.2092; % [N]
-
 %% Baseline 읽기
 
 % ---------------- GRF baseline STO 읽기 ----------------
@@ -120,7 +118,7 @@ objective_total      = nan(iterNum, 1);
 objective_effort     = nan(iterNum, 1);
 objective_final_time = nan(iterNum, 1);
 
-CoTIter = nan(iterNum, 1);
+apWorkFromGRF = nan(iterNum, 1);
 % ---------------------------------------------
 
 for i = 1:iterNum
@@ -241,7 +239,7 @@ for i = 1:iterNum
     pelvSpeed = kin_i.(pelvisSpeedField)(:);
     vFwd_onGRF = interp1(tk, pelvSpeed, ti, 'linear');
     positive_apGRF     = max(vxi, 0);
-    CoTIter(i)      = trapz(ti, positive_apGRF .* vFwd_onGRF) / ((pelv(end) - pelv(1))*Model_weight); % CoT 계산
+    apWorkFromGRF(i)  = trapz(ti, positive_apGRF .* vFwd_onGRF);
 
     % ---------------- cost 데이터 가져오기 -----------------
     costPath_i = fullfile(mocoResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i));
@@ -453,21 +451,21 @@ legend('Effort','FinalTime', 'Total', 'Location','best')
 set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '09_objective_cost.png'), 'Resolution', 300);
 
-%% 9) CoT plot
+%% 9) apWork plot
 figure('Color','w','Position',[0 0 1200 800]);
 hold on; box on;
 
 vFwd0_onGRF = interp1(tg0, pelvSpeed0, t0, 'linear');
-CoT0 = trapz(t0, max(vx0,0) .* vFwd0_onGRF) / (distance0*Model_weight);
-plot(0, CoT0, 'o-', 'Color',"black",'LineWidth', 10, 'DisplayName', 'baseline');
+apWork0 = trapz(t0, max(vx0,0) .* vFwd0_onGRF);
+plot(0, apWork0, 'o-', 'Color',"black",'LineWidth', 10, 'DisplayName', 'baseline');
 
 iters = 1:iterNum;
-plot(iters, CoTIter, 'o-', 'LineWidth', 1.5, ...
+plot(iters, apWorkFromGRF, 'o-', 'LineWidth', 1.5, ...
     'Color', [0 0.5 0.0], 'DisplayName', 'iter CoT');
 
 xlabel('Iteration');
-ylabel('CoT');
+ylabel('Work (J)');
 xlim([-1 iterNum+1])
-title(sprintf('%s, Cost of Transport',OutputFolderName), 'Interpreter', 'none')
+title(sprintf('%s, Positive AP Work',OutputFolderName), 'Interpreter', 'none')
 set(gca, 'FontSize', 25)
-exportgraphics(gcf, fullfile(FigureFolder, '10_CoT.png'), 'Resolution', 300);
+exportgraphics(gcf, fullfile(FigureFolder, '10_apWork.png'), 'Resolution', 300);
