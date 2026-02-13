@@ -1,5 +1,8 @@
-function WoC_moco_main(iter, a, b, cost, p, q, result_dir)
+function WoC_moco_main(iter, a, b, cost, p, q, result_dir, resume_mode, resume_dir)
 clc; close all;
+
+if nargin < 8 || isempty(resume_mode), resume_mode = false; end
+if nargin < 9, resume_dir = ''; end
 
 %% --------------------------------------------------
 %  0. baseFolder = 이 파일이 있는 폴더
@@ -60,24 +63,66 @@ grfInitSto   = fullfile(baseFolder, 'GRF_init_v5.sto');
 AnalySetupPath  = fullfile(baseFolder, 'analysis_setup.xml');
 
 %% --------------------------------------------------
+%  2.5 실행 범위 결정 (일반 / Resume)
+% ---------------------------------------------------
+if ~resume_mode
+    baseIter  = 0;
+    startIter = 1;
+    endIter   = iterNum;
+    fprintf('=== Normal mode: result_1 -> result_%d ===\n', endIter);
+else
+    if isempty(resume_dir)
+        error('Resume_mode=true 이면 Resume_dir를 지정해야 합니다.');
+    end
+
+    % Resume_dir가 baseFolder 기준 상대경로라고 가정 (예: 'et_a001b0_iter300\result_300')
+    resumeAbsDir = fullfile(baseFolder, resume_dir);
+
+    % result_XXX에서 XXX 파싱
+    [~, resumeFolderName] = fileparts(resumeAbsDir);
+    tok = regexp(resumeFolderName, '^result_(\d+)$', 'tokens', 'once');
+    if isempty(tok)
+        error('Resume_dir 마지막 폴더명이 result_### 형식이어야 합니다: %s', resumeFolderName);
+    end
+    baseIter = str2double(tok{1});
+
+    startIter = baseIter + 1;
+    endIter   = baseIter + iterNum;
+
+    fprintf('=== Resume mode: base = result_%d, run result_%d -> result_%d ===\n', ...
+        baseIter, startIter, endIter);
+end
+
+%% --------------------------------------------------
 %  3. 메인 루프
 % ---------------------------------------------------
-for i = 1:iterNum
-    fprintf('===== Iteration %d / %d =====\n', i, iterNum);
+for i = startIter:endIter
+    fprintf('===== Iteration %d / %d =====\n', i, iterNum+baseIter);
 
     %------------------------------------------------
     % 3-1. 이번 iteration에서 사용할
     %      (1) analy용 kinematics, (2) stance 검출용 GRF
     %------------------------------------------------
-    if i == 1
-        % 첫 iteration: tracking solution 기반 초기 가이트 사용
-        kinStoForAnaly = guessInitSto;
-        grfStoPath  = grfInitSto;
+    if ~resume_mode
+        if i == 1
+            kinStoForAnaly = guessInitSto;
+            grfStoPath     = grfInitSto;
+        else
+            prevResultDir  = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
+            kinStoForAnaly = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i-1));
+            grfStoPath     = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', i-1));
+        end
     else
-        % 이후 iteration: 직전 iteration의 moco 결과 사용
-        prevResultDir = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
-        kinStoForAnaly   = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i-1));
-        grfStoPath    = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', i-1));
+        if i == startIter
+            % Resume 첫 iteration은 Resume_dir(baseIter) 결과를 prev로 사용
+            prevResultDir  = fullfile(resumeAbsDir, 'moco_result');
+            kinStoForAnaly = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', baseIter));
+            grfStoPath     = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', baseIter));
+        else
+            prevResultDir  = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
+            kinStoForAnaly = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i-1));
+            grfStoPath     = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', i-1));
+        end
     end
 
     % 이번 iteration의 result_i 폴더들
@@ -87,7 +132,7 @@ for i = 1:iterNum
     controlResultDir = fullfile(iterRootDir, 'control_result');
 
     if ~exist(iterRootDir, 'dir');       mkdir(iterRootDir);       end
-    if ~exist(AnalyResultDir, 'dir');    mkdir(AnalyResultDir);       end
+    if ~exist(AnalyResultDir, 'dir');    mkdir(AnalyResultDir);    end
     if ~exist(mocoResultDir, 'dir');     mkdir(mocoResultDir);     end
     if ~exist(controlResultDir, 'dir');  mkdir(controlResultDir);  end
 
@@ -170,15 +215,24 @@ for i = 1:iterNum
     % 3-7. Moco loop: QP 결과 control을 reference로 넣고
     %      새로운 gait solution 계산
     %------------------------------------------------
-    if i == 1
-        % 첫 iteration: 초기 guess는 tracking solution 사용
-        guessStoPath = guessInitSto;
+    if ~resume_mode
+        if i == 1
+            guessStoPath = guessInitSto;
+        else
+            prevHalf = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result', ...
+                sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i-1));
+            guessStoPath = prevHalf;
+        end
     else
-        % 이후 iteration: 직전 iteration의 kinematics를 guess로 사용
-        prevKinematicsSto = fullfile( ...
-            fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result'), ...
-            sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i-1));
-        guessStoPath = prevKinematicsSto;
+        if i == startIter
+            prevHalf = fullfile(resumeAbsDir,'moco_result', ...
+                sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', baseIter));
+            guessStoPath = prevHalf;
+        else
+            prevHalf = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result', ...
+                sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i-1));
+            guessStoPath = prevHalf;
+        end
     end
 
     sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, MocoOpts);

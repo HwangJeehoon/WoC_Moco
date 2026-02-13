@@ -11,9 +11,9 @@ end
 baseFolder = fileparts(thisFile);
 
 %% 기본 설정
-OutputFolderName = 'et_a001b0_iter300'; % 원하는 결과의 폴더 명
-figureFolderName = fullfile(OutputFolderName,'\test');
-iterNum          = 300;
+OutputFolderName = 'et_a001b0_iter600'; % 원하는 결과의 폴더 명
+figureFolderName = fullfile(OutputFolderName,'\Fig');
+iterNum          = 600;
 
 OutputFolder   = fullfile(baseFolder, OutputFolderName);
 FigureFolder   = fullfile(baseFolder, figureFolderName);
