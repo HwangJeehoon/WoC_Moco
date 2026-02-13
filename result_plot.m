@@ -11,9 +11,9 @@ end
 baseFolder = fileparts(thisFile);
 
 %% 기본 설정
-OutputFolderName = 'et_a001b0_iter600'; % 원하는 결과의 폴더 명
+OutputFolderName = 'et_a001b1_iter300'; % 원하는 결과의 폴더 명
 figureFolderName = fullfile(OutputFolderName,'\Fig');
-iterNum          = 600;
+iterNum          = 300;
 
 OutputFolder   = fullfile(baseFolder, OutputFolderName);
 FigureFolder   = fullfile(baseFolder, figureFolderName);
@@ -93,7 +93,7 @@ avgSpeed0    = (pelv0(end) - pelv0(1)) / (tg0(end) - tg0(1));
 gastrocAct0  = guess0.(gastrocField)(:);
 soleusAct0   = guess0.(soleusField)(:);
 pelvSpeed0 = guess0.(pelvisSpeedField)(:);
-distance0 = pelv0(end) - pelv0(1);
+stride0 = pelv0(end) - pelv0(1);
 
 %% iteration별 GRF control 읽기
 
@@ -232,7 +232,7 @@ for i = 1:iterNum
     tKin{i} = tk;
     pelv = kin_i.(pelvisField)(:);
     avgSpeedIter(i) = (pelv(end) - pelv(1)) / (tk(end) - tk(1));
-    strideLength(i) = (pelv(end) - pelv(1))/2;
+    strideLength(i) = (pelv(end) - pelv(1));
     gastrocAct{i} = kin_i.(gastrocField)(:);
     soleusAct{i} = kin_i.(soleusField)(:);
 
@@ -342,6 +342,7 @@ end
 
 xlabel('Time (s)');
 ylabel('Control (0~1)');
+ylim([0 1])
 title(sprintf('%s, AFO Optimal Control',OutputFolderName), 'Interpreter', 'none')
 set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '02_control_AFO_right.png'), 'Resolution', 300);
@@ -420,10 +421,10 @@ exportgraphics(gcf, fullfile(FigureFolder, '06_soleus_r_activation.png'), 'Resol
 figure('Color','w','Position',[0 0 1200 800]);
 hold on; box on;
 
-plot(0, strideLength(1), 'o-', 'Color',"black",'LineWidth', 10, 'DisplayName', 'baseline');
+plot(0, stride0, 'o-', 'Color',"black",'LineWidth', 10, 'DisplayName', 'baseline');
 
-iters = 1:iterNum-1;
-plot(iters, strideLength(2:end), 'o-', 'LineWidth', 1.5, ...
+iters = 1:iterNum;
+plot(iters, strideLength(1:end), 'o-', 'LineWidth', 1.5, ...
     'Color', [0 0.5 0.0], 'DisplayName', 'iter speed');
 
 xlabel('Iteration');

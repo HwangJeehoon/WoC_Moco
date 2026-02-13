@@ -27,7 +27,7 @@ outs(5).name    = 'et_a1b0_iter300';
 outs(5).iterNum = 300;
 
 %% ====== Plot 저장 경로 설정 ======
-FigureFolder = fullfile(baseFolder,'\analysis_fig2');
+FigureFolder = fullfile(baseFolder,'\analysis_fig');
 if ~exist(FigureFolder, 'dir')
     mkdir(FigureFolder);
 end
@@ -162,6 +162,7 @@ fclose(fid);
 t0  = data(:, strcmp(names,'time'));
 vx0 = data(:, strcmp(names,'ground_force_r_vx'));
 baselineProp = trapz(t0, max(vx0,0));
+baselinePeakAp = max(vx0);
 
 % --- baseline CMAPD, Speed ---
 fid = fopen(guessInitSto,'r');
@@ -181,12 +182,12 @@ g0    = data(:, strcmp(fn, gastrocField));
 s0    = data(:, strcmp(fn, soleusField));
 vPel0 = data(:, strcmp(fn, pelvisSpeedField));
 
-dist0 = pelv0(end) - pelv0(1);
-baselineCMAPD = (trapz(tk0,g0) + trapz(tk0,s0)) / dist0;
-baselineSpeed = dist0 / (tk0(end) - tk0(1));
+stride0 = pelv0(end) - pelv0(1);
+baselineCMAPD = (trapz(tk0,g0) + trapz(tk0,s0)) / stride0;
+baselineSpeed = stride0 / (tk0(end) - tk0(1));
 
 baselineElapsed = tk0(end) - tk0(1);
-baselineWalkingDist = dist0;
+baselineStride = stride0;
 
 baselineApWork = trapz(tk0, max(vx0,0) .* vPel0);
 
@@ -209,7 +210,7 @@ for o = 1:nOut
     integralF  = nan(iterNum,1);
 
     elapsedTime  = nan(iterNum,1);
-    walkingDist  = nan(iterNum,1);
+    strideLength  = nan(iterNum,1);
     peakApGRF    = nan(iterNum,1);
     dP_over_dist = nan(iterNum,1);
     dP_over_time = nan(iterNum,1);
@@ -248,7 +249,7 @@ for o = 1:nOut
 
         % elapsed time, walking distance
         elapsedTime(i) = tk(end) - tk(1);
-        walkingDist(i) = dist;
+        strideLength(i) = dist;
 
         % peak apGRF
         peakApGRF(i) = max(vx);
@@ -271,7 +272,7 @@ for o = 1:nOut
     All(o).metric.color = iterColor;
 
     All(o).metric.elapsedTime  = elapsedTime;
-    All(o).metric.walkingDist  = walkingDist;
+    All(o).metric.strideLength  = strideLength;
     All(o).metric.peakApGRF    = peakApGRF;
     All(o).metric.dP_over_dist = dP_over_dist;
     All(o).metric.dP_over_time = dP_over_time;
@@ -346,19 +347,19 @@ legend([dummy;], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_inteF.png'), 'Resolution', 300);
 
 
-% 5) elapsedTime vs walkingDist
+% 5) elapsedTime vs strideLength
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.elapsedTime, All(o).metric.walkingDist, ms, All(o).metric.color, 'filled');
+    scatter(All(o).metric.elapsedTime, All(o).metric.strideLength, ms, All(o).metric.color, 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-hBase = scatter(baselineElapsed, baselineWalkingDist, 1000, 'k', 'filled', 'Marker', 'p');
-xlabel('Elapsed time (s)'); ylabel('Walking distance (m)');
-title('Elapsed time vs Walking distance');
+hBase = scatter(baselineElapsed, baselineStride, 1000, 'k', 'filled', 'Marker', 'p');
+xlabel('Elapsed time (s)'); ylabel('Stride length (m)');
+title('Elapsed time vs Stride length');
 set(gca,'FontSize',25);
 lg = {All.name}; lg{end+1} = 'baseline';
 legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
-exportgraphics(gcf, fullfile(FigureFolder, 'Elapsed_WalkingDist.png'), 'Resolution', 300);
+exportgraphics(gcf, fullfile(FigureFolder, 'Elapsed_Stride.png'), 'Resolution', 300);
 
 
 % 6) delta(propulsion) vs integral(F)
@@ -389,7 +390,7 @@ legend(dummy, lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Speed_dP_over_dist.png'), 'Resolution', 300);
 
 
-% 8) Speed vs dP_over_dist
+% 8) Speed vs dP_over_time
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
     scatter(All(o).metric.Speed, All(o).metric.dP_over_time, ms, All(o).metric.color, 'filled');
@@ -416,3 +417,18 @@ set(gca,'FontSize',25);
 lg = {All.name}; lg{end+1} = 'baseline';
 legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_apWork.png'), 'Resolution', 300);
+
+
+% 10) Speed vs peakApGRF
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    scatter(All(o).metric.Speed, All(o).metric.peakApGRF, ms, All(o).metric.color, 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+hBase = scatter(baselineSpeed, baselinePeakAp, 1000, 'k', 'filled', 'Marker', 'p');
+xlabel('Gait speed (m/s)'); ylabel('Peak apGRF (N)');
+title('Gait speed vs Peak apGRF');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'Speed_peakAp.png'), 'Resolution', 300);
