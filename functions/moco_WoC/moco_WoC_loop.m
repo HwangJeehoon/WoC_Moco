@@ -1,4 +1,4 @@
-function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, resultsDir, opts)
+function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, resultsDir, model ,opts)
 % moco_WoC_loop
 %
 %   오른발 AFO reference control(.sto)와
@@ -43,7 +43,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     col_r = 'AFO_r';
     col_l = 'AFO_l';
 
-    baseOsimPath = '2D_gait_AFO_pc.osim';
+    baseOsimPath = model;
 
     % ---- 1) STO 읽기 (Storage + ArrayDouble) ----
     sto = Storage(controlInitStoPath);

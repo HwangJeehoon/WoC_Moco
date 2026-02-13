@@ -1,4 +1,4 @@
-function WoC_moco_main(iter, a, b, cost, p, q, result_dir, resume_mode, resume_dir)
+function WoC_moco_main(model, iter, a, b, cost, p, q, result_dir, resume_mode, resume_dir)
 clc; close all;
 
 if nargin < 8 || isempty(resume_mode), resume_mode = false; end
@@ -17,6 +17,9 @@ baseFolder = fileparts(thisFile);
 %% --------------------------------------------------
 %  1. 파라미터 설정 + Output 폴더명 지정
 % ---------------------------------------------------
+
+% 사용할 model명 지정
+ModelName = model;
 
 % QP Parameter
 iterNum          = iter;    % 원하는 iteration 수
@@ -142,6 +145,7 @@ for i = startIter:endIter
     % analy_setup.xml 안에 PointKinematics가 정의되어 있고,
     % AnalyzeTool 결과 디렉터리가 AnalyResultDir가 되도록 override
     WoC_moco_analysis(AnalySetupPath, ...
+        'modelPath', ModelName,...
         'kinematicsStoPath', kinStoForAnaly, ...
         'resultsDir', AnalyResultDir);
 
@@ -235,13 +239,13 @@ for i = startIter:endIter
         end
     end
 
-    sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, MocoOpts);
+    sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, ModelName,MocoOpts);
 
     %------------------------------------------------
     % 3-8. moco 결과 저장 (kinematics, GRF 등)
     %------------------------------------------------
     resOpts           = struct();
-    resOpts.modelPath = fullfile(baseFolder, '2D_gait_AFO_pc.osim');
+    resOpts.modelPath = fullfile(baseFolder, ModelName);
     resOpts.prefix    = sprintf('moco_WoC_Solution_iter%02d', i);
 
     moco_WoC_getResult(sol, mocoResultDir, resOpts);
