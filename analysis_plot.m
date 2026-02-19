@@ -34,9 +34,18 @@ end
 
 %% ====== field name 정의 ======
 pelvisField  = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/value');
+pelvisSpeedField = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/speed');
+
 gastrocField = matlab.lang.makeValidName('/gastroc_r/activation');
 soleusField  = matlab.lang.makeValidName('/soleus_r/activation');
-pelvisSpeedField = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/speed');
+tibAntField  = matlab.lang.makeValidName('/tib_ant_r/activation');
+rectFemField  = matlab.lang.makeValidName('/rect_fem_r/activation');
+
+hamStringField  = matlab.lang.makeValidName('/hamstrings_r/activation');
+biFemshField  = matlab.lang.makeValidName('/bifemsh_r/activation');
+glutMaxField  = matlab.lang.makeValidName('/glut_max_r/activation');
+iliopsoasField  = matlab.lang.makeValidName('/iliopsoas_r/activation');
+vastiField  = matlab.lang.makeValidName('/vasti_r/activation');
 
 %% ====== 결과 저장 구조체 ======
 All = struct([]);
@@ -98,24 +107,51 @@ for o = 1:numel(outs)
         fn = matlab.lang.makeValidName(names);
         idxT  = find(strcmp(fn,'time'),1);
         idxPx = find(strcmp(fn, pelvisField),1);
+        idxVxPel = find(strcmp(fn, pelvisSpeedField),1);
+
         idxGa = find(strcmp(fn, gastrocField),1);
         idxSa = find(strcmp(fn, soleusField),1);
-        idxVxPel = find(strcmp(fn, pelvisSpeedField),1);
+        idxTA  = find(strcmp(fn, tibAntField),1);
+        idxRF  = find(strcmp(fn, rectFemField),1);
+
+        idxHS  = find(strcmp(fn, hamStringField),1);
+        idxBFS = find(strcmp(fn, biFemshField),1);
+        idxGM  = find(strcmp(fn, glutMaxField),1);
+        idxIL  = find(strcmp(fn, iliopsoasField),1);
+        idxVA  = find(strcmp(fn, vastiField),1);
 
         tKin = data(:,idxT);
         pelv = data(:,idxPx);
+        vPel = data(:,idxVxPel);
+
         gAct = data(:,idxGa);
         sAct = data(:,idxSa);
-        vPel = data(:,idxVxPel);
+        tibAnt = data(:,idxTA);
+        rectFem = data(:,idxRF);
+
+        hamStr  = data(:,idxHS);
+        biFemsh = data(:,idxBFS);
+        glutMax = data(:,idxGM);
+        iliopsoas = data(:,idxIL);
+        vasti   = data(:,idxVA);
 
         avgSpeed = (pelv(end) - pelv(1)) / (tKin(end) - tKin(1));
 
         All(o).iter(i).kin.t          = tKin;
         All(o).iter(i).kin.pelvisTx   = pelv;
+        All(o).iter(i).kin.pelvisTxSpeed = vPel;
+        All(o).iter(i).avgSpeed = avgSpeed;
+
         All(o).iter(i).kin.gastrocAct = gAct;
         All(o).iter(i).kin.soleusAct  = sAct;
-        All(o).iter(i).avgSpeed = avgSpeed;
-        All(o).iter(i).kin.pelvisTxSpeed = vPel;
+        All(o).iter(i).kin.tibAntAct   = tibAnt;
+        All(o).iter(i).kin.rectFemAct  = rectFem;
+        
+        All(o).iter(i).kin.hamStrAct   = hamStr;
+        All(o).iter(i).kin.biFemshAct  = biFemsh;
+        All(o).iter(i).kin.glutMaxAct  = glutMax;
+        All(o).iter(i).kin.iliopsoasAct = iliopsoas;
+        All(o).iter(i).kin.vastiAct    = vasti;
 
         % ---- Control ----
         controlDir = fullfile(outDir, sprintf('result_%d', i), 'control_result');
@@ -140,7 +176,6 @@ for o = 1:numel(outs)
 
         All(o).iter(i).ctrl.t = tCtrl;
         All(o).iter(i).ctrl.u = uCtrl;
-
     end
 end
 
@@ -178,17 +213,33 @@ fclose(fid);
 fn = matlab.lang.makeValidName(names);
 tk0   = data(:, strcmp(fn,'time'));
 pelv0 = data(:, strcmp(fn, pelvisField));
-g0    = data(:, strcmp(fn, gastrocField));
-s0    = data(:, strcmp(fn, soleusField));
 vPel0 = data(:, strcmp(fn, pelvisSpeedField));
 
-stride0 = pelv0(end) - pelv0(1);
-baselineCMAPD = (trapz(tk0,g0) + trapz(tk0,s0)) / stride0;
-baselineSpeed = stride0 / (tk0(end) - tk0(1));
+g0    = data(:, strcmp(fn, gastrocField));
+s0    = data(:, strcmp(fn, soleusField));
+ta0  = data(:, strcmp(fn, tibAntField));
+rf0  = data(:, strcmp(fn, rectFemField));
 
+hs0  = data(:, strcmp(fn, hamStringField));
+bfs0 = data(:, strcmp(fn, biFemshField));
+gm0  = data(:, strcmp(fn, glutMaxField));
+il0  = data(:, strcmp(fn, iliopsoasField));
+va0  = data(:, strcmp(fn, vastiField));
+
+% Cal baseline metric 
+
+stride0 = pelv0(end) - pelv0(1);
+
+baselineCMAPD_GS     = (trapz(tk0,g0) + trapz(tk0,s0)) / stride0;
+baselineCMAPD_Shank  = (trapz(tk0,g0) + trapz(tk0,s0) + trapz(tk0,ta0)) / stride0;
+baselineCMAPD_4set   = (trapz(tk0,g0) + trapz(tk0,s0) + trapz(tk0,ta0) + trapz(tk0,rf0)) / stride0;
+baselineCMAPD_whole  = ( ...
+    trapz(tk0,g0) + trapz(tk0,s0) + trapz(tk0,ta0) + trapz(tk0,rf0) + ...
+    trapz(tk0,hs0) + trapz(tk0,bfs0) + trapz(tk0,gm0) + trapz(tk0,il0) + trapz(tk0,va0) ) / stride0;
+
+baselineSpeed = stride0 / (tk0(end) - tk0(1));
 baselineElapsed = tk0(end) - tk0(1);
 baselineStride = stride0;
-
 baselineApWork = trapz(tk0, max(vx0,0) .* vPel0);
 
 %% ===== metrics per output + gradient colors =====
@@ -199,14 +250,16 @@ ms = 30;                            % marker size
 optimalForce = 300;                 % AFO(PathActuator)의 optimal force
 
 for o = 1:nOut
-
     iterNum = All(o).iterNum;
 
-    CMAPD_sol  = nan(iterNum,1);
-    CMAPD_gast = nan(iterNum,1);
-    CMAPD_tot  = nan(iterNum,1);
+    CMAPD_GS     = nan(iterNum,1);
+    CMAPD_Shank  = nan(iterNum,1);
+    CMAPD_4set   = nan(iterNum,1);
+    CMAPD_whole  = nan(iterNum,1);
+
     Speed      = nan(iterNum,1);
     deltaProp  = nan(iterNum,1);
+    Prop       = nan(iterNum,1);
     integralF  = nan(iterNum,1);
 
     elapsedTime  = nan(iterNum,1);
@@ -221,23 +274,35 @@ for o = 1:nOut
     iterColor = (1-a)*[1 1 1] + a*baseColors(o,:);  % [iterNum x 3]
 
     for i = 1:iterNum
-
         % propulsion
         t  = All(o).iter(i).grf.t(:);
         vx = All(o).iter(i).grf.vx(:);
         prop = trapz(t, max(vx,0));
+        Prop(i) = prop;
         deltaProp(i) = prop - baselineProp;
 
         % CMAPD
+        dist = pelv(end) - pelv(1);
         tk   = All(o).iter(i).kin.t(:);
         pelv = All(o).iter(i).kin.pelvisTx(:);
+
         gAct = All(o).iter(i).kin.gastrocAct(:);
         sAct = All(o).iter(i).kin.soleusAct(:);
+        taAct  = All(o).iter(i).kin.tibAntAct(:);
+        rfAct  = All(o).iter(i).kin.rectFemAct(:);
 
-        dist = pelv(end) - pelv(1);
-        CMAPD_sol(i) = trapz(tk, sAct) / dist;
-        CMAPD_gast(i) = trapz(tk, gAct) / dist;
-        CMAPD_tot(i) = (trapz(tk, gAct) + trapz(tk, sAct)) / dist;
+        hsAct  = All(o).iter(i).kin.hamStrAct(:);
+        bfsAct = All(o).iter(i).kin.biFemshAct(:);
+        gmAct  = All(o).iter(i).kin.glutMaxAct(:);
+        ilAct  = All(o).iter(i).kin.iliopsoasAct(:);
+        vaAct  = All(o).iter(i).kin.vastiAct(:);
+
+        CMAPD_GS(i)    = (trapz(tk,gAct) + trapz(tk,sAct)) / dist;
+        CMAPD_Shank(i) = (trapz(tk,gAct) + trapz(tk,sAct) + trapz(tk,taAct)) / dist;
+        CMAPD_4set(i)  = (trapz(tk,gAct) + trapz(tk,sAct) + trapz(tk,taAct) + trapz(tk,rfAct)) / dist;
+        CMAPD_whole(i) = ( ...
+            trapz(tk,gAct) + trapz(tk,sAct) + trapz(tk,taAct) + trapz(tk,rfAct) + ...
+            trapz(tk,hsAct) + trapz(tk,bfsAct) + trapz(tk,gmAct) + trapz(tk,ilAct) + trapz(tk,vaAct) ) / dist;
 
         % speed
         Speed(i) = All(o).iter(i).avgSpeed;
@@ -263,11 +328,15 @@ for o = 1:nOut
         apWorkFromGRF(i) = trapz(t, max(vx,0) .* vPel);
     end
 
-    All(o).metric.CMAPD_sol = CMAPD_sol;
-    All(o).metric.CMAPD_gast = CMAPD_gast;
-    All(o).metric.CMAPD_tot = CMAPD_tot;
+    % Save metrics
+    All(o).metric.CMAPD_GS    = CMAPD_GS;
+    All(o).metric.CMAPD_Shank = CMAPD_Shank;
+    All(o).metric.CMAPD_4set  = CMAPD_4set;
+    All(o).metric.CMAPD_whole = CMAPD_whole;
+
     All(o).metric.Speed = Speed;
     All(o).metric.deltaProp = deltaProp;
+    All(o).metric.Prop = Prop;
     All(o).metric.integralF  = integralF;
     All(o).metric.color = iterColor;
 
@@ -285,10 +354,10 @@ end
 % legend용 더미 핸들
 dummy = gobjects(nOut,1);
 
-% 1) CMAPD vs Speed
+% 1) CMAPD_GS vs Speed
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.CMAPD_tot, All(o).metric.Speed, ms, All(o).metric.color, 'filled');
+    scatter(All(o).metric.CMAPD_GS, All(o).metric.Speed, ms, All(o).metric.color, 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 hBase = scatter(baselineCMAPD, baselineSpeed, 1000, 'k', 'filled', 'Marker', 'p');
@@ -301,10 +370,10 @@ legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_Speed.png'), 'Resolution', 300);
 
 
-% 2) CMAPD vs delta(Propulsion)
+% 2) CMAPD_GS vs delta(Propulsion)
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.CMAPD_tot, All(o).metric.deltaProp, ms, All(o).metric.color, 'filled');
+    scatter(All(o).metric.CMAPD_GS, All(o).metric.deltaProp, ms, All(o).metric.color, 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 hBase = scatter(baselineCMAPD, 0, 1000, 'k', 'filled', 'Marker', 'p');
@@ -333,10 +402,10 @@ legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Speed_Propulsion.png'), 'Resolution', 300);
 
 
-% 4) CMAPD vs integral(F)
+% 4) CMAPD_GS vs integral(F)
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.CMAPD_tot, All(o).metric.integralF, ms, All(o).metric.color, 'filled');
+    scatter(All(o).metric.CMAPD_GS, All(o).metric.integralF, ms, All(o).metric.color, 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 xlabel('CMAPD'); ylabel('Integral(F) (N·s)'); 
@@ -404,10 +473,10 @@ legend(dummy, lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Speed_dP_over_time.png'), 'Resolution', 300);
 
 
-% 9) CMAPD vs apWork
+% 9) CMAPD_GS vs apWork
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.CMAPD_tot, All(o).metric.apWork, ms, All(o).metric.color, 'filled');
+    scatter(All(o).metric.CMAPD_GS, All(o).metric.apWork, ms, All(o).metric.color, 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 hBase = scatter(baselineCMAPD, baselineApWork, 1000, 'k', 'filled', 'Marker', 'p');
