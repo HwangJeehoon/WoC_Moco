@@ -35,6 +35,7 @@ end
 %% ====== field name 정의 ======
 pelvisField  = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/value');
 pelvisSpeedField = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/speed');
+ankleAngVelField = matlab.lang.makeValidName('ankle_angle_r');
 
 gastrocField = matlab.lang.makeValidName('/gastroc_r/activation');
 soleusField  = matlab.lang.makeValidName('/soleus_r/activation');
@@ -153,6 +154,30 @@ for o = 1:numel(outs)
         All(o).iter(i).kin.iliopsoasAct = iliopsoas;
         All(o).iter(i).kin.vastiAct    = vasti;
 
+
+        % ---- Analy (ankle angular velocity) ----
+        analyDir = fullfile(outDir, sprintf('result_%d', i), 'analy_result');
+        KinematicsPath = fullfile(analyDir, '2D_gait_AFO_pc_Kinematics_u.sto');
+
+        fid = fopen(KinematicsPath,'r');
+        line = fgetl(fid);
+        while ischar(line)
+            if startsWith(strtrim(line),'endheader'), break; end
+            line = fgetl(fid);
+        end
+
+        names = strsplit(strtrim(fgetl(fid)));
+        data  = fscanf(fid, '%f', [numel(names), Inf])';
+        fclose(fid);
+
+        fn = matlab.lang.makeValidName(names);
+        idxT  = find(strcmp(fn,'time'),1);
+        idxW  = find(strcmp(fn, ankleAngVelField),1);
+
+        All(o).iter(i).analy.t = data(:,idxT);
+        All(o).iter(i).analy.w = data(:,idxW);
+
+
         % ---- Control ----
         controlDir = fullfile(outDir, sprintf('result_%d', i), 'control_result');
         ctrlPath   = fullfile(controlDir, 'control.sto');
@@ -268,6 +293,7 @@ for o = 1:nOut
     dP_over_dist = nan(iterNum,1);
     dP_over_time = nan(iterNum,1);
     apWorkFromGRF = nan(iterNum,1);
+    posWorkFromAFO = nan(iterNum,1);
 
     % iter 그라데이션 색 (white -> baseColor)
     a = linspace(minMix, 1, iterNum)';          % 1: 연함, end: 진함
@@ -323,9 +349,14 @@ for o = 1:nOut
         dP_over_dist(i) = deltaProp(i) / dist;
         dP_over_time(i) = deltaProp(i) / elapsedTime(i);
 
-        % apWork
+        % apWorkFromGRF = ∫(GRF_ap * max(v,0)) dt
         vPel = All(o).iter(i).kin.pelvisTxSpeed(:);
         apWorkFromGRF(i) = trapz(t, max(vx,0) .* vPel);
+
+        % PosWorkFromAFO = ∫(F * max(w,0)) dt
+        w  = - All(o).iter(i).analy.w(:); % OpenSim에선 Plantar 방향이 음수이므로 마이너스 추가 필요
+        F   = u * optimalForce;
+        posWorkFromAFO(i) = trapz(tc, F .* max(w,0));
     end
 
     % Save metrics
@@ -345,7 +376,8 @@ for o = 1:nOut
     All(o).metric.peakApGRF    = peakApGRF;
     All(o).metric.dP_over_dist = dP_over_dist;
     All(o).metric.dP_over_time = dP_over_time;
-    All(o).metric.apWork = apWorkFromGRF;
+    All(o).metric.apWorkFromGRF = apWorkFromGRF;
+    All(o).metric.posWorkFromAFO = posWorkFromAFO;
 end
 
 
@@ -354,72 +386,83 @@ end
 % legend용 더미 핸들
 dummy = gobjects(nOut,1);
 
+% 점을 몇 개씩 찍을지
+sampleStep = 10;   % 10개 중 1개만 표시
+
+
+
 % 1) CMAPD_GS vs Speed
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.CMAPD_GS, All(o).metric.Speed, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.CMAPD_GS(idx), All(o).metric.Speed(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-hBase = scatter(baselineCMAPD, baselineSpeed, 1000, 'k', 'filled', 'Marker', 'p');
+hBase = scatter(baselineCMAPD_GS, baselineSpeed, 1000, 'k', 'filled', 'Marker', 'p');
 xlabel('CMAPD'); ylabel('Gait speed (m/s)');
-title('CMAPD vs Gait speed');
+title('CMAPD(GS) vs Gait speed');
 set(gca,'FontSize',25);
-lg = {All.name};
-lg{end+1} = 'baseline';
+lg = {All.name}; lg{end+1} = 'baseline';
 legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
-exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_Speed.png'), 'Resolution', 300);
+exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_GS_Speed.png'), 'Resolution', 300);
+
 
 
 % 2) CMAPD_GS vs delta(Propulsion)
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.CMAPD_GS, All(o).metric.deltaProp, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.CMAPD_GS(idx), All(o).metric.deltaProp(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-hBase = scatter(baselineCMAPD, 0, 1000, 'k', 'filled', 'Marker', 'p');
+hBase = scatter(baselineCMAPD_GS, 0, 1000, 'k', 'filled', 'Marker', 'p');
 xlabel('CMAPD'); ylabel('\Delta Propulsion (N·s)');
-title('CMAPD vs \Delta Propulsion');
+title('CMAPD(GS) vs \Delta Propulsion');
 set(gca,'FontSize',25);
-lg = {All.name};
-lg{end+1} = 'baseline';
+lg = {All.name}; lg{end+1} = 'baseline';
 legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
-exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_Propulsion.png'), 'Resolution', 300);
+exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_GS_Propulsion.png'), 'Resolution', 300);
+
 
 
 % 3) Speed vs delta(Propulsion)
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.Speed, All(o).metric.deltaProp, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.Speed(idx), All(o).metric.deltaProp(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 hBase = scatter(baselineSpeed, 0, 1000, 'k', 'filled', 'Marker', 'p');
 xlabel('Gait speed (m/s)'); ylabel('\Delta Propulsion (N·s)');
 title('Gait speed vs \Delta Propulsion');
 set(gca,'FontSize',25);
-lg = {All.name};
-lg{end+1} = 'baseline';
+lg = {All.name}; lg{end+1} = 'baseline';
 legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Speed_Propulsion.png'), 'Resolution', 300);
+
 
 
 % 4) CMAPD_GS vs integral(F)
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.CMAPD_GS, All(o).metric.integralF, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.CMAPD_GS(idx), All(o).metric.integralF(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-xlabel('CMAPD'); ylabel('Integral(F) (N·s)'); 
-title('CMAPD vs Integral(F)');
+xlabel('CMAPD'); ylabel('Integral(F) (N·s)');
+title('CMAPD(GS) vs Integral(F)');
 set(gca,'FontSize',25);
 lg = {All.name};
-legend([dummy;], lg, 'Location','best', 'Interpreter','none');
-exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_inteF.png'), 'Resolution', 300);
+legend(dummy, lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_GS_inteF.png'), 'Resolution', 300);
+
 
 
 % 5) elapsedTime vs strideLength
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.elapsedTime, All(o).metric.strideLength, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.elapsedTime(idx), All(o).metric.strideLength(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 hBase = scatter(baselineElapsed, baselineStride, 1000, 'k', 'filled', 'Marker', 'p');
@@ -431,10 +474,12 @@ legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Elapsed_Stride.png'), 'Resolution', 300);
 
 
+
 % 6) delta(propulsion) vs integral(F)
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.deltaProp, All(o).metric.integralF, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.deltaProp(idx), All(o).metric.integralF(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 xlabel('\Delta Propulsion (N·s)'); ylabel('Integral(F) (N·s)');
@@ -445,10 +490,12 @@ legend(dummy, lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'dProp_inteF.png'), 'Resolution', 300);
 
 
+
 % 7) Speed vs dP_over_dist
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.Speed, All(o).metric.dP_over_dist, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.Speed(idx), All(o).metric.dP_over_dist(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 xlabel('Gait speed (m/s)'); ylabel('\Delta Propulsion / distance (N·s/m)');
@@ -459,10 +506,12 @@ legend(dummy, lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Speed_dP_over_dist.png'), 'Resolution', 300);
 
 
+
 % 8) Speed vs dP_over_time
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.Speed, All(o).metric.dP_over_time, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.Speed(idx), All(o).metric.dP_over_time(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 xlabel('Gait speed (m/s)'); ylabel('\Delta Propulsion / time (N)');
@@ -473,25 +522,28 @@ legend(dummy, lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Speed_dP_over_time.png'), 'Resolution', 300);
 
 
+
 % 9) CMAPD_GS vs apWork
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.CMAPD_GS, All(o).metric.apWork, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.CMAPD_GS(idx), All(o).metric.apWorkFromGRF(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
-hBase = scatter(baselineCMAPD, baselineApWork, 1000, 'k', 'filled', 'Marker', 'p');
+hBase = scatter(baselineCMAPD_GS, baselineApWork, 1000, 'k', 'filled', 'Marker', 'p');
 xlabel('CMAPD'); ylabel('Work (J)');
-title('CMAPD vs Positive AP Work');
+title('CMAPD(GS) vs Positive AP Work');
 set(gca,'FontSize',25);
 lg = {All.name}; lg{end+1} = 'baseline';
 legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
-exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_apWork.png'), 'Resolution', 300);
+exportgraphics(gcf, fullfile(FigureFolder, 'CMAPD_GS_apWork.png'), 'Resolution', 300);
 
 
 % 10) Speed vs peakApGRF
 figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
 for o = 1:nOut
-    scatter(All(o).metric.Speed, All(o).metric.peakApGRF, ms, All(o).metric.color, 'filled');
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.Speed(idx), All(o).metric.peakApGRF(idx), ms, All(o).metric.color(idx,:), 'filled');
     dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
 end
 hBase = scatter(baselineSpeed, baselinePeakAp, 1000, 'k', 'filled', 'Marker', 'p');
