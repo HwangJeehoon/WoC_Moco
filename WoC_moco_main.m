@@ -245,9 +245,9 @@ for i = startIter:endIter
     % 3-8. moco 결과 저장 (kinematics, GRF 등)
     %------------------------------------------------
     resOpts           = struct();
-    resOpts.modelPath = fullfile(baseFolder, ModelName);
+%     resOpts.modelPath = fullfile(baseFolder, ModelName);
+    resOpts.modelPath = fullfile(AnalyResultDir, sprintf('2D_gait_AFO_pc_%d.osim', i));
     resOpts.prefix    = sprintf('moco_WoC_Solution_iter%02d', i);
-
     moco_WoC_getResult(sol, mocoResultDir, resOpts);
 
     fprintf('Iteration %d done.\n', i);
