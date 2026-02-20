@@ -20,11 +20,14 @@ outs(2).iterNum = 300;
 outs(3).name    = 'et_a01b0_iter300';
 outs(3).iterNum = 300;
 
-outs(4).name    = 'et_a05b0_iter300';
+outs(4).name    = 'et_a03b0_iter300';
 outs(4).iterNum = 300;
 
-outs(5).name    = 'et_a1b0_iter300';
+outs(5).name    = 'et_a05b0_iter300';
 outs(5).iterNum = 300;
+
+outs(6).name    = 'et_a1b0_iter300';
+outs(6).iterNum = 300;
 
 %% ====== Plot 저장 경로 설정 ======
 FigureFolder = fullfile(baseFolder,'\analysis_fig');
@@ -553,3 +556,220 @@ set(gca,'FontSize',25);
 lg = {All.name}; lg{end+1} = 'baseline';
 legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
 exportgraphics(gcf, fullfile(FigureFolder, 'Speed_peakAp.png'), 'Resolution', 300);
+
+%% 추가
+
+% 11) apWork vs Speed
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.apWorkFromGRF(idx), All(o).metric.Speed(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+hBase = scatter(baselineApWork, baselineSpeed, 1000, 'k', 'filled', 'Marker', 'p');
+xlabel('apWork (J)'); ylabel('Gait speed (m/s)');
+title('apWork vs Gait speed');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'apWork_Speed.png'), 'Resolution', 300);
+
+
+% 12) apWork vs peakApGRF
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.apWorkFromGRF(idx), All(o).metric.peakApGRF(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+hBase = scatter(baselineApWork, baselinePeakAp, 1000, 'k', 'filled', 'Marker', 'p');
+xlabel('apWork (J)'); ylabel('Peak apGRF (N)');
+title('apWork vs Peak apGRF');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'apWork_peakApGRF.png'), 'Resolution', 300);
+
+
+% 13) apWork vs delta(Propulsion)
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.apWorkFromGRF(idx), All(o).metric.deltaProp(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+hBase = scatter(baselineApWork, 0, 1000, 'k', 'filled', 'Marker', 'p');
+xlabel('apWork (J)'); ylabel('\Delta Propulsion (N·s)');
+title('apWork vs \Delta Propulsion');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'apWork_dProp.png'), 'Resolution', 300);
+
+
+% 14) apWork vs integral(F)
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.apWorkFromGRF(idx), All(o).metric.integralF(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('apWork (J)'); ylabel('Integral(F) (N·s)');
+title('apWork vs Integral(F)');
+set(gca,'FontSize',25);
+lg = {All.name};
+legend(dummy, lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'apWork_inteF.png'), 'Resolution', 300);
+
+
+% 15) apWork vs CMAPD_Shank
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.apWorkFromGRF(idx), All(o).metric.CMAPD_Shank(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+hBase = scatter(baselineApWork, baselineCMAPD_Shank, 1000, 'k', 'filled', 'Marker', 'p');
+xlabel('apWork (J)'); ylabel('CMAPD\_Shank');
+title('apWork vs CMAPD\_Shank');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'apWork_CMAPD_Shank.png'), 'Resolution', 300);
+
+
+% 16) apWork vs CMAPD_4set
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.apWorkFromGRF(idx), All(o).metric.CMAPD_4set(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+hBase = scatter(baselineApWork, baselineCMAPD_4set, 1000, 'k', 'filled', 'Marker', 'p');
+xlabel('apWork (J)'); ylabel('CMAPD\_4set');
+title('apWork vs CMAPD\_4set');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'apWork_CMAPD_4set.png'), 'Resolution', 300);
+
+
+% 17) apWork vs CMAPD_whole
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.apWorkFromGRF(idx), All(o).metric.CMAPD_whole(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+hBase = scatter(baselineApWork, baselineCMAPD_whole, 1000, 'k', 'filled', 'Marker', 'p');
+xlabel('apWork (J)'); ylabel('CMAPD\_whole');
+title('apWork vs CMAPD\_whole');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'apWork_CMAPD_whole.png'), 'Resolution', 300);
+
+
+% 18) PosWork vs Speed
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.posWorkFromAFO(idx), All(o).metric.Speed(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('PosWork (arb)'); ylabel('Gait speed (m/s)');
+title('PosWork vs Gait speed');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'PosWork_Speed.png'), 'Resolution', 300);
+
+
+% 19) PosWork vs peakApGRF
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.posWorkFromAFO(idx), All(o).metric.peakApGRF(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('PosWork (arb)'); ylabel('Peak apGRF (N)');
+title('PosWork vs Peak apGRF');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'PosWork_peakApGRF.png'), 'Resolution', 300);
+
+
+% 20) PosWork vs delta(Propulsion)
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.posWorkFromAFO(idx), All(o).metric.deltaProp(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('PosWork (arb)'); ylabel('\Delta Propulsion (N·s)');
+title('PosWork vs \Delta Propulsion');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'PosWork_dProp.png'), 'Resolution', 300);
+
+
+% 21) PosWork vs integral(F)
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.posWorkFromAFO(idx), All(o).metric.integralF(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('PosWork (arb)'); ylabel('Integral(F) (N·s)');
+title('PosWork vs Integral(F)');
+set(gca,'FontSize',25);
+lg = {All.name};
+legend(dummy, lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'PosWork_inteF.png'), 'Resolution', 300);
+
+
+% 22) PosWork vs CMAPD_Shank
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.posWorkFromAFO(idx), All(o).metric.CMAPD_Shank(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('PosWork (arb)'); ylabel('CMAPD\_Shank');
+title('PosWork vs CMAPD\_Shank');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'PosWork_CMAPD_Shank.png'), 'Resolution', 300);
+
+
+% 23) PosWork vs CMAPD_4set
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.posWorkFromAFO(idx), All(o).metric.CMAPD_4set(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('PosWork (arb)'); ylabel('CMAPD\_4set');
+title('PosWork vs CMAPD\_4set');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'PosWork_CMAPD_4set.png'), 'Resolution', 300);
+
+
+% 24) PosWork vs CMAPD_whole
+figure('Color','w','Position',[0 0 1200 800]); hold on; box on;
+for o = 1:nOut
+    idx = 1:sampleStep:All(o).iterNum;
+    scatter(All(o).metric.posWorkFromAFO(idx), All(o).metric.CMAPD_whole(idx), ms, All(o).metric.color(idx,:), 'filled');
+    dummy(o) = plot(nan,nan,'o','MarkerFaceColor',baseColors(o,:), 'MarkerEdgeColor',baseColors(o,:));
+end
+xlabel('PosWork (arb)'); ylabel('CMAPD\_whole');
+title('PosWork vs CMAPD\_whole');
+set(gca,'FontSize',25);
+lg = {All.name}; lg{end+1} = 'baseline';
+legend([dummy; hBase], lg, 'Location','best', 'Interpreter','none');
+exportgraphics(gcf, fullfile(FigureFolder, 'PosWork_CMAPD_whole.png'), 'Resolution', 300);
