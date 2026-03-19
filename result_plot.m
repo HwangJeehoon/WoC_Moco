@@ -11,7 +11,7 @@ end
 baseFolder = fileparts(thisFile);
 
 %% 기본 설정
-OutputFolderName = 'et_a001b1_iter300'; % 원하는 결과의 폴더 명
+OutputFolderName = 'et_a05b0_iter300_50BW'; % 원하는 결과의 폴더 명
 figureFolderName = fullfile(OutputFolderName,'\Fig');
 iterNum          = 300;
 
@@ -321,8 +321,7 @@ hold on; box on;
 plot(t0, vx0, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
 
 for i = 1:iterNum
-    plot(tGRF{i}, vxIter{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
+    plot(tGRF{i}, vxIter{i}, 'Color', colors(i,:), 'LineWidth', 1);
 end
 yline(0, '--');
 xlabel('Time (s)');
@@ -336,8 +335,7 @@ figure('Color','w','Position',[0 0 1200 800]);
 hold on; box on;
 
 for i = 1:iterNum
-    plot(tCtrl{i}, uIter{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
+    plot(tCtrl{i}, uIter{i}, 'Color', colors(i,:), 'LineWidth', 1);
 end
 
 xlabel('Time (s)');
@@ -354,8 +352,7 @@ hold on; box on;
 plot(time_eta_baseline, eta_baseline, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
 
 for i = 1:iterNum
-    plot(tNormData{i}, etaIter{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
+    plot(tNormData{i}, etaIter{i}, 'Color', colors(i,:), 'LineWidth', 1);
 end
 
 yline(0, '--');
@@ -372,8 +369,7 @@ hold on; box on;
 plot(0, avgSpeed0, 'o-', 'Color',"black",'LineWidth', 10, 'DisplayName', 'baseline');
 
 iters = 1:iterNum;
-plot(iters, avgSpeedIter, 'o-', 'LineWidth', 1.5, ...
-    'Color', [0 0.5 0.0], 'DisplayName', 'iter speed');
+plot(iters, avgSpeedIter, 'o-', 'LineWidth', 1.5, 'Color', [0 0.5 0.0]);
 
 xlabel('Iteration');
 ylabel('Avg Walking Speed (m/s)');
@@ -390,8 +386,7 @@ hold on; box on;
 plot(tg0, gastrocAct0, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
 
 for i = 1:iterNum
-    plot(tKin{i}, gastrocAct{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
+    plot(tKin{i}, gastrocAct{i}, 'Color', colors(i,:), 'LineWidth', 1);
 end
 
 xlabel('Time (s)');
@@ -407,8 +402,7 @@ hold on; box on;
 plot(tg0, soleusAct0, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
 
 for i = 1:iterNum
-    plot(tKin{i}, soleusAct{i}, 'Color', colors(i,:), ...
-        'DisplayName', sprintf('iter %d', i), 'LineWidth', 1);
+    plot(tKin{i}, soleusAct{i}, 'Color', colors(i,:), 'LineWidth', 1);
 end
 
 xlabel('Time (s)');
@@ -424,25 +418,23 @@ hold on; box on;
 plot(0, stride0, 'o-', 'Color',"black",'LineWidth', 10, 'DisplayName', 'baseline');
 
 iters = 1:iterNum;
-plot(iters, strideLength(1:end), 'o-', 'LineWidth', 1.5, ...
-    'Color', [0 0.5 0.0], 'DisplayName', 'iter speed');
+plot(iters, strideLength(1:end), 'o-', 'LineWidth', 1.5);
 
 xlabel('Iteration');
 ylabel('Stride length (m)');
 xlim([-1 iterNum+1])
 title(sprintf('%s, Stride Length',OutputFolderName), 'Interpreter', 'none')
 set(gca, 'FontSize', 25)
-exportgraphics(gcf, fullfile(FigureFolder, '08_stride_length.png'), 'Resolution', 300);
+exportgraphics(gcf, fullfile(FigureFolder, '07_stride_length.png'), 'Resolution', 300);
 
 %% 8) cost 비교 (objective effort final_time total)
 figure('Color','w','Position',[0 0 1200 800]);
 hold on; box on;
 
 iters = 1:iterNum;
-
-plot(iters, objective_effort, 'o-', 'LineWidth', 1.5, 'DisplayName', 'objective effort');
-plot(iters, objective_final_time, 'o-', 'LineWidth', 1.5, 'DisplayName', 'objective final time');
-plot(iters, objective_total, 'o-', 'LineWidth', 1.5, 'DisplayName', 'objective total');
+plot(iters, objective_effort, 'o-', 'LineWidth', 1.5);
+plot(iters, objective_final_time, 'o-', 'LineWidth', 1.5);
+plot(iters, objective_total, 'o-', 'LineWidth', 1.5);
 
 xlabel('Iteration');
 ylabel('Cost');
@@ -450,23 +442,22 @@ xlim([-1 iterNum+1])
 title(sprintf('%s, Objective Cost',OutputFolderName), 'Interpreter', 'none')
 legend('Effort','FinalTime', 'Total', 'Location','best')
 set(gca, 'FontSize', 25)
-exportgraphics(gcf, fullfile(FigureFolder, '09_objective_cost.png'), 'Resolution', 300);
+exportgraphics(gcf, fullfile(FigureFolder, '08_objective_cost.png'), 'Resolution', 300);
 
-%% 9) apWork plot
+%% 9) PosCoMWork plot
 figure('Color','w','Position',[0 0 1200 800]);
 hold on; box on;
 
 vFwd0_onGRF = interp1(tg0, pelvSpeed0, t0, 'linear');
 apWork0 = trapz(t0, max(vx0,0) .* vFwd0_onGRF);
-plot(0, apWork0, 'o-', 'Color',"black",'LineWidth', 10, 'DisplayName', 'baseline');
+plot(0, apWork0, 'o-', 'Color',"black",'LineWidth', 10);
 
 iters = 1:iterNum;
-plot(iters, apWorkFromGRF, 'o-', 'LineWidth', 1.5, ...
-    'Color', [0 0.5 0.0], 'DisplayName', 'iter CoT');
+plot(iters, apWorkFromGRF, 'o-', 'LineWidth', 1.5, 'Color', [0 0.5 0.0]);
 
 xlabel('Iteration');
 ylabel('Work (J)');
 xlim([-1 iterNum+1])
-title(sprintf('%s, Positive AP Work',OutputFolderName), 'Interpreter', 'none')
+title(sprintf('%s, Positive CoM Work',OutputFolderName), 'Interpreter', 'none')
 set(gca, 'FontSize', 25)
-exportgraphics(gcf, fullfile(FigureFolder, '10_apWork.png'), 'Resolution', 300);
+exportgraphics(gcf, fullfile(FigureFolder, '09_PosCoMWork.png'), 'Resolution', 300);
