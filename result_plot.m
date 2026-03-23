@@ -11,9 +11,13 @@ end
 baseFolder = fileparts(thisFile);
 
 %% 기본 설정
-OutputFolderName = 'et_a05b0_iter300_50BW'; % 원하는 결과의 폴더 명
+OutputFolderName = 'et_a001b0_iter300_50BW_gastr25'; % 원하는 결과의 폴더 명
 figureFolderName = fullfile(OutputFolderName,'\Fig');
 iterNum          = 300;
+optimalForce     = 300;   % AFO PathActuator optimal force - 50BW
+% optimalForce     = 243;   % AFO PathActuator optimal force - 40BW
+% optimalForce     = 182;   % AFO PathActuator optimal force - 30BW
+% optimalForce     = 121;   % AFO PathActuator optimal force - 20BW
 
 OutputFolder   = fullfile(baseFolder, OutputFolderName);
 FigureFolder   = fullfile(baseFolder, figureFolderName);
@@ -22,14 +26,23 @@ if ~exist(FigureFolder, 'dir')
     mkdir(FigureFolder);
 end
 
-grfInitSto     = fullfile(baseFolder, 'Off_GRF.sto');        % baseline -> OfF 기준 full stride
-guessInitSto   = fullfile(baseFolder, 'Off_kinematics.sto');
+%% Baseline 설정
+% grfInitSto     = fullfile(baseFolder, 'Off_GRF.sto');        % baseline -> OfF 기준 full stride
+% guessInitSto   = fullfile(baseFolder, 'Off_kinematics.sto');
+
+% grfInitSto     = fullfile(baseFolder, 'Off_GRF_sol25.sto');        % baseline -> Off Sol25 
+% guessInitSto   = fullfile(baseFolder, 'Off_kinematics_sol25.sto');
+
+grfInitSto     = fullfile(baseFolder, 'Off_GRF_gastrc25.sto');        % baseline -> Off gastrc25 
+guessInitSto   = fullfile(baseFolder, 'Off_kinematics_gastrc25.sto');
 
 pelvisField  = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/value');
 gastrocField = matlab.lang.makeValidName('/gastroc_r/activation');
 soleusField  = matlab.lang.makeValidName('/soleus_r/activation');
 afoField     = matlab.lang.makeValidName('/AFO_r');
 pelvisSpeedField = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/speed');
+ankleAngVelField = matlab.lang.makeValidName('ankle_angle_r');
+momentArmAFO     = 0.07;  % AFO moment arm [m]
 
 %% Baseline 읽기
 
@@ -94,6 +107,8 @@ gastrocAct0  = guess0.(gastrocField)(:);
 soleusAct0   = guess0.(soleusField)(:);
 pelvSpeed0 = guess0.(pelvisSpeedField)(:);
 stride0 = pelv0(end) - pelv0(1);
+vFwd0_onGRF = interp1(tg0, pelvSpeed0, t0, 'linear');
+PosCoMWork0 = trapz(t0, max(vx0,0) .* vFwd0_onGRF);
 
 %% iteration별 GRF control 읽기
 
@@ -103,7 +118,7 @@ vxIter     = cell(iterNum, 1);
 tCtrl  = cell(iterNum, 1);
 uIter      = cell(iterNum, 1);
 
-tNormData     = cell(iterNum, 1);
+tData     = cell(iterNum, 1);
 etaIter       = cell(iterNum, 1);
 avgSpeedIter  = zeros(iterNum, 1);
 
@@ -114,11 +129,15 @@ soleusAct  = cell(iterNum, 1);
 afoKinIter  = cell(iterNum, 1);
 strideLength = zeros(iterNum, 1);
 
+tAnaly   = cell(iterNum, 1);
+ankVelIter = cell(iterNum, 1);
+
 objective_total      = nan(iterNum, 1);
 objective_effort     = nan(iterNum, 1);
 objective_final_time = nan(iterNum, 1);
 
-apWorkFromGRF = nan(iterNum, 1);
+PosCoMWork = nan(iterNum, 1);
+PosAnkWork = nan(iterNum, 1);
 % ---------------------------------------------
 
 for i = 1:iterNum
@@ -194,16 +213,16 @@ for i = 1:iterNum
 
     dataPath_i = fullfile(controlDir, 'data.csv'); % data 파일
     data_i     = readtable(dataPath_i);
-    tci        = data_i.stanceTime(:);
-    ui         = data_i.eta(:);
+    tdi        = data_i.stanceTime(:);
+    eta         = data_i.eta(:);
 
     if i == 1
         eta_baseline      = data_i.eta(:);
         time_eta_baseline = data_i.stanceTime(:);
     end
 
-    tNormData{i} = tci;
-    etaIter{i}   = ui;
+    tData{i} = tdi;
+    etaIter{i}   = eta;
 
     % ---------------- kinematics 데이터 가져오기----------
     kinPath_i = fullfile(mocoResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i)); % -> full stride
@@ -239,7 +258,46 @@ for i = 1:iterNum
     pelvSpeed = kin_i.(pelvisSpeedField)(:);
     vFwd_onGRF = interp1(tk, pelvSpeed, ti, 'linear');
     positive_apGRF     = max(vxi, 0);
-    apWorkFromGRF(i)  = trapz(ti, positive_apGRF .* vFwd_onGRF);
+    PosCoMWork(i)  = trapz(ti, positive_apGRF .* vFwd_onGRF);
+
+    % ---------------- analy 데이터 가져오기 (ankle angular velocity) ----------------
+    analyPath_i = fullfile(pkDir, '2D_gait_AFO_pc_Kinematics_u.sto');
+    fid = fopen(analyPath_i,'r');
+    if fid == -1
+        error('Cannot open %s', analyPath_i);
+    end
+
+    line = fgetl(fid);
+    while ischar(line)
+        if startsWith(strtrim(line),'endheader')
+            break;
+        end
+        line = fgetl(fid);
+    end
+
+    varLine = fgetl(fid);
+    names   = strsplit(strtrim(varLine));
+    data    = fscanf(fid, '%f', [numel(names), Inf])';
+    fclose(fid);
+
+    analy_i = struct();
+    for k = 1:numel(names)
+        fn = matlab.lang.makeValidName(names{k});
+        analy_i.(fn) = data(:,k);
+    end
+
+    ta = analy_i.time(:);
+    wa = -analy_i.(ankleAngVelField)(:);   % plantarflexion 방향을 양수로 맞추기 위해 부호 반전
+
+    tAnaly{i}    = ta;
+    ankVelIter{i} = wa;
+    tauCtrl = ui * optimalForce * momentArmAFO;
+
+    % control 시간축의 torque를 analy 시간축으로 보간
+    tau_on_analy = interp1(tCtrl{i}, tauCtrl, ta, 'linear', 'extrap');
+
+    % Positive ankle work = ∫ Tau * max(w,0) dt
+    PosAnkWork(i) = trapz(ta, tau_on_analy .* max(wa,0));
 
     % ---------------- cost 데이터 가져오기 -----------------
     costPath_i = fullfile(mocoResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i));
@@ -352,7 +410,7 @@ hold on; box on;
 plot(time_eta_baseline, eta_baseline, 'k', 'LineWidth', 4, 'DisplayName', 'baseline');
 
 for i = 1:iterNum
-    plot(tNormData{i}, etaIter{i}, 'Color', colors(i,:), 'LineWidth', 1);
+    plot(tData{i}, etaIter{i}, 'Color', colors(i,:), 'LineWidth', 1);
 end
 
 yline(0, '--');
@@ -448,12 +506,10 @@ exportgraphics(gcf, fullfile(FigureFolder, '08_objective_cost.png'), 'Resolution
 figure('Color','w','Position',[0 0 1200 800]);
 hold on; box on;
 
-vFwd0_onGRF = interp1(tg0, pelvSpeed0, t0, 'linear');
-apWork0 = trapz(t0, max(vx0,0) .* vFwd0_onGRF);
-plot(0, apWork0, 'o-', 'Color',"black",'LineWidth', 10);
+plot(0, PosCoMWork0, 'o-', 'Color',"black",'LineWidth', 10);
 
 iters = 1:iterNum;
-plot(iters, apWorkFromGRF, 'o-', 'LineWidth', 1.5, 'Color', [0 0.5 0.0]);
+plot(iters, PosCoMWork, 'o-', 'LineWidth', 1.5, 'Color', [0 0.5 0.0]);
 
 xlabel('Iteration');
 ylabel('Work (J)');
@@ -461,3 +517,17 @@ xlim([-1 iterNum+1])
 title(sprintf('%s, Positive CoM Work',OutputFolderName), 'Interpreter', 'none')
 set(gca, 'FontSize', 25)
 exportgraphics(gcf, fullfile(FigureFolder, '09_PosCoMWork.png'), 'Resolution', 300);
+
+%% 10) PosAnkWork plot
+figure('Color','w','Position',[0 0 1200 800]);
+hold on; box on;
+
+iters = 1:iterNum;
+plot(iters, PosAnkWork, 'o-', 'LineWidth', 1.5, 'Color', [0 0.5 0.0]);
+
+xlabel('Iteration');
+ylabel('Work (J)');
+xlim([-1 iterNum+1])
+title(sprintf('%s, Positive Ankle Work',OutputFolderName), 'Interpreter', 'none')
+set(gca, 'FontSize', 25)
+exportgraphics(gcf, fullfile(FigureFolder, '10_PosAnkWork.png'), 'Resolution', 300);
