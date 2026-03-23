@@ -10,20 +10,32 @@ baseFolder = fileparts(thisFile);
 
 %% ====== 분석하고 싶은 output 설정 ======
 
+% AFO force 설정
+AFO_Force_50BW = 300;
+AFO_Force_40BW = 243;
+AFO_Force_30BW = 182;
+AFO_Force_20BW = 121;
+
 % 같은 힘 레벨에서 파라미터 간 분석
 outs = struct([]);
 outs(1).name    = 'et_a001b0_iter300_50BW';
 outs(1).iterNum = 300;
+outs(1).optimalForce = AFO_Force_50BW;
 outs(2).name    = 'et_a005b0_iter300_50BW';
 outs(2).iterNum = 300;
+outs(2).optimalForce = AFO_Force_50BW;
 outs(3).name    = 'et_a01b0_iter300_50BW';
 outs(3).iterNum = 300;
+outs(3).optimalForce = AFO_Force_50BW;
 outs(4).name    = 'et_a03b0_iter300_50BW';
 outs(4).iterNum = 300;
+outs(4).optimalForce = AFO_Force_50BW;
 outs(5).name    = 'et_a05b0_iter300_50BW';
 outs(5).iterNum = 300;
+outs(5).optimalForce = AFO_Force_50BW;
 outs(6).name    = 'et_a1b0_iter300_50BW';
 outs(6).iterNum = 300;
+outs(6).optimalForce = AFO_Force_50BW;
 FigureFolder = fullfile(baseFolder,'\analysis_fig\50BW');
 if ~exist(FigureFolder, 'dir')
     mkdir(FigureFolder);
@@ -32,122 +44,179 @@ end
 outs = struct([]);
 outs(1).name    = 'et_a001b0_iter300_40BW';
 outs(1).iterNum = 300;
+outs(1).optimalForce = AFO_Force_40BW;
 outs(2).name    = 'et_a005b0_iter300_40BW';
 outs(2).iterNum = 300;
+outs(2).optimalForce = AFO_Force_40BW;
 outs(3).name    = 'et_a01b0_iter300_40BW';
 outs(3).iterNum = 300;
+outs(3).optimalForce = AFO_Force_40BW;
 outs(4).name    = 'et_a03b0_iter300_40BW';
 outs(4).iterNum = 300;
+outs(4).optimalForce = AFO_Force_40BW;
 outs(5).name    = 'et_a05b0_iter300_40BW';
 outs(5).iterNum = 300;
+outs(5).optimalForce = AFO_Force_40BW;
 FigureFolder = fullfile(baseFolder,'\analysis_fig\40BW');
 if ~exist(FigureFolder, 'dir')
     mkdir(FigureFolder);
 end
 
-outs = struct([]);
-outs(1).name    = 'et_a001b0_iter300_30BW';
-outs(1).iterNum = 300;
-outs(2).name    = 'et_a005b0_iter300_30BW';
-outs(2).iterNum = 300;
-outs(3).name    = 'et_a01b0_iter300_30BW';
-outs(3).iterNum = 300;
-outs(4).name    = 'et_a03b0_iter300_30BW';
-outs(4).iterNum = 300;
-outs(5).name    = 'et_a05b0_iter300_30BW';
-outs(5).iterNum = 300;
-FigureFolder = fullfile(baseFolder,'\analysis_fig\30BW');
-if ~exist(FigureFolder, 'dir')
-    mkdir(FigureFolder);
-end
+% outs = struct([]);
+% outs(1).name    = 'et_a001b0_iter300_30BW';
+% outs(1).iterNum = 300;
+% outs(1).optimalForce = AFO_Force_30BW;
+% outs(2).name    = 'et_a005b0_iter300_30BW';
+% outs(2).iterNum = 300;
+% outs(2).optimalForce = AFO_Force_30BW;
+% outs(3).name    = 'et_a01b0_iter300_30BW';
+% outs(3).iterNum = 300;
+% outs(3).optimalForce = AFO_Force_30BW;
+% outs(4).name    = 'et_a03b0_iter300_30BW';
+% outs(4).iterNum = 300;
+% outs(4).optimalForce = AFO_Force_30BW;
+% outs(5).name    = 'et_a05b0_iter300_30BW';
+% outs(5).iterNum = 300;
+% outs(5).optimalForce = AFO_Force_30BW;
+% FigureFolder = fullfile(baseFolder,'\analysis_fig\30BW');
+% if ~exist(FigureFolder, 'dir')
+%     mkdir(FigureFolder);
+% end
+% 
+% 
+% outs = struct([]);
+% outs(1).name    = 'et_a001b0_iter300_20BW';
+% outs(1).iterNum = 300;
+% outs(1).optimalForce = AFO_Force_20BW;
+% outs(2).name    = 'et_a005b0_iter300_20BW';
+% outs(2).iterNum = 300;
+% outs(2).optimalForce = AFO_Force_20BW;
+% outs(3).name    = 'et_a01b0_iter300_20BW';
+% outs(3).iterNum = 300;
+% outs(3).optimalForce = AFO_Force_20BW;
+% outs(4).name    = 'et_a03b0_iter300_20BW';
+% outs(4).iterNum = 300;
+% outs(4).optimalForce = AFO_Force_20BW;
+% outs(5).name    = 'et_a05b0_iter300_20BW';
+% outs(5).iterNum = 300;
+% outs(5).optimalForce = AFO_Force_20BW;
+% FigureFolder = fullfile(baseFolder,'\analysis_fig\20BW');
+% if ~exist(FigureFolder, 'dir')
+%     mkdir(FigureFolder);
+% end
+% 
+% % 같은 파라미터에서 힘 레벨 간 분석
+% outs = struct([]);
+% outs(1).name    = 'et_a001b0_iter300_50BW';
+% outs(1).iterNum = 300;
+% outs(1).optimalForce = AFO_Force_50BW;
+% outs(2).name    = 'et_a001b0_iter300_40BW';
+% outs(2).iterNum = 300;
+% outs(2).optimalForce = AFO_Force_40BW;
+% outs(3).name    = 'et_a001b0_iter300_30BW';
+% outs(3).iterNum = 300;
+% outs(3).optimalForce = AFO_Force_30BW;
+% outs(4).name    = 'et_a001b0_iter300_20BW';
+% outs(4).iterNum = 300;
+% outs(4).optimalForce = AFO_Force_20BW;
+% FigureFolder = fullfile(baseFolder,'\analysis_fig\a001b0');
+% if ~exist(FigureFolder, 'dir')
+%     mkdir(FigureFolder);
+% end
+% 
+% outs = struct([]);
+% outs(1).name    = 'et_a005b0_iter300_50BW';
+% outs(1).iterNum = 300;
+% outs(1).optimalForce = AFO_Force_50BW;
+% outs(2).name    = 'et_a005b0_iter300_40BW';
+% outs(2).iterNum = 300;
+% outs(2).optimalForce = AFO_Force_40BW;
+% outs(3).name    = 'et_a005b0_iter300_30BW';
+% outs(3).iterNum = 300;
+% outs(3).optimalForce = AFO_Force_30BW;
+% outs(4).name    = 'et_a005b0_iter300_20BW';
+% outs(4).iterNum = 300;
+% outs(4).optimalForce = AFO_Force_20BW;
+% FigureFolder = fullfile(baseFolder,'\analysis_fig\a005b0');
+% if ~exist(FigureFolder, 'dir')
+%     mkdir(FigureFolder);
+% end
+% 
+% outs = struct([]);
+% outs(1).name    = 'et_a01b0_iter300_50BW';
+% outs(1).iterNum = 300;
+% outs(1).optimalForce = AFO_Force_50BW;
+% outs(2).name    = 'et_a01b0_iter300_40BW';
+% outs(2).iterNum = 300;
+% outs(2).optimalForce = AFO_Force_40BW;
+% outs(3).name    = 'et_a01b0_iter300_30BW';
+% outs(3).iterNum = 300;
+% outs(3).optimalForce = AFO_Force_30BW;
+% outs(4).name    = 'et_a01b0_iter300_20BW';
+% outs(4).iterNum = 300;
+% outs(4).optimalForce = AFO_Force_20BW;
+% FigureFolder = fullfile(baseFolder,'\analysis_fig\a01b0');
+% if ~exist(FigureFolder, 'dir')
+%     mkdir(FigureFolder);
+% end
+% 
+% outs = struct([]);
+% outs(1).name    = 'et_a03b0_iter300_50BW';
+% outs(1).iterNum = 300;
+% outs(1).optimalForce = AFO_Force_50BW;
+% outs(2).name    = 'et_a03b0_iter300_40BW';
+% outs(2).iterNum = 300;
+% outs(2).optimalForce = AFO_Force_40BW;
+% outs(3).name    = 'et_a03b0_iter300_30BW';
+% outs(3).iterNum = 300;
+% outs(3).optimalForce = AFO_Force_30BW;
+% outs(4).name    = 'et_a03b0_iter300_20BW';
+% outs(4).iterNum = 300;
+% outs(4).optimalForce = AFO_Force_20BW;
+% FigureFolder = fullfile(baseFolder,'\analysis_fig\a03b0');
+% if ~exist(FigureFolder, 'dir')
+%     mkdir(FigureFolder);
+% end
+% 
+% outs = struct([]);
+% outs(1).name    = 'et_a05b0_iter300_50BW';
+% outs(1).iterNum = 300;
+% outs(1).optimalForce = AFO_Force_50BW;
+% outs(2).name    = 'et_a05b0_iter300_40BW';
+% outs(2).iterNum = 300;
+% outs(2).optimalForce = AFO_Force_40BW;
+% outs(3).name    = 'et_a05b0_iter300_30BW';
+% outs(3).iterNum = 300;
+% outs(3).optimalForce = AFO_Force_30BW;
+% outs(4).name    = 'et_a05b0_iter300_20BW';
+% outs(4).iterNum = 300;
+% outs(4).optimalForce = AFO_Force_20BW;
+% FigureFolder = fullfile(baseFolder,'\analysis_fig\a05b0');
+% if ~exist(FigureFolder, 'dir')
+%     mkdir(FigureFolder);
+% end
 
-
-outs = struct([]);
-outs(1).name    = 'et_a001b0_iter300_20BW';
-outs(1).iterNum = 300;
-outs(2).name    = 'et_a005b0_iter300_20BW';
-outs(2).iterNum = 300;
-outs(3).name    = 'et_a01b0_iter300_20BW';
-outs(3).iterNum = 300;
-outs(4).name    = 'et_a03b0_iter300_20BW';
-outs(4).iterNum = 300;
-outs(5).name    = 'et_a05b0_iter300_20BW';
-outs(5).iterNum = 300;
-FigureFolder = fullfile(baseFolder,'\analysis_fig\20BW');
-if ~exist(FigureFolder, 'dir')
-    mkdir(FigureFolder);
-end
-
-% 같은 파라미터에서 힘 레벨 간 분석
-outs = struct([]);
-outs(1).name    = 'et_a001b0_iter300_50BW';
-outs(1).iterNum = 300;
-outs(2).name    = 'et_a001b0_iter300_40BW';
-outs(2).iterNum = 300;
-outs(3).name    = 'et_a001b0_iter300_30BW';
-outs(3).iterNum = 300;
-outs(4).name    = 'et_a001b0_iter300_20BW';
-outs(4).iterNum = 300;
-FigureFolder = fullfile(baseFolder,'\analysis_fig\a001b0');
-if ~exist(FigureFolder, 'dir')
-    mkdir(FigureFolder);
-end
-
-outs = struct([]);
-outs(1).name    = 'et_a005b0_iter300_50BW';
-outs(1).iterNum = 300;
-outs(2).name    = 'et_a005b0_iter300_40BW';
-outs(2).iterNum = 300;
-outs(3).name    = 'et_a005b0_iter300_30BW';
-outs(3).iterNum = 300;
-outs(4).name    = 'et_a005b0_iter300_20BW';
-outs(4).iterNum = 300;
-FigureFolder = fullfile(baseFolder,'\analysis_fig\a005b0');
-if ~exist(FigureFolder, 'dir')
-    mkdir(FigureFolder);
-end
-
-outs = struct([]);
-outs(1).name    = 'et_a01b0_iter300_50BW';
-outs(1).iterNum = 300;
-outs(2).name    = 'et_a01b0_iter300_40BW';
-outs(2).iterNum = 300;
-outs(3).name    = 'et_a01b0_iter300_30BW';
-outs(3).iterNum = 300;
-outs(4).name    = 'et_a01b0_iter300_20BW';
-outs(4).iterNum = 300;
-FigureFolder = fullfile(baseFolder,'\analysis_fig\a01b0');
-if ~exist(FigureFolder, 'dir')
-    mkdir(FigureFolder);
-end
-
-outs = struct([]);
-outs(1).name    = 'et_a03b0_iter300_50BW';
-outs(1).iterNum = 300;
-outs(2).name    = 'et_a03b0_iter300_40BW';
-outs(2).iterNum = 300;
-outs(3).name    = 'et_a03b0_iter300_30BW';
-outs(3).iterNum = 300;
-outs(4).name    = 'et_a03b0_iter300_20BW';
-outs(4).iterNum = 300;
-FigureFolder = fullfile(baseFolder,'\analysis_fig\a03b0');
-if ~exist(FigureFolder, 'dir')
-    mkdir(FigureFolder);
-end
-
-outs = struct([]);
-outs(1).name    = 'et_a05b0_iter300_50BW';
-outs(1).iterNum = 300;
-outs(2).name    = 'et_a05b0_iter300_40BW';
-outs(2).iterNum = 300;
-outs(3).name    = 'et_a05b0_iter300_30BW';
-outs(3).iterNum = 300;
-outs(4).name    = 'et_a05b0_iter300_20BW';
-outs(4).iterNum = 300;
-FigureFolder = fullfile(baseFolder,'\analysis_fig\a05b0');
-if ~exist(FigureFolder, 'dir')
-    mkdir(FigureFolder);
-end
+% % 같은 파라미터/힘에서 정상과 장애 차이 분석
+% outs = struct([]);
+% outs(1).name    = 'et_a001b0_iter300_50BW';
+% outs(1).iterNum = 300;
+% outs(1).optimalForce = AFO_Force_50BW;
+% outs(2).name    = 'et_a001b0_iter300_50BW_sol12.5';
+% outs(2).iterNum = 300;
+% outs(2).optimalForce = AFO_Force_50BW;
+% outs(3).name    = 'et_a001b0_iter300_50BW_sol25';
+% outs(3).iterNum = 300;
+% outs(3).optimalForce = AFO_Force_50BW;
+% outs(4).name    = 'et_a001b0_iter300_50BW_gastr12.5';
+% outs(4).iterNum = 300;
+% outs(4).optimalForce = AFO_Force_50BW;
+% outs(5).name    = 'et_a001b0_iter300_50BW_gastr25';
+% outs(5).iterNum = 300;
+% outs(5).optimalForce = AFO_Force_50BW;
+% FigureFolder = fullfile(baseFolder,'\analysis_fig\a001b0_disabled');
+% if ~exist(FigureFolder, 'dir')
+%     mkdir(FigureFolder);
+% end
 
 %% ====== Plot 저장 경로 설정 ======
 % FigureFolder = fullfile(baseFolder,'\analysis_fig');
@@ -395,7 +464,6 @@ nOut = numel(All);
 baseColors = lines(nOut);           % output별 기준색
 minMix = 0.25;                      % 1번 iter의 "연함" 정도 (0~1, 클수록 더 하얘짐)
 ms = 30;                            % marker size
-optimalForce = 300;                 % AFO(PathActuator)의 optimal force
 momentArmAFO = 0.07;                % AFO(PathActuator)의 moment arm -> 고정된 값 사용
 
 for o = 1:nOut
@@ -460,7 +528,8 @@ for o = 1:nOut
         % integral(F) 
         tc = All(o).iter(i).ctrl.t(:);
         u  = All(o).iter(i).ctrl.u(:);
-        integralF(i) = trapz(tc, u * optimalForce);
+        optF = All(o).optimalForce;
+        integralF(i) = trapz(tc, u * optF);
 
         % elapsed time, walking distance
         elapsedTime(i) = tk(end) - tk(1);
@@ -479,7 +548,7 @@ for o = 1:nOut
 
         % PosAnkWork = ∫(F * max(w,0)) dt
         w  = - All(o).iter(i).analy.w(:); % OpenSim에선 Plantar 방향이 음수이므로 마이너스 추가 필요
-        Tau   = u * optimalForce * momentArmAFO;
+        Tau   = u * optF * momentArmAFO;
         PosAnkWork(i) = trapz(tc, Tau .* max(w,0));
     end
 
