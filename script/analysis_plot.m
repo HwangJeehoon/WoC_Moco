@@ -7,9 +7,9 @@ else
     thisFile = mfilename("fullpath");
 end
 baseFolder = fileparts(thisFile);
+resultFolder = fullfile(baseFolder, '..', 'results');
 
 %% ====== 분석하고 싶은 output 설정 ======
-
 % AFO force 설정
 AFO_Force_50BW = 300;
 AFO_Force_40BW = 243;
@@ -36,7 +36,7 @@ outs(5).optimalForce = AFO_Force_50BW;
 outs(6).name    = 'et_a1b0_iter300_50BW';
 outs(6).iterNum = 300;
 outs(6).optimalForce = AFO_Force_50BW;
-FigureFolder = fullfile(baseFolder,'\analysis_fig\50BW');
+FigureFolder = fullfile(resultFolder,'\analysis_fig\50BW');
 if ~exist(FigureFolder, 'dir')
     mkdir(FigureFolder);
 end
@@ -57,7 +57,7 @@ outs(4).optimalForce = AFO_Force_40BW;
 outs(5).name    = 'et_a05b0_iter300_40BW';
 outs(5).iterNum = 300;
 outs(5).optimalForce = AFO_Force_40BW;
-FigureFolder = fullfile(baseFolder,'\analysis_fig\40BW');
+FigureFolder = fullfile(resultFolder,'\analysis_fig\40BW');
 if ~exist(FigureFolder, 'dir')
     mkdir(FigureFolder);
 end
@@ -78,7 +78,7 @@ end
 % outs(5).name    = 'et_a05b0_iter300_30BW';
 % outs(5).iterNum = 300;
 % outs(5).optimalForce = AFO_Force_30BW;
-% FigureFolder = fullfile(baseFolder,'\analysis_fig\30BW');
+% FigureFolder = fullfile(resultFolder,'\analysis_fig\30BW');
 % if ~exist(FigureFolder, 'dir')
 %     mkdir(FigureFolder);
 % end
@@ -100,7 +100,7 @@ end
 % outs(5).name    = 'et_a05b0_iter300_20BW';
 % outs(5).iterNum = 300;
 % outs(5).optimalForce = AFO_Force_20BW;
-% FigureFolder = fullfile(baseFolder,'\analysis_fig\20BW');
+% FigureFolder = fullfile(resultFolder,'\analysis_fig\20BW');
 % if ~exist(FigureFolder, 'dir')
 %     mkdir(FigureFolder);
 % end
@@ -119,7 +119,7 @@ end
 % outs(4).name    = 'et_a001b0_iter300_20BW';
 % outs(4).iterNum = 300;
 % outs(4).optimalForce = AFO_Force_20BW;
-% FigureFolder = fullfile(baseFolder,'\analysis_fig\a001b0');
+% FigureFolder = fullfile(resultFolder,'\analysis_fig\a001b0');
 % if ~exist(FigureFolder, 'dir')
 %     mkdir(FigureFolder);
 % end
@@ -137,7 +137,7 @@ end
 % outs(4).name    = 'et_a005b0_iter300_20BW';
 % outs(4).iterNum = 300;
 % outs(4).optimalForce = AFO_Force_20BW;
-% FigureFolder = fullfile(baseFolder,'\analysis_fig\a005b0');
+% FigureFolder = fullfile(resultFolder,'\analysis_fig\a005b0');
 % if ~exist(FigureFolder, 'dir')
 %     mkdir(FigureFolder);
 % end
@@ -155,7 +155,7 @@ end
 % outs(4).name    = 'et_a01b0_iter300_20BW';
 % outs(4).iterNum = 300;
 % outs(4).optimalForce = AFO_Force_20BW;
-% FigureFolder = fullfile(baseFolder,'\analysis_fig\a01b0');
+% FigureFolder = fullfile(resultFolder,'\analysis_fig\a01b0');
 % if ~exist(FigureFolder, 'dir')
 %     mkdir(FigureFolder);
 % end
@@ -173,7 +173,7 @@ end
 % outs(4).name    = 'et_a03b0_iter300_20BW';
 % outs(4).iterNum = 300;
 % outs(4).optimalForce = AFO_Force_20BW;
-% FigureFolder = fullfile(baseFolder,'\analysis_fig\a03b0');
+% FigureFolder = fullfile(resultFolder,'\analysis_fig\a03b0');
 % if ~exist(FigureFolder, 'dir')
 %     mkdir(FigureFolder);
 % end
@@ -191,7 +191,7 @@ end
 % outs(4).name    = 'et_a05b0_iter300_20BW';
 % outs(4).iterNum = 300;
 % outs(4).optimalForce = AFO_Force_20BW;
-% FigureFolder = fullfile(baseFolder,'\analysis_fig\a05b0');
+% FigureFolder = fullfile(resultFolder,'\analysis_fig\a05b0');
 % if ~exist(FigureFolder, 'dir')
 %     mkdir(FigureFolder);
 % end
@@ -213,13 +213,13 @@ end
 % outs(5).name    = 'et_a001b0_iter300_50BW_gastr25';
 % outs(5).iterNum = 300;
 % outs(5).optimalForce = AFO_Force_50BW;
-% FigureFolder = fullfile(baseFolder,'\analysis_fig\a001b0_disabled');
+% FigureFolder = fullfile(resultFolder,'\analysis_fig\a001b0_disabled');
 % if ~exist(FigureFolder, 'dir')
 %     mkdir(FigureFolder);
 % end
 
 %% ====== Plot 저장 경로 설정 ======
-% FigureFolder = fullfile(baseFolder,'\analysis_fig');
+% FigureFolder = fullfile(resultFolder,'\analysis_fig');
 % if ~exist(FigureFolder, 'dir')
 %     mkdir(FigureFolder);
 % end
@@ -248,7 +248,7 @@ for o = 1:numel(outs)
     outName = outs(o).name;
     iterNum = outs(o).iterNum;
 
-    outDir  = fullfile(baseFolder, outName);
+    outDir  = fullfile(resultFolder, outName);
 
     All(o).name         = outName;
     All(o).iterNum      = iterNum;
@@ -397,8 +397,9 @@ for o = 1:numel(outs)
 end
 
 %% ===== baseline metrics (Off_GRF.sto, Off_kinematics.sto) =====
-grfInitSto   = fullfile(baseFolder, 'Off_GRF.sto');
-guessInitSto = fullfile(baseFolder, 'Off_kinematics.sto');
+inputFolder = fullfile(baseFolder, '..', 'inputs');
+grfInitSto   = fullfile(inputFolder, 'Off_GRF.sto');
+guessInitSto = fullfile(inputFolder, 'Off_kinematics.sto');
 
 % --- baseline propulsion ---
 fid = fopen(grfInitSto,'r');

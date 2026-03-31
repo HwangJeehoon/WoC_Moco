@@ -19,7 +19,8 @@ baseFolder = fileparts(thisFile);
 % ---------------------------------------------------
 
 % 사용할 model명 지정
-ModelName = model;
+ModelNameOsim = model;
+[~, modelName, ~] = fileparts(model); % 이름에서 .osim 떼어내기
 
 % QP Parameter
 iterNum          = iter;    % 원하는 iteration 수
@@ -47,7 +48,7 @@ MocoOpts.weight_finalTime  = q;    % Final time goal weight
 
 % Output 폴더명 지정
 OutputFolderName = result_dir;             % 원하는 폴더명
-OutputFolder     = fullfile(baseFolder, OutputFolderName);
+OutputFolder     = fullfile(baseFolder,'..','results',OutputFolderName);
 if ~exist(OutputFolder, 'dir')
     mkdir(OutputFolder);
 end
@@ -56,14 +57,22 @@ end
 %  2. 초기 데이터 경로 설정
 %    (파일 이름은 환경에 맞게 수정해서 사용)
 % ---------------------------------------------------
+
+% Guess.sto, setup.xml 등을 모아놓는 경로
+inputPath = fullfile(baseFolder, '..','inputs');
+
 % AFO control = 0 인 초기 가이트(kinematics guess)
-guessInitSto = fullfile(baseFolder, 'guess_init_v5.sto');
+guessInitSto = fullfile(inputPath,'guess_init_v5.sto');
 
 % 초기 GRF (full stride) – 첫 루프에서 stance 추출용
-grfInitSto   = fullfile(baseFolder, 'GRF_init_v5.sto');
+grfInitSto   = fullfile(inputPath, 'GRF_init_v5.sto');
 
 % AnalyzeTool(Pk, kinematics) setup XML
-AnalySetupPath  = fullfile(baseFolder, 'analysis_setup.xml');
+AnalySetupPath  = fullfile(inputPath, 'analysis_setup.xml');
+
+% Main으로 사용할 Model을 모아놓는 경로
+modelPath = fullfile(baseFolder, '..','models');
+
 
 %% --------------------------------------------------
 %  2.5 실행 범위 결정 (일반 / Resume)
@@ -79,7 +88,7 @@ else
     end
 
     % Resume_dir가 baseFolder 기준 상대경로라고 가정 (예: 'et_a001b0_iter300\result_300')
-    resumeAbsDir = fullfile(baseFolder, resume_dir);
+    resumeAbsDir = fullfile(baseFolder,'..','results', resume_dir);
 
     % result_XXX에서 XXX 파싱
     [~, resumeFolderName] = fileparts(resumeAbsDir);
@@ -110,10 +119,14 @@ for i = startIter:endIter
         if i == 1
             kinStoForAnaly = guessInitSto;
             grfStoPath     = grfInitSto;
+            modelPathForAnaly = fullfile(modelPath, ModelNameOsim);
         else
             prevResultDir  = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
             kinStoForAnaly = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i-1));
             grfStoPath     = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', i-1));
+
+            prevAnalyDir   = fullfile(OutputFolder, sprintf('result_%d', i-1), 'analy_result');
+            modelPathForAnaly = fullfile(prevAnalyDir, sprintf('%s_%d.osim', modelName, i-1));
         end
     else
         if i == startIter
@@ -121,10 +134,16 @@ for i = startIter:endIter
             prevResultDir  = fullfile(resumeAbsDir, 'moco_result');
             kinStoForAnaly = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', baseIter));
             grfStoPath     = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', baseIter));
+
+            prevAnalyDir   = fullfile(resumeAbsDir, 'analy_result');
+            modelPathForAnaly = fullfile(prevAnalyDir, sprintf('%s_%d.osim', modelName, baseIter));
         else
             prevResultDir  = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
             kinStoForAnaly = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i-1));
             grfStoPath     = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', i-1));
+
+            prevAnalyDir   = fullfile(OutputFolder, sprintf('result_%d', i-1), 'analy_result');
+            modelPathForAnaly = fullfile(prevAnalyDir, sprintf('%s_%d.osim', modelName, i-1));
         end
     end
 
@@ -145,7 +164,7 @@ for i = startIter:endIter
     % analy_setup.xml 안에 PointKinematics가 정의되어 있고,
     % AnalyzeTool 결과 디렉터리가 AnalyResultDir가 되도록 override
     WoC_moco_analysis(AnalySetupPath, ...
-        'modelPath', ModelName,...
+        'modelPath', modelPathForAnaly,...
         'kinematicsStoPath', kinStoForAnaly, ...
         'resultsDir', AnalyResultDir);
 
@@ -238,15 +257,15 @@ for i = startIter:endIter
             guessStoPath = prevHalf;
         end
     end
-
-    sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, ModelName,MocoOpts);
+    
+    baseOsimPath = fullfile(modelPath, ModelNameOsim); % 기본 Model을 쓰고, moco_WoC_loop 안에서 갱신
+    sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, baseOsimPath, MocoOpts);
 
     %------------------------------------------------
     % 3-8. moco 결과 저장 (kinematics, GRF 등)
     %------------------------------------------------
     resOpts           = struct();
-%     resOpts.modelPath = fullfile(baseFolder, ModelName);
-    resOpts.modelPath = fullfile(AnalyResultDir, sprintf('2D_gait_AFO_pc_%d.osim', i));
+    resOpts.modelPath = fullfile(AnalyResultDir, sprintf('%s_%d.osim', modelName, i));
     resOpts.prefix    = sprintf('moco_WoC_Solution_iter%02d', i);
     moco_WoC_getResult(sol, mocoResultDir, resOpts);
 

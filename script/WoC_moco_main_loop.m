@@ -69,11 +69,14 @@
 % clc; clear; close all;
 % WoC_moco_main('2D_gait_AFO_pc_20BW.osim',45, 0.05, 0,'et',1,0.03,'et_a005b0_iter258to300_20BW', true, 'et_a005b0_iter300_20BW\result_258') %위에서 이거 잘못 돌림
 
-clc; clear; close all;
-WoC_moco_main('2D_gait_AFO_pc_20BW.osim',300, 0.1, 0,'et',1,0.03,'Debug_et_a01b0_iter300_20BW', false)
+% clc; clear; close all;
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim',300, 0.1, 0,'et',1,0.03,'Debug_et_a01b0_iter300_20BW', false)
+
+% clc; clear; close all;
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim',300, 0.01, 0,'et',1,0.03,'Debug_et_a001b0_iter300_20BW', false)
 
 clc; clear; close all;
-WoC_moco_main('2D_gait_AFO_pc_20BW.osim',300, 0.01, 0,'et',1,0.03,'Debug_et_a001b0_iter300_20BW', false)
+WoC_moco_main('2D_gait_AFO_pc_20BW.osim',300, 0.01, 0,'et',1,0.03,'test2', false)
 
 %% Off 추출
 clc; clear; close all;

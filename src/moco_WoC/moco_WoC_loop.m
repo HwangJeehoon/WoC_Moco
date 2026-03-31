@@ -1,4 +1,4 @@
-function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, resultsDir, modelName ,opts)
+function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, resultsDir, modelPath ,opts)
 % moco_WoC_loop
 %
 %   오른발 AFO reference control(.sto)와
@@ -43,7 +43,8 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     col_r = 'AFO_r';
     col_l = 'AFO_l';
 
-    baseOsimPath = modelName;
+    baseOsimPath = modelPath;
+    [~, modelName, ~] = fileparts(baseOsimPath);
 
     % ---- 1) STO 읽기 (Storage + ArrayDouble) ----
     sto = Storage(controlInitStoPath);
@@ -157,7 +158,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     objectsNode.appendChild(g2);
 
     % ---- 5) 수정된 osim 저장 후 그걸 ModelProcessor로 사용 ----
-    injectedOsimPath = fullfile(resultsDir, sprintf('2D_gait_AFO_pc_%d.osim', i));
+    injectedOsimPath = fullfile(resultsDir, sprintf('%s_%d.osim', modelName, i));
     xmlwrite(injectedOsimPath, doc);
 
     modelProcessor = ModelProcessor(injectedOsimPath);

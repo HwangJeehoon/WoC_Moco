@@ -11,6 +11,7 @@ end
 baseFolder = fileparts(thisFile);
 
 %% 기본 설정
+resultFolder = fullfile(baseFolder, '..', 'results');
 OutputFolderName = 'et_a001b0_iter300_50BW_gastr25'; % 원하는 결과의 폴더 명
 figureFolderName = fullfile(OutputFolderName,'\Fig');
 iterNum          = 300;
@@ -19,22 +20,22 @@ optimalForce     = 300;   % AFO PathActuator optimal force - 50BW
 % optimalForce     = 182;   % AFO PathActuator optimal force - 30BW
 % optimalForce     = 121;   % AFO PathActuator optimal force - 20BW
 
-OutputFolder   = fullfile(baseFolder, OutputFolderName);
-FigureFolder   = fullfile(baseFolder, figureFolderName);
-
+OutputFolder   = fullfile(resultFolder, OutputFolderName);
+FigureFolder   = fullfile(resultFolder, figureFolderName);
 if ~exist(FigureFolder, 'dir')
     mkdir(FigureFolder);
 end
 
 %% Baseline 설정
-% grfInitSto     = fullfile(baseFolder, 'Off_GRF.sto');        % baseline -> OfF 기준 full stride
-% guessInitSto   = fullfile(baseFolder, 'Off_kinematics.sto');
+inputFolder = fullfile(baseFolder, '..', 'inputs');
+% grfInitSto     = fullfile(inputFolder, 'Off_GRF.sto');        % baseline -> OfF 기준 full stride
+% guessInitSto   = fullfile(inputFolder, 'Off_kinematics.sto');
 
-% grfInitSto     = fullfile(baseFolder, 'Off_GRF_sol25.sto');        % baseline -> Off Sol25 
-% guessInitSto   = fullfile(baseFolder, 'Off_kinematics_sol25.sto');
+% grfInitSto     = fullfile(inputFolder, 'Off_GRF_sol25.sto');        % baseline -> Off Sol25 
+% guessInitSto   = fullfile(inputFolder, 'Off_kinematics_sol25.sto');
 
-grfInitSto     = fullfile(baseFolder, 'Off_GRF_gastrc25.sto');        % baseline -> Off gastrc25 
-guessInitSto   = fullfile(baseFolder, 'Off_kinematics_gastrc25.sto');
+grfInitSto     = fullfile(inputFolder, 'Off_GRF_gastrc25.sto');        % baseline -> Off gastrc25 
+guessInitSto   = fullfile(inputFolder, 'Off_kinematics_gastrc25.sto');
 
 pelvisField  = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/value');
 gastrocField = matlab.lang.makeValidName('/gastroc_r/activation');
