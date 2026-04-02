@@ -1,4 +1,4 @@
-function moco_WoC_Solution = moco_WoC_loop_extractOff(guessStoPath, model ,opts)
+function moco_WoC_Solution = moco_WoC_loop_extractOff(guessStoPath, modelPath ,opts)
 % moco_WoC_loop
 %
 %   오른발 AFO reference control(.sto)와
@@ -34,7 +34,7 @@ function moco_WoC_Solution = moco_WoC_loop_extractOff(guessStoPath, model ,opts)
     study.setName('moco_WoC');
     problem = study.updProblem();
 
-    baseOsimPath = model;
+    baseOsimPath = modelPath;
 
     modelProcessor = ModelProcessor(baseOsimPath);
     problem.setModelProcessor(modelProcessor);

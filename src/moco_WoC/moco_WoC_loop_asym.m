@@ -1,4 +1,4 @@
-function moco_WoC_Solution = moco_WoC_loop_asym(guessStoPath, model ,opts)
+function moco_WoC_Solution = moco_WoC_loop_asym(guessStoPath, modelPath ,opts)
 % moco_WoC_loop
 %
 %   오른발 AFO reference control(.sto)와
@@ -34,7 +34,7 @@ function moco_WoC_Solution = moco_WoC_loop_asym(guessStoPath, model ,opts)
     study.setName('moco_WoC');
     problem = study.updProblem();
 
-    baseOsimPath = model;
+    baseOsimPath = modelPath;
 
     modelProcessor = ModelProcessor(baseOsimPath);
     problem.setModelProcessor(modelProcessor);
@@ -45,7 +45,7 @@ function moco_WoC_Solution = moco_WoC_loop_asym(guessStoPath, model ,opts)
     % 2. Goal 설정
     %--------------------------------------------------------------
 
-    % 2-1) Periodic goal
+    % 2-1) Periodic goal (좌우 symmetric goal과는 다름)
     periodicGoal = MocoPeriodicityGoal('periodicGoal');
     problem.addGoal(periodicGoal);
 
