@@ -1,124 +1,99 @@
 % 호출 규약:
-%   optResume.result_dir = '결과 폴더명';
-%   WoC_moco_main(model, iter, alpha, beta, cost, p, q, optMode, optResume)
+%   WoC_moco_main(model, iter, alpha, beta, cost, p, q, optMode, result_name)
+%   WoC_moco_main(model, iter, alpha, beta, cost, p, q, optMode, result_name, optResume)
 %
-%   optMode: 'modeWoC'  - WoC QP 기반 최적 보조 토크
-%            'modeOff'  - 보조력 없음 (AFO=0, QP 생략)
+%   optMode: 'modeWoC'    - WoC QP 기반 최적 보조 토크
+%            'modeOff'    - 보조력 없음 (AFO=0, QP 생략)
+%            struct       - modeSpline (optMode.type = 'modeSpline', + 파라미터 필드)
 %            'modeCustom' - 사용자 정의 (TODO)
 %
-%   Resume 예시 (optResume.resume_dir 가 있으면 자동 resume):
-%     optResume.result_dir = 'et_a001b0_iter600to1000';
-%     optResume.resume_dir = 'et_a001b0_iter600\result_600';
-%     WoC_moco_main('2D_gait_AFO_pc.osim', 400, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+%   Resume 예시 (optResume.resume_name 이 있으면 자동 resume):
+%     optResume.resume_name = 'et_a001b0_iter600\result_600';
+%     WoC_moco_main('2D_gait_AFO_pc.osim', 400, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'et_a001b0_iter600to1000', optResume)
 
 
 %% modeWoC 예시
 
 % clc; clear; close all;
-% optResume.result_dir = 'GRF_debug_et_a001b0_iter300';
-% WoC_moco_main('2D_gait_AFO_pc.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'GRF_debug_et_a001b0_iter300')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a001b0_iter600to1000';
-% optResume.resume_dir = 'et_a001b0_iter600\result_600';
-% WoC_moco_main('2D_gait_AFO_pc.osim', 400, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% optResume.resume_name = 'et_a001b0_iter600\result_600';
+% WoC_moco_main('2D_gait_AFO_pc.osim', 400, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'et_a001b0_iter600to1000', optResume)
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a03b0_iter300';
-% WoC_moco_main('2D_gait_AFO_pc.osim', 300, 0.3, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc.osim', 300, 0.3, 0, 'et', 1, 0.03, 'modeWoC', 'et_a03b0_iter300')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a001b0_iter300_30BW';
-% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'et_a001b0_iter300_30BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a005b0_iter300_30BW';
-% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.05, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.05, 0, 'et', 1, 0.03, 'modeWoC', 'et_a005b0_iter300_30BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a01b0_iter300_30BW';
-% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.1, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.1, 0, 'et', 1, 0.03, 'modeWoC', 'et_a01b0_iter300_30BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a03b0_iter300_30BW';
-% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.3, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.3, 0, 'et', 1, 0.03, 'modeWoC', 'et_a03b0_iter300_30BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a05b0_iter300_30BW';
-% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.5, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 0.5, 0, 'et', 1, 0.03, 'modeWoC', 'et_a05b0_iter300_30BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a001b0_iter1000to1500';
-% optResume.resume_dir = 'et_a001b0_iter1000\result_1000';
-% WoC_moco_main('2D_gait_AFO_pc.osim', 500, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% optResume.resume_name = 'et_a001b0_iter1000\result_1000';
+% WoC_moco_main('2D_gait_AFO_pc.osim', 500, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'et_a001b0_iter1000to1500', optResume)
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a001b0_iter300_40BW';
-% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'et_a001b0_iter300_40BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a005b0_iter300_40BW';
-% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.05, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.05, 0, 'et', 1, 0.03, 'modeWoC', 'et_a005b0_iter300_40BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a01b0_iter300_40BW';
-% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.1, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.1, 0, 'et', 1, 0.03, 'modeWoC', 'et_a01b0_iter300_40BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a03b0_iter300_40BW';
-% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.3, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.3, 0, 'et', 1, 0.03, 'modeWoC', 'et_a03b0_iter300_40BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a05b0_iter300_40BW';
-% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.5, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 0.5, 0, 'et', 1, 0.03, 'modeWoC', 'et_a05b0_iter300_40BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a001b0_iter300_20BW';
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'et_a001b0_iter300_20BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a005b0_iter300_20BW';  % 258번에서 오류뜸
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.05, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.05, 0, 'et', 1, 0.03, 'modeWoC', 'et_a005b0_iter300_20BW')  % 258번에서 오류뜸
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a005b0_iter258to300_20BW';
-% optResume.resume_dir = 'et_a005b0_iter300_20BW\result_258';
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 45, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% optResume.resume_name = 'et_a005b0_iter300_20BW\result_258';
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 45, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'et_a005b0_iter258to300_20BW', optResume)
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a01b0_iter300_20BW';
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.1, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.1, 0, 'et', 1, 0.03, 'modeWoC', 'et_a01b0_iter300_20BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a03b0_iter300_20BW';  % 36번까지 돌리고 끊음
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.3, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.3, 0, 'et', 1, 0.03, 'modeWoC', 'et_a03b0_iter300_20BW')  % 36번까지 돌리고 끊음
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a005b0_iter36to300_20BW';
-% optResume.resume_dir = 'et_a03b0_iter300_20BW\result_36';
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 270, 0.3, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% optResume.resume_name = 'et_a03b0_iter300_20BW\result_36';
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 270, 0.3, 0, 'et', 1, 0.03, 'modeWoC', 'et_a005b0_iter36to300_20BW', optResume)
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a05b0_iter300_20BW';
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.5, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.5, 0, 'et', 1, 0.03, 'modeWoC', 'et_a05b0_iter300_20BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'Debug_et_a01b0_iter300_20BW';
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.1, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.1, 0, 'et', 1, 0.03, 'modeWoC', 'Debug_et_a01b0_iter300_20BW')
 
 % clc; clear; close all;
-% optResume.result_dir = 'Debug_et_a001b0_iter300_20BW';
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'Debug_et_a001b0_iter300_20BW')
 
 clc; clear; close all;
-optResume.result_dir = 'test2';
-WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'test2')
 
 %% modeOff 예시
 
 % clc; clear; close all;
-% optResume.result_dir = 'off_20BW';
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 1, 0, 0, 'et', 1, 0.03, 'modeOff', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 1, 0, 0, 'et', 1, 0.03, 'modeOff', 'off_20BW')
 
 %% modeSpline 예시
 %   optMode를 struct로 전달. trigger+rise+flat+fall <= 0.6, maxVal in [0,1]
@@ -128,24 +103,21 @@ WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC'
 %     → 0.1에서 시작해 0.1 동안 상승, 0.2 동안 0.8 유지, 0.1 동안 하강
 
 % clc; clear; close all;
-% optResume.result_dir = 'spline_t01r01f02d01m08_20BW';
 % optMode.type    = 'modeSpline';
 % optMode.trigger = 0.1;
 % optMode.rise    = 0.1;
 % optMode.flat    = 0.2;
 % optMode.fall    = 0.1;
 % optMode.maxVal  = 0.8;
-% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0, 0, 'et', 1, 0.03, optMode, optResume)
+% WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 0, 0, 'et', 1, 0.03, optMode, 'spline_t01r01f02d01m08_20BW')
 
 %% 근육 장애 (modeWoC)
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a001b0_iter300_50BW_sol25';
-% WoC_moco_main('2D_gait_AFO_pc_sol25.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_sol25.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'et_a001b0_iter300_50BW_sol25')
 
 % clc; clear; close all;
-% optResume.result_dir = 'et_a001b0_iter300_50BW_gastr25';
-% WoC_moco_main('2D_gait_AFO_pc_gastr25.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', optResume)
+% WoC_moco_main('2D_gait_AFO_pc_gastr25.osim', 300, 0.01, 0, 'et', 1, 0.03, 'modeWoC', 'et_a001b0_iter300_50BW_gastr25')
 
 %% Off 추출 (moco_WoC_loop_extractOff 직접 사용 - 단발성 추출용)
 % clc; clear; close all;

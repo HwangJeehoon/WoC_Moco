@@ -1,15 +1,13 @@
-function WoC_moco_main(model, iter, a, b, cost, p, q, optMode, optResume)
+function WoC_moco_main(model, iter, a, b, cost, p, q, optMode, result_name, optResume)
 % WoC_moco_main
 %
 %   호출 예시:
-%     % 일반 실행 (string optMode)
-%     optResume.result_dir = 'my_result';
-%     WoC_moco_main(model, iter, a, b, cost, p, q, 'modeWoC', optResume)
+%     % 일반 실행
+%     WoC_moco_main(model, iter, a, b, cost, p, q, 'modeWoC', 'my_result')
 %
-%     % Resume 실행 (optResume.resume_dir 가 있으면 자동으로 resume mode)
-%     optResume.result_dir = 'my_result_continued';
-%     optResume.resume_dir = 'my_result\result_300';
-%     WoC_moco_main(model, iter, a, b, cost, p, q, 'modeWoC', optResume)
+%     % Resume 실행 (optResume.resume_name 이 있으면 자동으로 resume mode)
+%     optResume.resume_name = 'my_result\result_300';
+%     WoC_moco_main(model, iter, a, b, cost, p, q, 'modeWoC', 'my_result_continued', optResume)
 %
 %   optMode (string):
 %     'modeWoC'    : WoC QP 기반 최적 보조 토크 (기본 동작)
@@ -63,22 +61,22 @@ if strcmpi(modeType, 'modeSpline')
 end
 
 %% --------------------------------------------------
-%  optResume 파싱
+%  result_name / optResume 파싱
 % ---------------------------------------------------
-if nargin < 9 || isempty(optResume)
+if nargin < 9 || isempty(result_name)
+    error('result_name 을 지정해야 합니다.');
+end
+
+if nargin < 10 || isempty(optResume)
     optResume = struct();
 end
-if ~isfield(optResume, 'result_dir') || isempty(optResume.result_dir)
-    error('optResume.result_dir 를 지정해야 합니다.');
-end
-result_dir = optResume.result_dir;
 
-% resume_dir 가 있으면 resume mode
-resume_mode = isfield(optResume, 'resume_dir') && ~isempty(optResume.resume_dir);
+% resume_name 이 있으면 resume mode
+resume_mode = isfield(optResume, 'resume_name') && ~isempty(optResume.resume_name);
 if resume_mode
-    resume_dir = optResume.resume_dir;
+    resume_name = optResume.resume_name;
 else
-    resume_dir = '';
+    resume_name = '';
 end
 
 %% --------------------------------------------------
@@ -125,9 +123,8 @@ end
 MocoOpts.weight_effort    = p;
 MocoOpts.weight_finalTime = q;
 
-% Output 폴더명 지정
-OutputFolderName = result_dir;
-OutputFolder     = fullfile(baseFolder,'..','results',OutputFolderName);
+% Output 폴더
+OutputFolder = fullfile(baseFolder,'..','results', result_name);
 if ~exist(OutputFolder, 'dir')
     mkdir(OutputFolder);
 end
@@ -150,18 +147,14 @@ if ~resume_mode
     endIter   = iterNum;
     fprintf('=== [%s] Normal mode: result_1 -> result_%d ===\n', modeType, endIter);
 else
-    if isempty(resume_dir)
-        error('resume_mode가 true이면 optResume.resume_dir 를 지정해야 합니다.');
-    end
-
-    % resume_dir 가 baseFolder 기준 상대경로 (예: 'my_result\result_300')
-    resumeAbsDir = fullfile(baseFolder,'..','results', resume_dir);
+    % resume_name 가 baseFolder 기준 상대경로 (예: 'my_result\result_300')
+    resumeAbsDir = fullfile(baseFolder,'..','results', resume_name);
 
     % result_XXX에서 XXX 파싱
     [~, resumeFolderName] = fileparts(resumeAbsDir);
     tok = regexp(resumeFolderName, '^result_(\d+)$', 'tokens', 'once');
     if isempty(tok)
-        error('optResume.resume_dir 마지막 폴더명이 result_### 형식이어야 합니다: %s', resumeFolderName);
+        error('optResume.resume_name 마지막 폴더명이 result_### 형식이어야 합니다: %s', resumeFolderName);
     end
     baseIter  = str2double(tok{1});
     startIter = baseIter + 1;
