@@ -1,18 +1,18 @@
-function WoC_moco_main(model, iter, a, b, cost, p, q, optMode, result_name, optResume)
+function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 % WoC_moco_main
 %
 %   호출 예시:
 %     % 일반 실행
-%     WoC_moco_main(model, iter, a, b, cost, p, q, 'modeWoC', 'my_result')
+%     WoC_moco_main(model, iter, 'modeWoC', 'my_result')
+%     WoC_moco_main(model, iter, 'modeWoC', 'my_result', opts)
 %
 %     % Resume 실행 (optResume.resume_name 이 있으면 자동으로 resume mode)
 %     optResume.resume_name = 'my_result\result_300';
-%     WoC_moco_main(model, iter, a, b, cost, p, q, 'modeWoC', 'my_result_continued', optResume)
+%     WoC_moco_main(model, iter, 'modeWoC', 'my_result_continued', opts, optResume)
 %
 %   optMode (string):
 %     'modeWoC'    : WoC QP 기반 최적 보조 토크 (기본 동작)
 %     'modeOff'    : 보조력 없음 (AFO = 0, QP 생략)
-%     'modeCustom' : 사용자 정의 보조력 (TODO)
 %
 %   optMode (struct) — modeSpline 전용:
 %     .type    = 'modeSpline'
@@ -22,13 +22,21 @@ function WoC_moco_main(model, iter, a, b, cost, p, q, optMode, result_name, optR
 %     .fall    : 하강 구간 길이
 %     .maxVal  : 최대 출력값 (0 ~ 1)
 %     조건: trigger + rise + flat + fall <= 0.6
+%
+%   opts (선택 struct):
+%     .alpha    : QP 비용 계수 (default = 0.01)
+%     .beta     : QP 스무딩 계수 (default = 0)
+%     .cost     : Main cost 종류 'et'|'etw'|'etv' (default = 'et')
+%     .effort   : Moco effort goal weight (default = 1)
+%     .finalTime: Moco final time goal weight (default = 0.03)
+%     .gaitMode : 'modeSym' | 'modeAsym' (default = 'modeSym')
 
 clc; close all;
 
 %% --------------------------------------------------
 %  optMode 파싱 (string / struct 양쪽 허용)
 % ---------------------------------------------------
-if nargin < 8 || isempty(optMode)
+if nargin < 3 || isempty(optMode)
     optMode = 'modeWoC';
 end
 
@@ -45,9 +53,9 @@ else
     error('optMode는 string 또는 struct 이어야 합니다.');
 end
 
-validModes = {'modeWoC', 'modeOff', 'modeSpline', 'modeCustom'};
+validModes = {'modeWoC', 'modeOff', 'modeSpline'};
 if ~ismember(modeType, validModes)
-    error('Unknown optMode: ''%s''. Valid options: modeWoC, modeOff, modeSpline, modeCustom.', modeType);
+    error('Unknown optMode: ''%s''. Valid options: modeWoC, modeOff, modeSpline.', modeType);
 end
 
 % modeSpline 필수 필드 검증 (루프 진입 전에 미리 확인)
@@ -61,14 +69,30 @@ if strcmpi(modeType, 'modeSpline')
 end
 
 %% --------------------------------------------------
-%  result_name / optResume 파싱
+%  result_name / opts / optResume 파싱
 % ---------------------------------------------------
-if nargin < 9 || isempty(result_name)
+if nargin < 4 || isempty(result_name)
     error('result_name 을 지정해야 합니다.');
 end
 
-if nargin < 10 || isempty(optResume)
+if nargin < 5 || isempty(opts)
+    opts = struct();
+end
+
+if nargin < 6 || isempty(optResume)
     optResume = struct();
+end
+
+% opts 기본값
+alpha    = getOpt(opts, 'alpha',     0.01);
+beta     = getOpt(opts, 'beta',      0);
+cost     = getOpt(opts, 'cost',      'et');
+effort   = getOpt(opts, 'effort',    1);
+finalTime= getOpt(opts, 'finalTime', 0.03);
+gaitMode = getOpt(opts, 'gaitMode',  'modeSym');
+
+if ~ismember(gaitMode, {'modeSym', 'modeAsym'})
+    error('opts.gaitMode 는 ''modeSym'' 또는 ''modeAsym'' 이어야 합니다.');
 end
 
 % resume_name 이 있으면 resume mode
@@ -99,8 +123,8 @@ ModelNameOsim = model;
 
 % QP Parameter (modeWoC에서만 사용)
 iterNum          = iter;
-coeffi_cost      = a;
-coeffi_smoothing = b;
+coeffi_cost      = alpha;
+coeffi_smoothing = beta;
 
 % Main Cost (modeWoC에서만 사용)
 eta_tau   = false;
@@ -120,8 +144,9 @@ switch lower(cost)
 end
 
 % Moco Parameter
-MocoOpts.weight_effort    = p;
-MocoOpts.weight_finalTime = q;
+MocoOpts.weight_effort    = effort;
+MocoOpts.weight_finalTime = finalTime;
+MocoOpts.gaitMode         = gaitMode;
 
 % Output 폴더
 OutputFolder = fullfile(baseFolder,'..','results', result_name);
@@ -322,14 +347,6 @@ for i = startIter:endIter
 
             controlRefStoPath = fullfile(controlResultDir, 'control.sto');
 
-        case 'modeCustom'
-            %--------------------------------------------
-            % Custom mode: TODO
-            % 사용자 정의 보조력 프로파일을 적용하는 mode.
-            % controlRefStoPath 를 설정하는 로직을 여기에 구현.
-            %--------------------------------------------
-            error('[modeCustom] is not yet implemented.');
-
     end  % switch modeType
 
     %------------------------------------------------
@@ -339,19 +356,31 @@ for i = startIter:endIter
         if i == 1
             guessStoPath = guessInitSto;
         else
-            prevHalf     = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result', ...
-                sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i-1));
-            guessStoPath = prevHalf;
+            prevMocoDir = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
+            if strcmpi(gaitMode, 'modeSym')
+                guessStoPath = fullfile(prevMocoDir, ...
+                    sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i-1));
+            else  % modeAsym
+                guessStoPath = fullfile(prevMocoDir, ...
+                    sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i-1));
+            end
         end
     else
         if i == startIter
-            prevHalf     = fullfile(resumeAbsDir, 'moco_result', ...
-                sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', baseIter));
-            guessStoPath = prevHalf;
+            prevMocoDir = fullfile(resumeAbsDir, 'moco_result');
         else
-            prevHalf     = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result', ...
-                sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', i-1));
-            guessStoPath = prevHalf;
+            prevMocoDir = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
+        end
+        prevIterIdx = i - 1;
+        if i == startIter
+            prevIterIdx = baseIter;
+        end
+        if strcmpi(gaitMode, 'modeSym')
+            guessStoPath = fullfile(prevMocoDir, ...
+                sprintf('moco_WoC_Solution_iter%02d_kinematics_half.sto', prevIterIdx));
+        else  % modeAsym
+            guessStoPath = fullfile(prevMocoDir, ...
+                sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', prevIterIdx));
         end
     end
 
@@ -367,10 +396,21 @@ for i = startIter:endIter
     resOpts           = struct();
     resOpts.modelPath = fullfile(AnalyResultDir, sprintf('%s_%d.osim', modelName, i));
     resOpts.prefix    = sprintf('moco_WoC_Solution_iter%02d', i);
+    resOpts.gaitMode  = gaitMode;
     moco_WoC_getResult(sol, mocoResultDir, resOpts);
 
     fprintf('Iteration %d done.\n', i);
 end
 
 fprintf('All iterations finished.\n');
+end
+
+
+%% ---- 옵션 읽기용 헬퍼 ----
+function val = getOpt(s, field, defaultVal)
+    if isfield(s, field) && ~isempty(s.(field))
+        val = s.(field);
+    else
+        val = defaultVal;
+    end
 end
