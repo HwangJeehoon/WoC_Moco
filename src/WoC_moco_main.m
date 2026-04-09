@@ -95,6 +95,23 @@ if ~ismember(gaitMode, {'modeSym', 'modeAsym'})
     error('opts.gaitMode 는 ''modeSym'' 또는 ''modeAsym'' 이어야 합니다.');
 end
 
+%% --------------------------------------------------
+%  파라미터 출력
+% ---------------------------------------------------
+fprintf('=== WoC_moco_main Parameters ===\n');
+fprintf('  model      : %s\n', model);
+fprintf('  iter       : %d\n', iter);
+fprintf('  optMode    : %s\n', modeType);
+fprintf('  result_name: %s\n', result_name);
+fprintf('  --- opts ---\n');
+fprintf('  alpha      : %.4g\n', alpha);
+fprintf('  beta       : %.4g\n', beta);
+fprintf('  cost       : %s\n',   cost);
+fprintf('  effort     : %.4g\n', effort);
+fprintf('  finalTime  : %.4g\n', finalTime);
+fprintf('  gaitMode   : %s\n',   gaitMode);
+fprintf('================================\n');
+
 % resume_name 이 있으면 resume mode
 resume_mode = isfield(optResume, 'resume_name') && ~isempty(optResume.resume_name);
 if resume_mode
