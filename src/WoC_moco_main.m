@@ -293,7 +293,7 @@ for i = startIter:endIter
             fprintf(fid, 'endheader\n');
             fprintf(fid, 'time\tAFO_r\tAFO_l\n');
             fprintf(fid, '0\t0\t0\n');
-            fprintf(fid, '1\t0\t0\n');
+            fprintf(fid, '100\t0\t0\n');
             fclose(fid);
 
         case 'modeSpline'
