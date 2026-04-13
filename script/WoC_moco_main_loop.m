@@ -21,7 +21,7 @@
 
 %% test
 clc; clear; close all;
-opts.alpha = 0.01;
+opts.QP_effort = 0.01;
 WoC_moco_main('2D_gait_AFO_pc.osim', 2, 'modeWoC', 'test1', opts)
 
 clc; clear; close all;
@@ -49,98 +49,122 @@ optMode.fall    = 0.1;
 optMode.maxVal  = 0.8;
 WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 2, optMode, 'test5')
 
+
+clc; clear; close all;
+optMode.type    = 'modeSpline';
+optMode.trigger = 0.1;
+optMode.rise    = 0.1;
+optMode.flat    = 0.0;
+optMode.fall    = 0.1;
+optMode.maxVal  = 0.8;
+opts.QP_effort = 0.03;
+opts.QP_smooth = 0.1;
+opts.gaitMode = 'modeSym';
+WoC_moco_main('2D_gait_AFO_pc.osim', 2, optMode, 'test6', opts)
+
+clc; clear; close all;
+optMode.type    = 'modeSpline';
+optMode.trigger = 0.1;
+optMode.rise    = 0.1;
+optMode.flat    = 0.0;
+optMode.fall    = 0.1;
+optMode.maxVal  = 0.8;
+opts.QP_effort = 0.03;
+opts.QP_smooth = 0.1;
+opts.gaitMode = 'modeAsym';
+WoC_moco_main('2D_gait_AFO_pc.osim', 2, optMode, 'test7', opts)
 %% modeWoC 예시
 
 % clc; clear; close all;
-% opts.alpha = 0.01;
+% opts.QP_effort = 0.01;
 % WoC_moco_main('2D_gait_AFO_pc.osim', 300, 'modeWoC', 'GRF_debug_et_a001b0_iter300', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.01;
+% opts.QP_effort = 0.01;
 % optResume.resume_name = 'et_a001b0_iter600\result_600';
 % WoC_moco_main('2D_gait_AFO_pc.osim', 400, 'modeWoC', 'et_a001b0_iter600to1000', opts, optResume)
 
 % clc; clear; close all;
-% opts.alpha = 0.3;
+% opts.QP_effort = 0.3;
 % WoC_moco_main('2D_gait_AFO_pc.osim', 300, 'modeWoC', 'et_a03b0_iter300', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.01;
+% opts.QP_effort = 0.01;
 % WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 'modeWoC', 'et_a001b0_iter300_30BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.05;
+% opts.QP_effort = 0.05;
 % WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 'modeWoC', 'et_a005b0_iter300_30BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.1;
+% opts.QP_effort = 0.1;
 % WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 'modeWoC', 'et_a01b0_iter300_30BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.3;
+% opts.QP_effort = 0.3;
 % WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 'modeWoC', 'et_a03b0_iter300_30BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.5;
+% opts.QP_effort = 0.5;
 % WoC_moco_main('2D_gait_AFO_pc_30BW.osim', 300, 'modeWoC', 'et_a05b0_iter300_30BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.01;
+% opts.QP_effort = 0.01;
 % optResume.resume_name = 'et_a001b0_iter1000\result_1000';
 % WoC_moco_main('2D_gait_AFO_pc.osim', 500, 'modeWoC', 'et_a001b0_iter1000to1500', opts, optResume)
 
 % clc; clear; close all;
-% opts.alpha = 0.01;
+% opts.QP_effort = 0.01;
 % WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 'modeWoC', 'et_a001b0_iter300_40BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.05;
+% opts.QP_effort = 0.05;
 % WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 'modeWoC', 'et_a005b0_iter300_40BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.1;
+% opts.QP_effort = 0.1;
 % WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 'modeWoC', 'et_a01b0_iter300_40BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.3;
+% opts.QP_effort = 0.3;
 % WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 'modeWoC', 'et_a03b0_iter300_40BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.5;
+% opts.QP_effort = 0.5;
 % WoC_moco_main('2D_gait_AFO_pc_40BW.osim', 300, 'modeWoC', 'et_a05b0_iter300_40BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.01;
+% opts.QP_effort = 0.01;
 % WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 'modeWoC', 'et_a001b0_iter300_20BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.05;
+% opts.QP_effort = 0.05;
 % WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 'modeWoC', 'et_a005b0_iter300_20BW', opts)  % 258번에서 오류뜸
 
 % clc; clear; close all;
-% opts.alpha = 0.01;
+% opts.QP_effort = 0.01;
 % optResume.resume_name = 'et_a005b0_iter300_20BW\result_258';
 % WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 45, 'modeWoC', 'et_a005b0_iter258to300_20BW', opts, optResume)
 
 % clc; clear; close all;
-% opts.alpha = 0.1;
+% opts.QP_effort = 0.1;
 % WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 'modeWoC', 'et_a01b0_iter300_20BW', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.3;
+% opts.QP_effort = 0.3;
 % WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 'modeWoC', 'et_a03b0_iter300_20BW', opts)  % 36번까지 돌리고 끊음
 
 % clc; clear; close all;
-% opts.alpha = 0.3;
+% opts.QP_effort = 0.3;
 % optResume.resume_name = 'et_a03b0_iter300_20BW\result_36';
 % WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 270, 'modeWoC', 'et_a005b0_iter36to300_20BW', opts, optResume)
 
 % clc; clear; close all;
-% opts.alpha = 0.5;
+% opts.QP_effort = 0.5;
 % WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 'modeWoC', 'et_a05b0_iter300_20BW', opts)
 
 clc; clear; close all;
-opts.alpha = 0.01;
+opts.QP_effort = 0.01;
 WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 'modeWoC', 'test2', opts)
 
 %% modeOff 예시
@@ -167,11 +191,11 @@ WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 'modeWoC', 'test2', opts)
 %% 근육 장애 (modeWoC)
 
 % clc; clear; close all;
-% opts.alpha = 0.01;
+% opts.QP_effort = 0.01;
 % WoC_moco_main('2D_gait_AFO_pc_sol25.osim', 300, 'modeWoC', 'et_a001b0_iter300_50BW_sol25', opts)
 
 % clc; clear; close all;
-% opts.alpha = 0.01;
+% opts.QP_effort = 0.01;
 % WoC_moco_main('2D_gait_AFO_pc_gastr25.osim', 300, 'modeWoC', 'et_a001b0_iter300_50BW_gastr25', opts)
 
 %% Off 추출 (moco_WoC_loop_extractOff 직접 사용 - 단발성 추출용)

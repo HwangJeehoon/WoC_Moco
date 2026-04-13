@@ -10,8 +10,8 @@ function OptimToq = WoC_moco_solveQP(eta, w, dt, opts)
 %   eta  : [N x 1] 또는 [1 x N] 벡터
 %   w    : [N x 1] 또는 [1 x N] 벡터
 %   opts : struct (필드는 선택)
-%       .alpha     : tau.^2 weight (default = 1)
-%       .beta      : (tau_2dot).^2 weight (default = 1)
+%       .QP_effort : tau.^2 weight (default = 1)
+%       .QP_smooth : (tau_2dot).^2 weight (default = 1)
 %       .tauMin    : 최소 bound (default = 0)
 %       .tauMax    : 최대 bound (default = 1)
 %       .tauDotMax : |tau_dot| bound (default = 1)
@@ -31,17 +31,17 @@ function OptimToq = WoC_moco_solveQP(eta, w, dt, opts)
         opts = struct();
     end
 
-    % alpha, beta
-    if ~isfield(opts,'alpha') || isempty(opts.alpha) % square coeffi
+    % QP_effort, QP_smooth
+    if ~isfield(opts,'QP_effort') || isempty(opts.QP_effort) % square coeffi
         alpha = 1.0;
     else
-        alpha = opts.alpha;
+        alpha = opts.QP_effort;
     end
 
-    if ~isfield(opts,'beta') || isempty(opts.beta) % 2dot coeffi
+    if ~isfield(opts,'QP_smooth') || isempty(opts.QP_smooth) % 2dot coeffi
         beta = 1.0;
     else
-        beta = opts.beta;
+        beta = opts.QP_smooth;
     end
 
     % tau bounds

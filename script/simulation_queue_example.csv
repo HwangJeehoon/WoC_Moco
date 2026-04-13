@@ -1,0 +1,6 @@
+model,iter,optMode_type,trigger,rise,flat,fall,maxVal,result_name,QP_effort,QP_smooth,cost,mocoEffort,mocoFinalTime,gaitMode,resume_name,Complete
+2D_gait_AFO_pc.osim,300,modeWoC,,,,,,et_a001b0_iter300,0.01,,,,,modeSym,,0
+2D_gait_AFO_pc_20BW.osim,1,modeOff,,,,,,off_20BW,,,,,,modeSym,,0
+2D_gait_AFO_pc_30BW.osim,300,modeSpline,0.1,0.1,0.2,0.1,0.8,spline_30BW,,,,,,modeSym,,0
+2D_gait_AFO_pc.osim,400,modeWoC,,,,,,et_a001b0_iter300to700,0.01,,,,,modeSym,,0
+2D_gait_AFO_pc.osim,300,modeWoC,,,,,,et_a001b0_asym,0.01,,,,,modeAsym,,0

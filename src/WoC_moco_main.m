@@ -24,12 +24,12 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     조건: trigger + rise + flat + fall <= 0.6
 %
 %   opts (선택 struct):
-%     .alpha    : QP 비용 계수 (default = 0.01)
-%     .beta     : QP 스무딩 계수 (default = 0)
-%     .cost     : Main cost 종류 'et'|'etw'|'etv' (default = 'et')
-%     .effort   : Moco effort goal weight (default = 1)
-%     .finalTime: Moco final time goal weight (default = 0.03)
-%     .gaitMode : 'modeSym' | 'modeAsym' (default = 'modeSym')
+%     .QP_effort    : QP 비용 계수 (default = 0.01)
+%     .QP_smooth    : QP 스무딩 계수 (default = 0)
+%     .cost         : Main cost 종류 'et'|'etw'|'etv' (default = 'et')
+%     .mocoEffort   : Moco effort goal weight (default = 1)
+%     .mocoFinalTime: Moco final time goal weight (default = 0.03)
+%     .gaitMode     : 'modeSym' | 'modeAsym' (default = 'modeSym')
 
 clc; close all;
 
@@ -84,12 +84,12 @@ if nargin < 6 || isempty(optResume)
 end
 
 % opts 기본값
-alpha    = getOpt(opts, 'alpha',     0.01);
-beta     = getOpt(opts, 'beta',      0);
-cost     = getOpt(opts, 'cost',      'et');
-effort   = getOpt(opts, 'effort',    1);
-finalTime= getOpt(opts, 'finalTime', 0.03);
-gaitMode = getOpt(opts, 'gaitMode',  'modeSym');
+alpha    = getOpt(opts, 'QP_effort',     0.01);
+beta     = getOpt(opts, 'QP_smooth',     0);
+cost     = getOpt(opts, 'cost',          'et');
+effort   = getOpt(opts, 'mocoEffort',    1);
+finalTime= getOpt(opts, 'mocoFinalTime', 0.03);
+gaitMode = getOpt(opts, 'gaitMode',      'modeSym');
 
 if ~ismember(gaitMode, {'modeSym', 'modeAsym'})
     error('opts.gaitMode 는 ''modeSym'' 또는 ''modeAsym'' 이어야 합니다.');
@@ -104,11 +104,11 @@ fprintf('  iter       : %d\n', iter);
 fprintf('  optMode    : %s\n', modeType);
 fprintf('  result_name: %s\n', result_name);
 fprintf('  --- opts ---\n');
-fprintf('  alpha      : %.4g\n', alpha);
-fprintf('  beta       : %.4g\n', beta);
-fprintf('  cost       : %s\n',   cost);
-fprintf('  effort     : %.4g\n', effort);
-fprintf('  finalTime  : %.4g\n', finalTime);
+fprintf('  QP_effort    : %.4g\n', alpha);
+fprintf('  QP_smooth    : %.4g\n', beta);
+fprintf('  cost         : %s\n',   cost);
+fprintf('  mocoEffort   : %.4g\n', effort);
+fprintf('  mocoFinalTime: %.4g\n', finalTime);
 fprintf('  gaitMode   : %s\n',   gaitMode);
 fprintf('================================\n');
 
