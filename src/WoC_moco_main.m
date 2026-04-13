@@ -175,8 +175,13 @@ end
 %  2. 초기 데이터 경로 설정
 % ---------------------------------------------------
 inputPath      = fullfile(baseFolder, '..','inputs');
-guessInitSto   = fullfile(inputPath, 'guess_init_v5.sto');
-grfInitSto     = fullfile(inputPath, 'GRF_init_v5.sto');
+if strcmpi(gaitMode, 'modeAsym')
+    guessInitSto = fullfile(inputPath, 'guess_init_full.sto');
+    grfInitSto   = fullfile(inputPath, 'GRF_init_full.sto');
+else  % modeSym
+    guessInitSto = fullfile(inputPath, 'guess_init_half.sto');
+    grfInitSto   = fullfile(inputPath, 'GRF_init_half.sto');
+end
 AnalySetupPath = fullfile(inputPath, 'analysis_setup.xml');
 modelPath      = fullfile(baseFolder, '..','models');
 
