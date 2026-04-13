@@ -25,7 +25,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 
     % --- 옵션 파싱 ---
     weight_effort     = getOpt(opts, 'weight_effort',     1.0);
-    weight_finalTime  = getOpt(opts, 'weight_finalTime',  0.01);
+    weight_finalTime  = getOpt(opts, 'weight_finalTime',  0.03);
     gaitMode          = getOpt(opts, 'gaitMode',          'modeSym');
 
     %--------------------------------------------------------------
@@ -163,8 +163,8 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     if strcmpi(gaitMode, 'modeSym')
         %----------------------------------------------------------
         % modeSym: 좌우 대칭 goal (반 걸음 → createPeriodicTrajectory)
-        %   - jointset 좌표: _r ↔ _l 교차 페어
-        %   - pelvis_tx, activation 제외
+        %   - jointset 좌표, Activation : _r ↔ _l 교차 페어
+        %   - pelvis_tx 제외
         %----------------------------------------------------------
         symmetryGoal = MocoPeriodicityGoal('symmetryGoal');
         problem.addGoal(symmetryGoal);

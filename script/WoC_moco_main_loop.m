@@ -223,55 +223,79 @@ WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 'modeWoC', 'test2', opts)
 % moco_WoC_getResult(sol2,resultDir2,resOpts);
 
 %% Asym test
-% clc; clear; close all;
-%
-% if isempty(mfilename)
-%     thisFile = matlab.desktop.editor.getActiveFilename;
-% else
-%     thisFile = mfilename("fullpath");
-% end
-% baseFolder = fileparts(thisFile);
-%
-% Model = '2D_gait_AFO_pc_off.osim';
-% ModelPath = fullfile(baseFolder,'..','models',Model);
-% guessInit ='guess_init_v5.sto';
-% guessPath = fullfile(baseFolder,'..','inputs',guessInit);
-% sol = moco_WoC_loop_asym(guessPath,ModelPath);
-% resultDir = fullfile(baseFolder,'..',"results\Compare_Asym");
-% resOpts.modelPath = ModelPath;
-% moco_WoC_getResult(sol,resultDir,resOpts);
-%
-% Model = '2D_gait_AFO_pc_off.osim';
-% ModelPath = fullfile(baseFolder,'..','models',Model);
-% guessInit ='guess_init_v5.sto';
-% guessPath = fullfile(baseFolder,'..','inputs',guessInit);
-% sol = moco_WoC_loop_extractOff(guessPath,ModelPath);
-% resultDir = fullfile(baseFolder,'..',"results\Compare_Sym");
-% resOpts.modelPath = ModelPath;
-% moco_WoC_getResult(sol,resultDir,resOpts);
-%
-% dataAsym = fullfile(baseFolder,'..',"results\Compare_Asym\moco_WoC_Solution_kinematics_half.sto");
-% dataAsym = get_opensim_STO2(dataAsym);
-% dataSym  = fullfile(baseFolder,'..',"results\Compare_Sym\moco_WoC_Solution_kinematics.sto");
-% dataSym = get_opensim_STO2(dataSym);
-%
-% figure; hold on
-% plot(dataAsym.time, dataAsym.x_jointset_ankle_l_ankle_angle_l_value)
-% plot(dataSym.time, dataSym.x_jointset_ankle_l_ankle_angle_l_value)
-% ylabel('Ankle(L)')
-% xlabel('time')
-% legend('Full', 'Half')
-%
-% figure; hold on
-% plot(dataAsym.time, dataAsym.x_jointset_knee_l_knee_angle_l_value)
-% plot(dataSym.time, dataSym.x_jointset_knee_l_knee_angle_l_value)
-% ylabel('Knee(L)')
-% xlabel('time')
-% legend('Full', 'Half')
-%
-% figure; hold on
-% plot(dataAsym.time, dataAsym.x_jointset_hip_l_hip_flexion_l_value)
-% plot(dataSym.time, dataSym.x_jointset_hip_l_hip_flexion_l_value)
-% ylabel('Hip(L)')
-% xlabel('time')
-% legend('Full', 'Half')
+clc; clear; close all;
+
+if isempty(mfilename)
+    thisFile = matlab.desktop.editor.getActiveFilename;
+else
+    thisFile = mfilename("fullpath");
+end
+baseFolder = fileparts(thisFile);
+
+Model = '2D_gait_AFO_pc_off.osim';
+ModelPath = fullfile(baseFolder,'..','models',Model);
+guessInit ='guess_init_full.sto';
+guessPath = fullfile(baseFolder,'..','inputs',guessInit);
+sol = moco_WoC_loop_asym(guessPath,ModelPath);
+resultDir = fullfile(baseFolder,'..',"results\Compare_Asym");
+resOpts.modelPath = ModelPath;
+moco_WoC_getResult(sol,resultDir,resOpts);
+
+Model = '2D_gait_AFO_pc_off.osim';
+ModelPath = fullfile(baseFolder,'..','models',Model);
+guessInit ='guess_init_half.sto';
+guessPath = fullfile(baseFolder,'..','inputs',guessInit);
+sol = moco_WoC_loop_extractOff(guessPath,ModelPath);
+resultDir = fullfile(baseFolder,'..',"results\Compare_Sym");
+resOpts.modelPath = ModelPath;
+moco_WoC_getResult(sol,resultDir,resOpts);
+
+dataAsym = fullfile(baseFolder,'..',"results\Compare_Asym\moco_WoC_Solution_kinematics_half.sto");
+dataAsym = get_opensim_STO2(dataAsym);
+grfAsym = fullfile(baseFolder,'..',"results\Compare_Asym\moco_WoC_Solution_GRF.sto");
+grfAsym = get_opensim_STO2(grfAsym);
+dataSym  = fullfile(baseFolder,'..',"results\Compare_Sym\moco_WoC_Solution_kinematics.sto");
+dataSym = get_opensim_STO2(dataSym);
+grfSym = fullfile(baseFolder,'..',"results\Compare_Sym\moco_WoC_Solution_GRF.sto");
+grfSym = get_opensim_STO2(grfSym);
+
+figure; hold on
+plot(dataAsym.time, dataAsym.x_jointset_ankle_l_ankle_angle_l_value)
+plot(dataSym.time, dataSym.x_jointset_ankle_l_ankle_angle_l_value)
+ylabel('Angle(rad)')
+xlabel('time')
+title('Ankle(L)')
+legend('Full', 'Half')
+
+figure; hold on
+plot(dataAsym.time, dataAsym.x_jointset_knee_l_knee_angle_l_value)
+plot(dataSym.time, dataSym.x_jointset_knee_l_knee_angle_l_value)
+ylabel('Angle(rad)')
+xlabel('time')
+legend('Full', 'Half')
+title('Knee(L)')
+
+figure; hold on
+plot(dataAsym.time, dataAsym.x_jointset_hip_l_hip_flexion_l_value)
+plot(dataSym.time, dataSym.x_jointset_hip_l_hip_flexion_l_value)
+ylabel('Angle(rad)')
+xlabel('time')
+legend('Full', 'Half')
+title('Hip(L)')
+
+figure; hold on
+plot(grfAsym.time(1:101), grfAsym.ground_force_l_vx(1:101))
+plot(grfSym.time, grfSym.ground_force_l_vx)
+ylabel('Force(N)')
+xlabel('time')
+title('apGRF')
+legend('Full', 'Half')
+
+
+clc; clear; close all;
+opts.gaitMode = 'modeAsym';
+WoC_moco_main('2D_gait_AFO_pc_off.osim', 1, 'modeOff', 'Compare_Asym2', opts)
+
+clc; clear; close all;
+opts.gaitMode = 'modeSym';
+WoC_moco_main('2D_gait_AFO_pc_off.osim', 1, 'modeOff', 'Compare_Sym2', opts)
