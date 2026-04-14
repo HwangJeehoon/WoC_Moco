@@ -35,7 +35,10 @@ function moco_WoC_getResult(moco_WoC_Solution, outputDir, opts)
         opts = struct();
     end
 
-    modelPath = getOpt(opts, 'modelPath', '2D_gait_AFO.osim');
+    if ~isfield(opts, 'modelPath') || isempty(opts.modelPath)
+        error('moco_WoC_getResult: opts.modelPath 가 지정되지 않았습니다. GRF 추출에 사용할 .osim 절대경로를 반드시 전달하세요.');
+    end
+    modelPath = opts.modelPath;
     prefix    = getOpt(opts, 'prefix',    'moco_WoC_Solution');
     gaitMode  = getOpt(opts, 'gaitMode',  'modeSym');
 

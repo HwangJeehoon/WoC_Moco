@@ -84,12 +84,42 @@ if nargin < 6 || isempty(optResume)
 end
 
 % opts 기본값
-QP_effort    = getOpt(opts, 'QP_effort',     0.01);
-QP_smooth     = getOpt(opts, 'QP_smooth',     0);
-cost     = getOpt(opts, 'cost',          'et');
-mocoEffort   = getOpt(opts, 'mocoEffort',    1);
-mocoFinalTime= getOpt(opts, 'mocoFinalTime', 0.03);
-gaitMode = getOpt(opts, 'gaitMode',      'modeSym');
+if ~isfield(opts, 'QP_effort') || isempty(opts.QP_effort)
+    QP_effort = 0.01;
+    warning('WoC_moco_main: opts.QP_effort 가 지정되지 않아 default(0.01) 를 사용합니다.');
+else
+    QP_effort = opts.QP_effort;
+end
+
+if ~isfield(opts, 'QP_smooth') || isempty(opts.QP_smooth)
+    QP_smooth = 0;
+    warning('WoC_moco_main: opts.QP_smooth 가 지정되지 않아 default(0) 를 사용합니다.');
+else
+    QP_smooth = opts.QP_smooth;
+end
+
+cost         = getOpt(opts, 'cost',      'et');
+
+if ~isfield(opts, 'mocoEffort') || isempty(opts.mocoEffort)
+    mocoEffort = 1;
+    warning('WoC_moco_main: opts.mocoEffort 가 지정되지 않아 default(1) 를 사용합니다.');
+else
+    mocoEffort = opts.mocoEffort;
+end
+
+if ~isfield(opts, 'mocoFinalTime') || isempty(opts.mocoFinalTime)
+    mocoFinalTime = 0.03;
+    warning('WoC_moco_main: opts.mocoFinalTime 가 지정되지 않아 default(0.03) 를 사용합니다.');
+else
+    mocoFinalTime = opts.mocoFinalTime;
+end
+
+if ~isfield(opts, 'gaitMode') || isempty(opts.gaitMode)
+    gaitMode = 'modeSym';
+    warning('WoC_moco_main: opts.gaitMode 가 지정되지 않아 default(''modeSym'') 를 사용합니다.');
+else
+    gaitMode = opts.gaitMode;
+end
 
 if ~ismember(gaitMode, {'modeSym', 'modeAsym'})
     error('opts.gaitMode 는 ''modeSym'' 또는 ''modeAsym'' 이어야 합니다.');
@@ -140,7 +170,7 @@ ModelNameOsim = model;
 
 % QP Parameter (modeWoC에서만 사용)
 iterNum          = iter;
-coeffi_effort      = QP_effort;
+coeffi_cost      = QP_effort;
 coeffi_smoothing = QP_smooth;
 
 % Main Cost (modeWoC에서만 사용)
@@ -298,7 +328,7 @@ for i = startIter:endIter
 
             % 3-5. QP 풀어서 tau_R(stance 구간 control) 계산
             qpOpts             = struct();
-            qpOpts.QP_effort   = coeffi_effort;
+            qpOpts.QP_effort   = coeffi_cost;
             qpOpts.QP_smooth   = coeffi_smoothing;
             qpOpts.tauDotMax   = 10;
 

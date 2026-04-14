@@ -13,20 +13,15 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %     modelPath          : base .osim 경로
 %     opts               : (선택) struct
 %       .weight_effort    : effort goal weight (default = 1.0)
-%       .weight_finalTime : final time goal weight (default = 0.01)
+%       .weight_finalTime : final time goal weight (default = 0.03)
 %       .gaitMode         : 'modeSym'  - 반 걸음 풀고 좌우 대칭 복사 (default)
 %                           'modeAsym' - 한 걸음 전체를 풀고 주기성만 강제
 
     import org.opensim.modeling.*
 
-    if nargin < 6
-        opts = struct();
-    end
-
-    % --- 옵션 파싱 ---
-    weight_effort     = getOpt(opts, 'weight_effort',     1.0);
-    weight_finalTime  = getOpt(opts, 'weight_finalTime',  0.03);
-    gaitMode          = getOpt(opts, 'gaitMode',          'modeSym');
+    weight_effort    = opts.weight_effort;
+    weight_finalTime = opts.weight_finalTime;
+    gaitMode         = opts.gaitMode;
 
     %--------------------------------------------------------------
     % 1. MocoStudy 및 문제 정의
@@ -282,12 +277,4 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     %--------------------------------------------------------------
     moco_WoC_Solution = study.solve();
 
-end
-
-function val = getOpt(s, field, defaultVal)
-    if isfield(s, field) && ~isempty(s.(field))
-        val = s.(field);
-    else
-        val = defaultVal;
-    end
 end

@@ -31,18 +31,8 @@ function OptimToq = WoC_moco_solveQP(eta, w, dt, opts)
         opts = struct();
     end
 
-    % QP_effort, QP_smooth
-    if ~isfield(opts,'QP_effort') || isempty(opts.QP_effort) % square coeffi
-        alpha = 1.0;
-    else
-        alpha = opts.QP_effort;
-    end
-
-    if ~isfield(opts,'QP_smooth') || isempty(opts.QP_smooth) % 2dot coeffi
-        beta = 1.0;
-    else
-        beta = opts.QP_smooth;
-    end
+    alpha = opts.QP_effort;
+    beta  = opts.QP_smooth;
 
     % tau bounds
     if ~isfield(opts,'tauMin') || isempty(opts.tauMin)
