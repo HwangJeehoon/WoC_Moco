@@ -27,7 +27,7 @@ function OptimToq = WoC_moco_solveQP(eta, w, dt, opts)
     w = w(:);
     N   = numel(eta);
     
-    if nargin < 3
+    if nargin < 4
         opts = struct();
     end
 

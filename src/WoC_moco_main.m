@@ -84,11 +84,11 @@ if nargin < 6 || isempty(optResume)
 end
 
 % opts 기본값
-alpha    = getOpt(opts, 'QP_effort',     0.01);
-beta     = getOpt(opts, 'QP_smooth',     0);
+QP_effort    = getOpt(opts, 'QP_effort',     0.01);
+QP_smooth     = getOpt(opts, 'QP_smooth',     0);
 cost     = getOpt(opts, 'cost',          'et');
-effort   = getOpt(opts, 'mocoEffort',    1);
-finalTime= getOpt(opts, 'mocoFinalTime', 0.03);
+mocoEffort   = getOpt(opts, 'mocoEffort',    1);
+mocoFinalTime= getOpt(opts, 'mocoFinalTime', 0.03);
 gaitMode = getOpt(opts, 'gaitMode',      'modeSym');
 
 if ~ismember(gaitMode, {'modeSym', 'modeAsym'})
@@ -104,11 +104,11 @@ fprintf('  iter       : %d\n', iter);
 fprintf('  optMode    : %s\n', modeType);
 fprintf('  result_name: %s\n', result_name);
 fprintf('  --- opts ---\n');
-fprintf('  QP_effort    : %.4g\n', alpha);
-fprintf('  QP_smooth    : %.4g\n', beta);
+fprintf('  QP_effort    : %.4g\n', QP_effort);
+fprintf('  QP_smooth    : %.4g\n', QP_smooth);
 fprintf('  cost         : %s\n',   cost);
-fprintf('  mocoEffort   : %.4g\n', effort);
-fprintf('  mocoFinalTime: %.4g\n', finalTime);
+fprintf('  mocoEffort   : %.4g\n', mocoEffort);
+fprintf('  mocoFinalTime: %.4g\n', mocoFinalTime);
 fprintf('  gaitMode   : %s\n',   gaitMode);
 fprintf('================================\n');
 
@@ -140,8 +140,8 @@ ModelNameOsim = model;
 
 % QP Parameter (modeWoC에서만 사용)
 iterNum          = iter;
-coeffi_cost      = alpha;
-coeffi_smoothing = beta;
+coeffi_effort      = QP_effort;
+coeffi_smoothing = QP_smooth;
 
 % Main Cost (modeWoC에서만 사용)
 eta_tau   = false;
@@ -161,8 +161,8 @@ switch lower(cost)
 end
 
 % Moco Parameter
-MocoOpts.weight_effort    = effort;
-MocoOpts.weight_finalTime = finalTime;
+MocoOpts.weight_effort    = mocoEffort;
+MocoOpts.weight_finalTime = mocoFinalTime;
 MocoOpts.gaitMode         = gaitMode;
 
 % Output 폴더
@@ -297,10 +297,10 @@ for i = startIter:endIter
             fprintf('dt = %.6f\n', dt);
 
             % 3-5. QP 풀어서 tau_R(stance 구간 control) 계산
-            qpOpts           = struct();
-            qpOpts.alpha     = coeffi_cost;
-            qpOpts.beta      = coeffi_smoothing;
-            qpOpts.tauDotMax = 10;
+            qpOpts             = struct();
+            qpOpts.QP_effort   = coeffi_effort;
+            qpOpts.QP_smooth   = coeffi_smoothing;
+            qpOpts.tauDotMax   = 10;
 
             one_101 = ones(101,1);
             if eta_tau
