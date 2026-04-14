@@ -75,9 +75,29 @@ opts.gaitMode = 'modeAsym';
 WoC_moco_main('2D_gait_AFO_pc.osim', 2, optMode, 'test7', opts)
 %% modeWoC 예시
 
-% clc; clear; close all;
-% opts.QP_effort = 0.01;
-% WoC_moco_main('2D_gait_AFO_pc.osim', 300, 'modeWoC', 'GRF_debug_et_a001b0_iter300', opts)
+clear; close all;
+opts.QP_effort = 0.01;
+opts.QP_smooth = 0;
+opts.gaitMode = 'modeSym';
+WoC_moco_main('2D_gait_AFO_pc.osim', 1, 'modeWoC', 'woc_test1', opts)
+
+clear; close all;
+opts.QP_effort = 0.01;
+opts.QP_smooth = 0;
+opts.gaitMode = 'modeAsym';
+WoC_moco_main('2D_gait_AFO_pc.osim', 1, 'modeWoC', 'woc_test2', opts)
+
+clear; close all;
+opts.QP_effort = 0.01;
+opts.QP_smooth = 1;
+opts.gaitMode = 'modeSym';
+WoC_moco_main('2D_gait_AFO_pc.osim', 1, 'modeWoC', 'woc_test3', opts)
+
+clear; close all;
+opts.QP_effort = 0.01;
+opts.QP_smooth = 1;
+opts.gaitMode = 'modeAsym';
+WoC_moco_main('2D_gait_AFO_pc.osim', 1, 'modeWoC', 'woc_test4', opts)
 
 % clc; clear; close all;
 % opts.QP_effort = 0.01;

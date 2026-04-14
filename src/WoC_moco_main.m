@@ -31,7 +31,7 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .mocoFinalTime: Moco final time goal weight (default = 0.03)
 %     .gaitMode     : 'modeSym' | 'modeAsym' (default = 'modeSym')
 
-clc; close all;
+close all;
 
 %% --------------------------------------------------
 %  optMode 파싱 (string / struct 양쪽 허용)

@@ -27,7 +27,7 @@
 %   1) queue_csv_path 변수를 대기열 CSV 파일 경로로 설정
 %   2) 스크립트 실행
 
-clc; clear; close all;
+clear; close all;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
 queue_csv_path = 'simulation_queue.csv';   % ← CSV 경로를 여기에 지정
@@ -37,7 +37,21 @@ if ~isfile(queue_csv_path)
     error('대기열 CSV 파일을 찾을 수 없습니다: %s', queue_csv_path);
 end
 
-T = readtable(queue_csv_path, 'TextType', 'string', 'TreatAsMissing', '');
+% endheader 행을 찾아 그 다음 줄을 열 이름, 이후를 데이터로 읽기
+raw_lines = readlines(queue_csv_path);
+endheader_idx = find(startsWith(strtrim(raw_lines), 'endheader'), 1);
+if isempty(endheader_idx)
+    col_name_line = 1;          % endheader 없으면 첫 줄을 열 이름으로 간주
+    header_lines  = string.empty(0,1);
+else
+    col_name_line = endheader_idx + 1;
+    header_lines  = raw_lines(1:endheader_idx);   % endheader 줄까지 저장
+end
+
+iopts = detectImportOptions(queue_csv_path, 'TextType', 'string');
+iopts.VariableNamesLine = col_name_line;
+iopts.DataLines         = [col_name_line + 1, Inf];
+T = readtable(queue_csv_path, iopts);
 
 required_cols = {'model','iter','optMode_type','result_name','Complete'};
 for c = required_cols
@@ -113,13 +127,48 @@ for i = 1:height(T)
         T.Complete(i) = -1;
     end
 
-    % CSV 즉시 저장 (한 행 완료할 때마다)
-    writetable(T, queue_csv_path);
+    % CSV 즉시 저장 (헤더 줄 보존)
+    saveTableWithHeader(T, queue_csv_path, header_lines);
 end
 
 fprintf('\n모든 대기열 처리 완료.\n');
 
 %% ── 로컬 함수 ─────────────────────────────────────────────────────────────
+
+function saveTableWithHeader(T, csv_path, header_lines)
+% 헤더 줄(endheader 포함)을 유지하면서 테이블을 CSV로 저장.
+% 숫자 열의 NaN은 빈칸으로 저장한다.
+
+    % NaN → 빈칸 변환: 숫자 열을 string으로 바꾸되 NaN만 ""로 대체
+    T_write = T;
+    for col = T_write.Properties.VariableNames
+        v = T_write.(col{1});
+        if isnumeric(v)
+            s = string(v);
+            s(isnan(v)) = "";
+            T_write.(col{1}) = s;
+        end
+    end
+
+    % 테이블을 임시 파일에 먼저 쓰기
+    tmp_file = [tempname '.csv'];
+    writetable(T_write, tmp_file);
+    table_lines = readlines(tmp_file);
+    delete(tmp_file);
+
+    % 끝의 빈 줄 제거
+    table_lines = table_lines(strlength(table_lines) > 0);
+
+    % 헤더 + 테이블 합쳐서 쓰기
+    fid = fopen(csv_path, 'w');
+    for k = 1:numel(header_lines)
+        fprintf(fid, '%s\n', header_lines(k));
+    end
+    for k = 1:numel(table_lines)
+        fprintf(fid, '%s\n', table_lines(k));
+    end
+    fclose(fid);
+end
 
 function val = getNum(T, i, colName)
 % 숫자 열에서 값을 읽어 반환. 열이 없거나 NaN이면 오류.
