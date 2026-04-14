@@ -99,7 +99,7 @@ else
 end
 
 if ~isfield(opts, 'cost') || isempty(opts.cost)
-    QP_smooth = 'et';
+    cost = 'et';
     warning('WoC_moco_main: opts.cost 가 지정되지 않아 default(et) 를 사용합니다.');
 else
     cost = opts.cost;
