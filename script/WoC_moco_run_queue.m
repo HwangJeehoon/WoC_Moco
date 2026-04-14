@@ -30,7 +30,7 @@
 clear; close all;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
-queue_csv_path = 'simulation_queue.csv';   % ← CSV 경로를 여기에 지정
+queue_csv_path = 'simulation_queue_example.csv';   % ← CSV 경로를 여기에 지정
 
 %% ── CSV 읽기 ───────────────────────────────────────────────────────────────
 if ~isfile(queue_csv_path)
@@ -72,6 +72,9 @@ for i = 1:height(T)
     fprintf('========================================\n');
 
     try
+        % 이전 반복에서 남은 optMode 변수 초기화 (문자열 → struct 점 인덱싱 오류 방지)
+        clear optMode
+
         % model, iter, result_name
         model       = char(T.model(i));
         iter        = T.iter(i);

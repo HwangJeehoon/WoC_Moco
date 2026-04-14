@@ -5,8 +5,8 @@ default mocoFinalTime = 0.03,,,,,,,,,,,,,,,,
 default gaitMode = modeSym,,,,,,,,,,,,,,,,
 endheader,,,,,,,,,,,,,,,,
 model,iter,optMode_type,trigger,rise,flat,fall,maxVal,result_name,QP_effort,QP_smooth,cost,mocoEffort,mocoFinalTime,gaitMode,resume_name,Complete
-2D_gait_AFO_pc.osim,1,modeWoC,NaN,NaN,NaN,NaN,NaN,et_a001b1_iter1,0.01,1,NaN,NaN,NaN,modeSym,,0
-2D_gait_AFO_pc_20BW.osim,1,modeOff,NaN,NaN,NaN,NaN,NaN,off_20BW,NaN,NaN,NaN,NaN,NaN,modeSym,,0
-2D_gait_AFO_pc_30BW.osim,1,modeSpline,0.1,0.1,0.2,0.1,0.8,spline_30BW,NaN,NaN,NaN,NaN,NaN,modeSym,,0
-2D_gait_AFO_pc.osim,1,modeWoC,NaN,NaN,NaN,NaN,NaN,et_a001b0_iter1to2,0.01,0,NaN,NaN,NaN,modeSym,test1/result_1,0
-2D_gait_AFO_pc.osim,1,modeWoC,NaN,NaN,NaN,NaN,NaN,et_a001b0_asym,0.01,0,NaN,NaN,NaN,modeAsym,,0
+2D_gait_AFO_pc.osim,1,modeWoC,,,,,,test1,0.01,1,,,,modeSym,,1
+2D_gait_AFO_pc_20BW.osim,1,modeOff,,,,,,test2,,,,,,modeSym,,1
+2D_gait_AFO_pc_30BW.osim,1,modeSpline,0.1,0.1,0.2,0.1,0.8,test3,,,,,,modeSym,,-1
+2D_gait_AFO_pc.osim,1,modeWoC,,,,,,test4,0.01,0,,,,modeSym,test1/result_1,1
+2D_gait_AFO_pc.osim,1,modeWoC,,,,,,test5,0.01,0,,,,modeAsym,,1
