@@ -85,6 +85,10 @@ if nargin < 6 || isempty(optResume)
     optResume = struct();
 end
 
+% ID / Date (run_queue 에서 전달되는 메타 정보, 선택적)
+runID   = getOpt(opts, 'ID',   '');
+runDate = getOpt(opts, 'Date', '');
+
 % opts 기본값
 if ~isfield(opts, 'QP_effort') || isempty(opts.QP_effort)
     QP_effort = 0.01;
@@ -150,6 +154,8 @@ end
 %  파라미터 출력
 % ---------------------------------------------------
 fprintf('=== WoC_moco_main Parameters ===\n');
+if ~isempty(runID),   fprintf('  ID         : %s\n', runID);   end
+if ~isempty(runDate), fprintf('  Date       : %s\n', runDate); end
 fprintf('  model      : %s\n', model);
 fprintf('  iter       : %d\n', iter);
 fprintf('  optMode    : %s\n', modeType);
