@@ -12,16 +12,18 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %     resultsDir         : 주입된 osim을 저장할 디렉터리
 %     modelPath          : base .osim 경로
 %     opts               : (선택) struct
-%       .weight_effort    : effort goal weight (default = 1.0)
-%       .weight_finalTime : final time goal weight (default = 0.03)
-%       .gaitMode         : 'modeSym'  - 반 걸음 풀고 좌우 대칭 복사 (default)
-%                           'modeAsym' - 한 걸음 전체를 풀고 주기성만 강제
+%       .mocoEffort      : effort goal weight (default = 1.0)
+%       .mocoFinalTime   : final time goal weight (default = 0.03)
+%       .gaitMode        : 'modeSym'  - 반 걸음 풀고 좌우 대칭 복사 (default)
+%                          'modeAsym' - 한 걸음 전체를 풀고 주기성만 강제
 
     import org.opensim.modeling.*
 
-    weight_effort    = opts.weight_effort;
-    weight_finalTime = opts.weight_finalTime;
+    weight_effort    = opts.mocoEffort;
+    weight_finalTime = opts.mocoFinalTime;
     gaitMode         = opts.gaitMode;
+    mocoTimeBound    = opts.mocoTimeBound;
+    mocoDistBound    = opts.mocoDistBound;
 
     %--------------------------------------------------------------
     % 1. MocoStudy 및 문제 정의
@@ -238,13 +240,13 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     %--------------------------------------------------------------
     if strcmpi(gaitMode, 'modeSym')
         % 반 걸음 bounds
-        problem.setTimeBounds(0, [0.4, 0.8]);
-        problem.setStateInfo('/jointset/groundPelvis/pelvis_tx/value', [0, 1.5], 0.0, [0.4, 1.0]);
+        problem.setTimeBounds(0, mocoTimeBound);
+        problem.setStateInfo('/jointset/groundPelvis/pelvis_tx/value', [0, 10], 0.0, mocoDistBound);
 
     elseif strcmpi(gaitMode, 'modeAsym')
         % 한 걸음 bounds (modeSym 대비 시간 및 이동 거리 ~2배)
-        problem.setTimeBounds(0, [0.8, 1.6]);
-        problem.setStateInfo('/jointset/groundPelvis/pelvis_tx/value', [0, 3.0], 0.0, [0.8, 2.0]);
+        problem.setTimeBounds(0, mocoTimeBound*2);
+        problem.setStateInfo('/jointset/groundPelvis/pelvis_tx/value', [0, 20], 0.0, mocoDistBound*2);
     end
 
     % 나머지 bounds (공통)

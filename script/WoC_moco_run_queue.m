@@ -20,6 +20,8 @@
 %   mocoEffort    : opts.mocoEffort
 %   mocoFinalTime : opts.mocoFinalTime
 %   gaitMode      : opts.gaitMode   (modeSym | modeAsym)
+%   mocoTimeBound : opts.mocoTimeBound  (예: [0.4 0.8] 또는 0.8)
+%   mocoDistBound : opts.mocoDistBound  (예: [0.4 1.0] 또는 1.0)
 %   resume_name   : optResume.resume_name (빈 칸이면 resume 없음)
 %   Complete      : 0 = 미실행, 1 = 완료, -1 = 오류
 %
@@ -30,7 +32,7 @@
 clear; close all;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
-queue_csv_path = 'simulation_queue_example.csv';   % ← CSV 경로를 여기에 지정
+queue_csv_path = 'simulation_queue.csv';   % ← CSV 경로를 여기에 지정
 
 %% ── CSV 읽기 ───────────────────────────────────────────────────────────────
 if ~isfile(queue_csv_path)
@@ -102,6 +104,8 @@ for i = 1:height(T)
         opts = setOptField(opts, T, i, 'mocoEffort',     'num');
         opts = setOptField(opts, T, i, 'mocoFinalTime',  'num');
         opts = setOptField(opts, T, i, 'gaitMode',       'str');
+        opts = setOptField(opts, T, i, 'mocoTimeBound',  'vec');
+        opts = setOptField(opts, T, i, 'mocoDistBound',  'vec');
 
         % optResume 파싱
         optResume = struct();
@@ -191,6 +195,7 @@ end
 
 function opts = setOptField(opts, T, i, colName, dataType)
 % 열이 존재하고 값이 있으면 opts 구조체에 필드를 추가.
+% dataType: 'num' (스칼라 숫자), 'str' (문자열), 'vec' (벡터, 예: [0.4 0.8])
     if ~ismember(colName, T.Properties.VariableNames)
         return
     end
@@ -205,6 +210,12 @@ function opts = setOptField(opts, T, i, colName, dataType)
             if strcmp(dataType, 'num')
                 v = str2double(raw);
                 if ~isnan(v)
+                    opts.(colName) = v;
+                end
+            elseif strcmp(dataType, 'vec')
+                % 스칼라 또는 벡터 ([lb ub] 형식) 모두 허용
+                v = str2num(char(raw)); %#ok<ST2NM>
+                if ~isempty(v)
                     opts.(colName) = v;
                 end
             else

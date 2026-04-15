@@ -1,9 +1,11 @@
-default QP_effort = 0.01,,,,,,,,,,,,,,,,
-default QP_smooth = 0,,,,,,,,,,,,,,,,
-default mocoEffort = 1,,,,,,,,,,,,,,,,
-default mocoFinalTime = 0.03,,,,,,,,,,,,,,,,
-default gaitMode = modeSym,,,,,,,,,,,,,,,,
-endheader,,,,,,,,,,,,,,,,
-model,iter,optMode_type,trigger,rise,flat,fall,maxVal,result_name,QP_effort,QP_smooth,cost,mocoEffort,mocoFinalTime,gaitMode,resume_name,Complete
-2D_gait_AFO_pc_off_asym_sol12.5.osim,3,modeOff,,,,,,asym_sol12.5_Off,,,et,1,0.03,modeAsym,,1
-2D_gait_AFO_pc_off_asym_sol12.5.osim,3,modeWoC,,,,,,asym_sol12.5_WoC,0.01,0,et,1,0.03,modeAsym,,1
+default QP_effort = 0.01,,,,,,,,,,,,,,,,,,
+default QP_smooth = 0,,,,,,,,,,,,,,,,,,
+default mocoEffort = 1,,,,,,,,,,,,,,,,,,
+default mocoFinalTime = 0.03,,,,,,,,,,,,,,,,,,
+default mocoTimeBound = [0.4 0.8],,,,,,,,,,,,,,,,,,
+default mocoDistBound = [0.4 1.0],,,,,,,,,,,,,,,,,,
+default gaitMode = modeSym,,,,,,,,,,,,,,,,,,
+ID rule : 'S(Sym)/A(Asym)' + 'F(Off)/W(WoC)/P(Spline)' + 'index number' + '-iter number' (e.g. modeSym + modeWoC + 1st tiral + 5 iter = SW001-5),,,,,,,,,,,,,,,,,,
+endheader,,,,,,,,,,,,,,,,,,
+model,iter,optMode_type,trigger,rise,flat,fall,maxVal,result_name,QP_effort,QP_smooth,cost,mocoEffort,mocoFinalTime,mocoTimeBound,mocoDistBound,gaitMode,resume_name,Complete
+2D_gait_AFO_pc.osim,1,modeWoC,,,,,,test1,0.01,1,,,,,,modeAsym,,-1

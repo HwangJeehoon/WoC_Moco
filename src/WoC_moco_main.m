@@ -29,7 +29,9 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .cost         : Main cost 종류 'et'|'etw'|'etv' (default = 'et')
 %     .mocoEffort   : Moco effort goal weight (default = 1)
 %     .mocoFinalTime: Moco final time goal weight (default = 0.03)
-%     .gaitMode     : 'modeSym' | 'modeAsym' (default = 'modeSym')
+%     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
+%     .mocoTimeBound : Moco 시간 상한 [lb, ub] 또는 scalar (default = [0.4, 0.8])
+%     .mocoDistBound : pelvis_tx 최종 위치 bound [lb, ub] 또는 scalar (default = [0.4, 1.0])
 
 close all;
 
@@ -130,6 +132,20 @@ if ~ismember(gaitMode, {'modeSym', 'modeAsym'})
     error('opts.gaitMode 는 ''modeSym'' 또는 ''modeAsym'' 이어야 합니다.');
 end
 
+if ~isfield(opts, 'mocoTimeBound') || isempty(opts.mocoTimeBound)
+    mocoTimeBound = [0.4, 0.8];
+    warning('WoC_moco_main: opts.mocoTimeBound 가 지정되지 않아 default([0.4, 0.8]) 를 사용합니다.');
+else
+    mocoTimeBound = opts.mocoTimeBound;
+end
+
+if ~isfield(opts, 'mocoDistBound') || isempty(opts.mocoDistBound)
+    mocoDistBound = [0.4 1.0];
+    warning('WoC_moco_main: opts.mocoDistBound 가 지정되지 않아 default([0.4 1.0]) 를 사용합니다.');
+else
+    mocoDistBound = opts.mocoDistBound;
+end
+
 %% --------------------------------------------------
 %  파라미터 출력
 % ---------------------------------------------------
@@ -144,7 +160,9 @@ fprintf('  QP_smooth    : %.4g\n', QP_smooth);
 fprintf('  cost         : %s\n',   cost);
 fprintf('  mocoEffort   : %.4g\n', mocoEffort);
 fprintf('  mocoFinalTime: %.4g\n', mocoFinalTime);
-fprintf('  gaitMode   : %s\n',   gaitMode);
+fprintf('  gaitMode     : %s\n',   gaitMode);
+fprintf('  mocoTimeBound: %s\n',   mat2str(mocoTimeBound));
+fprintf('  mocoDistBound: %s\n',   mat2str(mocoDistBound));
 fprintf('================================\n');
 
 % resume_name 이 있으면 resume mode
@@ -196,9 +214,11 @@ switch lower(cost)
 end
 
 % Moco Parameter
-MocoOpts.weight_effort    = mocoEffort;
-MocoOpts.weight_finalTime = mocoFinalTime;
+MocoOpts.mocoEffort       = mocoEffort;
+MocoOpts.mocoFinalTime    = mocoFinalTime;
 MocoOpts.gaitMode         = gaitMode;
+MocoOpts.mocoTimeBound    = mocoTimeBound;
+MocoOpts.mocoDistBound    = mocoDistBound;
 
 % Output 폴더
 OutputFolder = fullfile(baseFolder,'..','results', result_name);

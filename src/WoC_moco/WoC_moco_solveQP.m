@@ -49,7 +49,7 @@ function OptimToq = WoC_moco_solveQP(eta, w, dt, opts)
 
     % |tau_dot| bound
     if ~isfield(opts,'tauDotMax') || isempty(opts.tauDotMax)
-        tauDotMax = 1;
+        tauDotMax = 10;
     else
         tauDotMax = opts.tauDotMax;
     end
