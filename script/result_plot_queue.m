@@ -199,7 +199,7 @@ for rowIdx = plotRows
 
     %% 색상 그라디언트 (blue → red, 중간은 흰색 혼합)
     colors      = makeColorGradient(iterNum);
-    titlePrefix = sprintf('[%s] %s', id_str, result_name);
+    titlePrefix = sprintf('[%s]', id_str);
 
     %% 1) apGRF
     fig = figure('Color','w','Position',[0 0 1200 800],'Visible','off');
@@ -210,7 +210,7 @@ for rowIdx = plotRows
     end
     yline(0, '--');
     xlabel('Time (s)'); ylabel('Force (N)');
-    title(sprintf('%s, apGRF', titlePrefix), 'Interpreter', 'none');
+    title(sprintf('%s apGRF', titlePrefix), 'Interpreter', 'none');
     set(gca, 'FontSize', 25);
     exportgraphics(fig, fullfile(FigureFolder, '01_apGRF_right.png'), 'Resolution', 300);
     close(fig);
@@ -223,7 +223,7 @@ for rowIdx = plotRows
     end
     xlabel('Time (s)'); ylabel('Control (0~1)');
     ylim([0 1]);
-    title(sprintf('%s, AFO Optimal Control', titlePrefix), 'Interpreter', 'none');
+    title(sprintf('%s AFO Optimal Control', titlePrefix), 'Interpreter', 'none');
     set(gca, 'FontSize', 25);
     exportgraphics(fig, fullfile(FigureFolder, '02_control_AFO_right.png'), 'Resolution', 300);
     close(fig);
@@ -240,7 +240,7 @@ for rowIdx = plotRows
         end
         yline(0, '--');
         xlabel('Time (s)'); ylabel('Eta');
-        title(sprintf('%s, Propulsive Transfer Ratio', titlePrefix), 'Interpreter', 'none');
+        title(sprintf('%s Propulsive Transfer Ratio', titlePrefix), 'Interpreter', 'none');
         set(gca, 'FontSize', 25);
         exportgraphics(fig, fullfile(FigureFolder, '03_eta_right.png'), 'Resolution', 300);
         close(fig);
@@ -253,7 +253,7 @@ for rowIdx = plotRows
     plot(1:iterNum, avgSpeedIter, 'o-', 'LineWidth', 1.5, 'Color', [0 0.5 0]);
     xlabel('Iteration'); ylabel('Avg Walking Speed (m/s)');
     xlim([-1 iterNum+1]);
-    title(sprintf('%s, Final Step Time: %.4f', titlePrefix, tKin{iterNum}(end)), 'Interpreter', 'none');
+    title(sprintf('%s Final Step Time: %.4f', titlePrefix, tKin{iterNum}(end)), 'Interpreter', 'none');
     set(gca, 'FontSize', 25);
     exportgraphics(fig, fullfile(FigureFolder, '04_avg_walking_speed.png'), 'Resolution', 300);
     close(fig);
@@ -266,7 +266,7 @@ for rowIdx = plotRows
         plot(tKin{i}, gastrocAct{i}, 'Color', colors(i,:), 'LineWidth', 1);
     end
     xlabel('Time (s)'); ylabel('Muscle Activation (0~1)');
-    title(sprintf('%s, Gastroc Activation', titlePrefix), 'Interpreter', 'none');
+    title(sprintf('%s Gastroc Activation', titlePrefix), 'Interpreter', 'none');
     set(gca, 'FontSize', 25);
     exportgraphics(fig, fullfile(FigureFolder, '05_gastroc_r_activation.png'), 'Resolution', 300);
     close(fig);
@@ -279,7 +279,7 @@ for rowIdx = plotRows
         plot(tKin{i}, soleusAct{i}, 'Color', colors(i,:), 'LineWidth', 1);
     end
     xlabel('Time (s)'); ylabel('Muscle Activation (0~1)');
-    title(sprintf('%s, Soleus Activation', titlePrefix), 'Interpreter', 'none');
+    title(sprintf('%s Soleus Activation', titlePrefix), 'Interpreter', 'none');
     set(gca, 'FontSize', 25);
     exportgraphics(fig, fullfile(FigureFolder, '06_soleus_r_activation.png'), 'Resolution', 300);
     close(fig);
@@ -291,7 +291,7 @@ for rowIdx = plotRows
     plot(1:iterNum, strideLength, 'o-', 'LineWidth', 1.5);
     xlabel('Iteration'); ylabel('Stride length (m)');
     xlim([-1 iterNum+1]);
-    title(sprintf('%s, Stride Length', titlePrefix), 'Interpreter', 'none');
+    title(sprintf('%s Stride Length', titlePrefix), 'Interpreter', 'none');
     set(gca, 'FontSize', 25);
     exportgraphics(fig, fullfile(FigureFolder, '07_stride_length.png'), 'Resolution', 300);
     close(fig);
@@ -305,7 +305,7 @@ for rowIdx = plotRows
     xlabel('Iteration'); ylabel('Cost');
     xlim([-1 iterNum+1]);
     legend('Effort', 'FinalTime', 'Total', 'Location', 'best');
-    title(sprintf('%s, Objective Cost', titlePrefix), 'Interpreter', 'none');
+    title(sprintf('%s Objective Cost', titlePrefix), 'Interpreter', 'none');
     set(gca, 'FontSize', 25);
     exportgraphics(fig, fullfile(FigureFolder, '08_objective_cost.png'), 'Resolution', 300);
     close(fig);
@@ -317,7 +317,7 @@ for rowIdx = plotRows
     plot(1:iterNum, PosCoMWork, 'o-', 'LineWidth', 1.5, 'Color', [0 0.5 0]);
     xlabel('Iteration'); ylabel('Work (J)');
     xlim([-1 iterNum+1]);
-    title(sprintf('%s, Positive CoM Work', titlePrefix), 'Interpreter', 'none');
+    title(sprintf('%s Positive CoM Work', titlePrefix), 'Interpreter', 'none');
     set(gca, 'FontSize', 25);
     exportgraphics(fig, fullfile(FigureFolder, '09_PosCoMWork.png'), 'Resolution', 300);
     close(fig);
@@ -329,7 +329,7 @@ for rowIdx = plotRows
         plot(1:iterNum, PosAnkWork, 'o-', 'LineWidth', 1.5, 'Color', [0 0.5 0]);
         xlabel('Iteration'); ylabel('Work (J)');
         xlim([-1 iterNum+1]);
-        title(sprintf('%s, Positive Ankle Work', titlePrefix), 'Interpreter', 'none');
+        title(sprintf('%s Positive Ankle Work', titlePrefix), 'Interpreter', 'none');
         set(gca, 'FontSize', 25);
         exportgraphics(fig, fullfile(FigureFolder, '10_PosAnkWork.png'), 'Resolution', 300);
         close(fig);
