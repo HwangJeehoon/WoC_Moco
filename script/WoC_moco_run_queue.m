@@ -58,6 +58,12 @@ ci_result   = colIdx(colNames, 'result_name');
 %% ── 대기열 실행 ────────────────────────────────────────────────────────────
 rows_to_move = false(size(data_q, 1), 1);
 
+% 자동 ID 할당용 로컬 카운터 (이번 세션에서 새로 배정한 수 추적)
+local_id_counters = struct();
+% hdr_d 스냅샷: 루프 중 incrementIDCounter로 hdr_d가 변해도 base 카운터는
+% 세션 시작 시점 값으로 고정해야 double-counting을 방지할 수 있음
+hdr_d_init = hdr_d;
+
 for i = 1:size(data_q, 1)
 
     complete_val = getCellNum(data_q{i, ci_complete});
@@ -68,6 +74,45 @@ for i = 1:size(data_q, 1)
     id_str    = getCellStr(data_q{i, ci_id});
     model_str = getCellStr(data_q{i, ci_model});
     res_str   = getCellStr(data_q{i, ci_result});
+
+    % ── 자동 ID / result_name 생성 ────────────────────────────────────────
+    id_auto_assigned  = false;
+    res_auto_assigned = false;
+
+    if isempty(id_str)
+        gm_raw = getCellStr(data_q{i, colIdx(colNames,'gaitMode')});
+        if isempty(gm_raw), gm_raw = 'modeSym'; end
+        om_raw = getCellStr(data_q{i, colIdx(colNames,'optMode_type')});
+        it_val = getCellNum(data_q{i, colIdx(colNames,'iter')});
+        if isnan(it_val), it_val = 0; end
+
+        auto_prefix = makeIDPrefix(gm_raw, om_raw);
+        pf = auto_prefix;   % struct 필드명 (예: 'SW')
+        if isfield(local_id_counters, pf)
+            local_id_counters.(pf) = local_id_counters.(pf) + 1;
+        else
+            local_id_counters.(pf) = 1;
+        end
+        base_cnt = getIDCounter(hdr_d_init, auto_prefix);
+        new_idx  = base_cnt + local_id_counters.(pf);
+
+        id_str = sprintf('%s%03d-%d', auto_prefix, new_idx, it_val);
+        data_q{i, ci_id} = id_str;
+        id_auto_assigned = true;
+        warning('[자동 ID 생성] 행 %d: ID가 비어 있어 자동 생성합니다 → %s', i, id_str);
+    end
+
+    if isempty(res_str)
+        res_str = id_str;
+        data_q{i, ci_result} = res_str;
+        res_auto_assigned = true;
+        warning('[자동 result_name 생성] 행 %d: result_name이 비어 있어 ID와 동일하게 설정합니다 → %s', i, res_str);
+    end
+
+    % 자동 할당된 경우 즉시 xlsx에 반영 (크래시 복구 대비)
+    if id_auto_assigned || res_auto_assigned
+        writeSheet(QUEUE_XLSX, SHEET_QUEUE, hdr_q, colNames, data_q(~rows_to_move, :));
+    end
 
     fprintf('\n========================================\n');
     fprintf(' [%d/%d] ID=%s  %s — %s\n', i, size(data_q,1), id_str, model_str, res_str);
@@ -367,6 +412,38 @@ function val = getSheetNum(data, row_i, col_names, col_name)
         error('열 ''%s'' 의 값이 비어 있거나 숫자가 아닙니다.', col_name);
     end
 end
+
+function prefix = makeIDPrefix(gait_mode, opt_mode_type)
+% gaitMode + optMode_type → 2자리 접두사 (예: 'SW', 'AF', 'SP')
+    switch lower(gait_mode)
+        case 'modeasym', sym_ch = 'A';
+        otherwise,       sym_ch = 'S';   % modeSym 또는 미입력
+    end
+    switch lower(strtrim(opt_mode_type))
+        case 'modeoff',    mode_ch = 'F';
+        case 'modewoc',    mode_ch = 'W';
+        case 'modespline', mode_ch = 'P';
+        otherwise,         mode_ch = 'W';
+    end
+    prefix = [sym_ch, mode_ch];
+end
+
+% ─────────────────────────────────────────────────────────────────────────
+
+function cnt = getIDCounter(hdr_d, prefix)
+% completed_queue 헤더에서 prefix 의 현재 카운터 값을 반환. 없으면 0.
+    cnt = 0;
+    for k = 1:size(hdr_d, 1)
+        cell_val = hdr_d{k, 1};
+        if ischar(cell_val) && strcmpi(strtrim(cell_val), prefix)
+            v = getCellNum(hdr_d{k, 2});
+            if ~isnan(v), cnt = v; end
+            return;
+        end
+    end
+end
+
+% ─────────────────────────────────────────────────────────────────────────
 
 function opts = setOptField(opts, row, col_names, col_name, data_type)
 % 열이 존재하고 값이 있으면 opts 구조체에 필드 추가.
