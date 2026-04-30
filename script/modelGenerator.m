@@ -4,15 +4,16 @@ function modelGenerator()
 % =========================================================================
 %  ★ 설정 영역 ★
 % =========================================================================
-    baseModelFile  = '2D_gait_AFO_pc.osim';   % models/ 폴더 기준 파일명
+    baseModelFile  = '2D_gait_AFO_pc_50BW.osim';   % models/ 폴더 기준 파일명
 
-    % scalingFactors = [          % [thigh, shank] 각 행이 하나의 조합 -> 합이 2가 아니면 수렴을 안함
-    %     1.00  0.98
-    % ];
-    vals = 0.90:0.02:1.10;   % deviation 
-    [thighGrid, shankGrid] = ndgrid(vals, vals);
-    mask = (thighGrid + shankGrid) == 2;
-    scalingFactors = [thighGrid(mask), shankGrid(mask)];
+    scalingFactors = [          % [thigh, shank] 각 행이 하나의 조합 -> 합이 2가 아니면 수렴을 안함
+        1.10  1.10;
+        0.90  0.90
+    ];
+    % vals = 0.90:0.02:1.10;   % deviation 
+    % [thighGrid, shankGrid] = ndgrid(vals, vals);
+    % mask = (thighGrid + shankGrid) == 2;
+    % scalingFactors = [thighGrid(mask), shankGrid(mask)];
 % =========================================================================
 
     import org.opensim.modeling.*
