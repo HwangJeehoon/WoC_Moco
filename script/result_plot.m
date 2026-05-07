@@ -12,7 +12,7 @@ baseFolder = fileparts(thisFile);
 
 %% 기본 설정
 resultFolder = fullfile(baseFolder, '..', 'results');
-OutputFolderName = 'et_a001b0_iter300_50BW_gastr25'; % 원하는 결과의 폴더 명
+OutputFolderName = 'short_test'; % 원하는 결과의 폴더 명
 figureFolderName = fullfile(OutputFolderName,'\Fig');
 iterNum          = 300;
 optimalForce     = 300;   % AFO PathActuator optimal force - 50BW
@@ -28,14 +28,14 @@ end
 
 %% Baseline 설정
 inputFolder = fullfile(baseFolder, '..', 'inputs');
-% grfInitSto     = fullfile(inputFolder, 'Off_GRF.sto');        % baseline -> OfF 기준 full stride
-% guessInitSto   = fullfile(inputFolder, 'Off_kinematics.sto');
+grfInitSto     = fullfile(inputFolder, 'Off_GRF.sto');        % baseline -> OfF 기준 full stride
+guessInitSto   = fullfile(inputFolder, 'Off_kinematics.sto');
 
 % grfInitSto     = fullfile(inputFolder, 'Off_GRF_sol25.sto');        % baseline -> Off Sol25 
 % guessInitSto   = fullfile(inputFolder, 'Off_kinematics_sol25.sto');
 
-grfInitSto     = fullfile(inputFolder, 'Off_GRF_gastrc25.sto');        % baseline -> Off gastrc25 
-guessInitSto   = fullfile(inputFolder, 'Off_kinematics_gastrc25.sto');
+% grfInitSto     = fullfile(inputFolder, 'Off_GRF_gastrc25.sto');        % baseline -> Off gastrc25 
+% guessInitSto   = fullfile(inputFolder, 'Off_kinematics_gastrc25.sto');
 
 pelvisField  = matlab.lang.makeValidName('/jointset/groundPelvis/pelvis_tx/value');
 gastrocField = matlab.lang.makeValidName('/gastroc_r/activation');

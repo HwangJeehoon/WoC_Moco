@@ -219,28 +219,32 @@ WoC_moco_main('2D_gait_AFO_pc_20BW.osim', 300, 'modeWoC', 'test2', opts)
 % WoC_moco_main('2D_gait_AFO_pc_gastr25.osim', 300, 'modeWoC', 'et_a001b0_iter300_50BW_gastr25', opts)
 
 %% Off 추출 (moco_WoC_loop_extractOff 직접 사용 - 단발성 추출용)
-% clc; clear; close all;
-%
-% if isempty(mfilename)
-%     thisFile = matlab.desktop.editor.getActiveFilename;
-% else
-%     thisFile = mfilename("fullpath");
-% end
-% baseFolder = fileparts(thisFile);
-%
-% Model = '2D_gait_AFO_pc_off_sol25.osim';
-% resultDir = fullfile(baseFolder, "sol25_Off");
-% guessInit ='guess_init_v5.sto';
-% sol = moco_WoC_loop_extractOff(guessInit,Model);
-% resOpts.modelPath = Model;
-% moco_WoC_getResult(sol,resultDir,resOpts);
-%
-% Model2 = '2D_gait_AFO_pc_gastr25.osim';
-% resultDir2 = fullfile(baseFolder, "gastr25_Off");
-% guessInit ='guess_init_v5.sto';
-% sol2 = moco_WoC_loop_extractOff(guessInit,Model2);
-% resOpts.modelPath = Model2;
-% moco_WoC_getResult(sol2,resultDir2,resOpts);
+clc; clear; close all;
+
+if isempty(mfilename)
+    thisFile = matlab.desktop.editor.getActiveFilename;
+else
+    thisFile = mfilename("fullpath");
+end
+baseFolder = fileparts(thisFile);
+
+Model = '2D_gait_AFO_pc_short.osim';
+ModelDir = fullfile(baseFolder,'..','models', Model);
+resultDir = fullfile(baseFolder,'..','results', "short_test");
+guess ='guess_init_half_short.sto';
+guessDir = fullfile(baseFolder,'..','inputs', guess);
+sol = moco_WoC_loop_extractOff(guessDir,ModelDir);
+resOpts.modelPath = ModelDir;
+moco_WoC_getResult(sol,resultDir,resOpts);
+
+Model = '2D_gait_AFO_pc_long.osim';
+ModelDir = fullfile(baseFolder,'..','models', Model);
+resultDir = fullfile(baseFolder,'..','results', "long_test");
+guess ='guess_init_half_long.sto';
+guessDir = fullfile(baseFolder,'..','inputs', guess);
+sol = moco_WoC_loop_extractOff(guessDir,ModelDir);
+resOpts.modelPath = ModelDir;
+moco_WoC_getResult(sol,resultDir,resOpts);
 
 %% Asym test
 clc; clear; close all;

@@ -16,8 +16,8 @@ clear;
 close all;
 
 %% ─── 사용자 설정 ─────────────────────────────────────────────────────────────
-plotRows = 9:55;   % completed_queue 에서 처리할 행 번호
-
+% plotRows = 9:55;   % completed_queue 에서 처리할 행 번호
+plotRows = [111 128]-8;   % completed_queue 에서 처리할 행 번호
 %% ─── 경로 설정 ───────────────────────────────────────────────────────────────
 if isempty(mfilename)
     thisFile = matlab.desktop.editor.getActiveFilename;
