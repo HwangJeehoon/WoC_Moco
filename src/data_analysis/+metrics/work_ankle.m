@@ -1,4 +1,4 @@
-function m = apGRF_max(path)
+function m = propulsion_PD(path)
     % GRF file 가져오는 함수 (범용적으로 사용 가능)
     path_moco_result = path + "/moco_result";
     d = dir(path_moco_result);
@@ -10,8 +10,23 @@ function m = apGRF_max(path)
 
     [tmp, t] = readSTO_auto(matches{1});
 
+    tf = contains(names, "kinematics", "IgnoreCase", true);
+    matches = fullfile(path_moco_result, cellstr(names(tf))); % full paths as cell array
+
+    [tmp, t2] = readSTO_auto(mathces{1});
+
     apGRF = t.ground_force_l_vx;
-    m = max(apGRF);   
+    time = t2.time;
+    distance = t2.x_jointset_groundPelvis_pelvis_tx_value;
+
+    stride_length = distance(end) - distance(1);
+    elapsed_time = time(end) - time(1);
+
+    apGRF_positive = max(apGRF, 0);
+    integrated_apGRF_positive = cumtrapz(time, apGRF_positive);
+    
+    m = integrated_apGRF_positive(end) /stride_length;
+    
 
 end
 
@@ -76,6 +91,41 @@ for i=1:numel(tokens)
     end
 end
 
+% helper: sanitize variable names in table (replace '/' -> '_' and make valid & unique)
+    function T = sanitizeVarNames(T)
+        if isempty(T) || isempty(T.Properties.VariableNames)
+            return
+        end
+        vn = T.Properties.VariableNames;
+        % replace slashes with underscores
+        vn = strrep(vn, '/', '_');
+        % make valid MATLAB names (handles spaces, leading digits, etc.)
+        vn = matlab.lang.makeValidName(vn);
+        % ensure uniqueness (R2020b+). If unavailable, fallback to simple uniquefy.
+        try
+            vn = matlab.lang.makeUniqueStrings(vn);
+        catch
+            % basic uniqueness fallback
+            [uniqueNames, ~, idx] = unique(vn, 'stable');
+            counts = accumarray(idx, 1);
+            vnNew = vn;
+            for ii = 1:numel(uniqueNames)
+                dupIdx = find(strcmp(vn, uniqueNames{ii}));
+                if numel(dupIdx) > 1
+                    for kdup = 1:numel(dupIdx)
+                        if kdup == 1
+                            vnNew{dupIdx(kdup)} = uniqueNames{ii};
+                        else
+                            vnNew{dupIdx(kdup)} = sprintf('%s_%d', uniqueNames{ii}, kdup);
+                        end
+                    end
+                end
+            end
+            vn = vnNew;
+        end
+        T.Properties.VariableNames = vn;
+    end
+
 % If most tokens are numeric -> use readmatrix; otherwise assume header names and use readtable
 if mean(isNumericToken) > 0.5
     % numeric data
@@ -84,14 +134,19 @@ if mean(isNumericToken) > 0.5
         dataTbl = table();
     else
         dataTbl = array2table(M);
+        % Optionally sanitize variable names created by array2table (Var1, Var2, ...)
+        dataTbl = sanitizeVarNames(dataTbl);
     end
 else
     % first non-header line is variable names: use detectImportOptions and set DataLines
     opts = detectImportOptions(filename, 'FileType', 'text');
-    % set DataLines to start at the first data row (header lines + 1 is varnames)
-    % VariableNamesLine is the line that has variable names
+    % preserve original variable name strings so we can sanitize them ourselves
+    opts.VariableNamingRule = 'preserve';
+    % set VariableNamesLine and DataLines appropriately
     opts.VariableNamesLine = lineCount + 1;
     opts.DataLines = [lineCount+2 Inf];
     dataTbl = readtable(filename, opts);
+    % sanitize variable names (replace '/' -> '_' etc.)
+    dataTbl = sanitizeVarNames(dataTbl);
 end
 end

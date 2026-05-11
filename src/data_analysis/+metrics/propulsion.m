@@ -1,4 +1,4 @@
-function m = apGRF_max(path)
+function m = positive_apGRF_impulse(path)
     % GRF file 가져오는 함수 (범용적으로 사용 가능)
     path_moco_result = path + "/moco_result";
     d = dir(path_moco_result);
@@ -11,7 +11,12 @@ function m = apGRF_max(path)
     [tmp, t] = readSTO_auto(matches{1});
 
     apGRF = t.ground_force_l_vx;
-    m = max(apGRF);   
+    time = t.time;
+
+    apGRF_positive = max(apGRF, 0);
+    integrated_apGRF_positive = cumtrapz(time, apGRF_positive);
+    m = integrated_apGRF_positive(end);
+    
 
 end
 
