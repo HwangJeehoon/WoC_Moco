@@ -1,4 +1,4 @@
-function m = propulsion_PD(path)
+function m = work_COM(path)
     % GRF file 가져오는 함수 (범용적으로 사용 가능)
     path_moco_result = path + "/moco_result";
     d = dir(path_moco_result);
