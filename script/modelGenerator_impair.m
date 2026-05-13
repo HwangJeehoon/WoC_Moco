@@ -141,6 +141,7 @@ function modelGenerator_impair()
             end
         end
 
+        model.initSystem();
         model.print(outFile);
         fprintf('Saved: %s\n', outFile);
 
