@@ -1,10 +1,10 @@
-function modelGenerator()
+function modelGenerator_length()
 % modelGenerator  --  그냥 실행하면 됨
 %
 % =========================================================================
 %  ★ 설정 영역 ★
 % =========================================================================
-    baseModelFile  = '2D_gait_AFO_pc_50BW.osim';   % models/ 폴더 기준 파일명
+    baseModelFile  = '2D_gait_AFO_pc.osim';   % models/ 폴더 기준 파일명
 
     scalingFactors = [          % [thigh, shank] 각 행이 하나의 조합 -> 합이 2가 아니면 수렴을 안함
         1.10  1.10;
@@ -126,7 +126,7 @@ function [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsx
     try
         sheetData = readcell(xlsxFile, 'Sheet', 'models');
     catch
-        sheetData = {'endheader'; 'Names','origin','Date','thigh','shank','afo','abnormal'};
+        sheetData = {'endheader'; 'Names','origin','Date','thigh','shank','abnormal'};
     end
 
     % endheader 행 위치 찾기
