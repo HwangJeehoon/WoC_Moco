@@ -2750,7 +2750,7 @@
 			<objects>
 				<PrescribedController name="AFO_controller">
 					<!--Paths to Components that satisfies the list Socket 'actuators' of type Actuator (description: The list of Actuators that this controller will control.).To specify multiple paths, put spaces between them.-->
-					<socket_actuators></socket_actuators>
+					<socket_actuators>/AFO_r /AFO_l</socket_actuators>
 					<!--Flag (true or false) indicating whether or not the controller is enabled.-->
 					<enabled>true</enabled>
 					<!--Functions (one per control) describing the controls for actuators specified for this controller. The control function set must match the number and order of connected actuators.-->
