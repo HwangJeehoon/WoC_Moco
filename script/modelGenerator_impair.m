@@ -16,6 +16,7 @@ function modelGenerator_impair()
     
     % 변경 여부 선택 (둘 다 true이면 동시에 변경)
     modifyForce = true;   % max_isometric_force 변경 여부
+    % modifyFiber = true;  % optimal_fiber_length 변경 여부
     modifyFiber = false;  % optimal_fiber_length 변경 여부
 
     % 각 행 = 하나의 모델 조합
