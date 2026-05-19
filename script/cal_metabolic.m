@@ -1,59 +1,73 @@
-clear
+function cal_metabolic(resultName, iterNums, resultsRootDir)
+% cal_metabolic  Bhargava2004 대사 비용 계산 및 .sto 저장
+%
+%   cal_metabolic(resultName)
+%   cal_metabolic(resultName, iterNums)
+%   cal_metabolic(resultName, iterNums, resultsRootDir)
+%
+%   resultName    : results/ 하위 폴더명 (예: 'SP097-3')
+%   iterNums      : 처리할 result 인덱스 벡터 (예: 1:3). 생략 시 result_* 전체 자동탐색
+%   resultsRootDir: results 루트 경로. 생략 시 이 함수 파일 기준 ../results
 
 import org.opensim.modeling.*
 
-%% Parameters
-subjectID  = 'SP097-3';
-resultsDir = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'results', subjectID);
+%% 경로 설정
+if nargin < 3 || isempty(resultsRootDir)
+    resultsRootDir = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'results');
+end
+resultBaseDir = fullfile(resultsRootDir, resultName);
 
-resultFolders = dir(fullfile(resultsDir, 'result_*'));
-resultFolders = resultFolders([resultFolders.isdir]);
+%% 처리할 result 폴더 목록 결정
+if nargin < 2 || isempty(iterNums)
+    found = dir(fullfile(resultBaseDir, 'result_*'));
+    found = found([found.isdir]);
+    [~, ord] = sort({found.name});
+    found = found(ord);
+    iterNums = arrayfun(@(f) str2double(regexp(f.name, '\d+', 'match', 'once')), found);
+    iterNums = iterNums(~isnan(iterNums));
+end
 
-for ri = 1:numel(resultFolders)
-    resultPath = fullfile(resultsDir, resultFolders(ri).name);
+for ri = iterNums(:)'
+    resultPath = fullfile(resultBaseDir, sprintf('result_%d', ri));
     mocoDir    = fullfile(resultPath, 'moco_result');
     analyDir   = fullfile(resultPath, 'analy_result');
 
-    %% Find kinematics .sto (full gait, not _half)
+    %% kinematics .sto 탐색 (_half 제외)
     stoFiles = dir(fullfile(mocoDir, '*kinematics.sto'));
     stoFiles = stoFiles(~contains({stoFiles.name}, 'half'));
     if isempty(stoFiles)
-        warning('No kinematics .sto found in %s, skipping.', mocoDir);
+        warning('[%s/result_%d] kinematics .sto 없음, 건너뜀.', resultName, ri);
         continue
     end
     solutionPath = fullfile(mocoDir, stoFiles(1).name);
 
-    %% Extract iter tag (e.g. iter01, iter02, iter03)
     tokens = regexp(stoFiles(1).name, '(iter\d+)', 'tokens');
-    if isempty(tokens)
-        iterTag = 'iter00';
-    else
-        iterTag = tokens{1}{1};
-    end
+    iterTag = 'iter00';
+    if ~isempty(tokens), iterTag = tokens{1}{1}; end
 
-    %% Find model .osim
+    %% 모델 .osim 탐색
     osmFiles = dir(fullfile(analyDir, '*.osim'));
     if isempty(osmFiles)
-        warning('No .osim found in %s, skipping.', analyDir);
+        warning('[%s/result_%d] .osim 없음, 건너뜀.', resultName, ri);
         continue
     end
     modelPath = fullfile(analyDir, osmFiles(1).name);
 
-    fprintf('\n[%s] model   : %s\n', resultFolders(ri).name, osmFiles(1).name);
-    fprintf('[%s] solution: %s\n',  resultFolders(ri).name, stoFiles(1).name);
+    fprintf('\n[%s/result_%d] model   : %s\n', resultName, ri, osmFiles(1).name);
+    fprintf('[%s/result_%d] solution: %s\n',  resultName, ri, stoFiles(1).name);
 
-    %% Load model and solution
+    %% 모델 및 솔루션 로드
     model    = Model(modelPath);
     solution = MocoTrajectory(solutionPath);
 
-    %% Add metabolics component
+    %% 대사 컴포넌트 추가
     metabolics = Bhargava2004SmoothedMuscleMetabolics();
     metabolics.setName('metabolics');
     metabolics.set_use_smoothing(true);
-    metabolics.set_include_negative_mechanical_work(true); % eccentric contraction -> negative possible
-    metabolics.set_forbid_negative_total_power(true); % total negative -> usually impossible
+    metabolics.set_include_negative_mechanical_work(true);
+    metabolics.set_forbid_negative_total_power(true);
 
-    %% Collect muscles via component iteration
+    %% 근육 수집 및 등록
     muscleNames = {};
     compList = model.getComponentsList();
     it = compList.begin();
@@ -64,9 +78,8 @@ for ri = 1:numel(resultFolders)
         end
         it.next();
     end
-    fprintf('[%s] Found %d muscles.\n', resultFolders(ri).name, numel(muscleNames));
+    fprintf('[%s/result_%d] 근육 %d개 발견\n', resultName, ri, numel(muscleNames));
 
-    %% Register muscles to metabolics
     for i = 1:numel(muscleNames)
         metabolics.addMuscle(muscleNames{i}, ...
             Muscle.safeDownCast(model.getComponent(muscleNames{i})));
@@ -76,17 +89,16 @@ for ri = 1:numel(resultFolders)
     model.finalizeConnections();
     state = model.initSystem();
 
-    %% Get metabolics component handle
     metComp = Bhargava2004SmoothedMuscleMetabolics.safeDownCast( ...
                   model.getComponent('/metabolics'));
 
-    %% Export states and controls tables
+    %% 상태 및 제어 테이블 export
     statesTable   = solution.exportToStatesTable();
     controlsTable = solution.exportToControlsTable();
 
-    statesTraj    = StatesTrajectory.createFromStatesTable(model, statesTable, true, true);
-    nRow          = int32(statesTraj.getSize());
-    nCtrlCols     = int32(controlsTable.getColumnLabels().size());
+    statesTraj = StatesTrajectory.createFromStatesTable(model, statesTable, true, true);
+    nRow       = int32(statesTraj.getSize());
+    nCtrlCols  = int32(controlsTable.getColumnLabels().size());
 
     t            = zeros(nRow, 1);
     met_rate_W   = zeros(nRow, 1);
@@ -95,18 +107,16 @@ for ri = 1:numel(resultFolders)
     short_rate_W = zeros(nRow, 1);
     mech_rate_W  = zeros(nRow, 1);
 
-    %% Evaluate frame-by-frame with controls applied to state
+    %% 프레임별 계산 (controls → state 반영 후 realizeDynamics)
     for k = 0:nRow-1
         s = statesTraj.get(k);
 
-        % Build controls vector from controls table (direct index mapping)
         controls = Vector(model.getNumControls(), 0.0);
         for j = 0:nCtrlCols-1
             col = controlsTable.getDependentColumnAtIndex(j);
             controls.set(j, col.get(k));
         end
 
-        % Apply controls before realizing dynamics
         model.realizePosition(s);
         model.setControls(s, controls);
         model.realizeDynamics(s);
@@ -119,7 +129,7 @@ for ri = 1:numel(resultFolders)
         mech_rate_W(k+1)  = metComp.getTotalMechanicalWorkRate(s);
     end
 
-    %% Integrate -> summary statistics
+    %% 요약 통계
     total_energy_J = trapz(t, met_rate_W);
     avg_rate_W     = total_energy_J / (t(end) - t(1));
     totalMass      = model.getTotalMass(state);
@@ -134,25 +144,25 @@ for ri = 1:numel(resultFolders)
         end
     end
     if txIdx < 0
-        error('State not found: %s', txStateName);
+        error('[%s/result_%d] 상태 열 없음: %s', resultName, ri, txStateName);
     end
     col        = statesTable.getDependentColumnAtIndex(txIdx);
     distance_m = col.get(col.size()-1) - col.get(0);
 
-    fprintf('[%s] Body mass              : %.2f kg\n',       resultFolders(ri).name, totalMass);
-    fprintf('[%s] Distance               : %.3f m\n',        resultFolders(ri).name, distance_m);
-    fprintf('[%s] Total metabolic energy : %.2f J\n',        resultFolders(ri).name, total_energy_J);
-    fprintf('[%s] Average metabolic rate : %.2f W\n',        resultFolders(ri).name, avg_rate_W);
-    fprintf('[%s] Cost of transport      : %.4f J/(kg*m)\n', resultFolders(ri).name, ...
+    fprintf('[%s/result_%d] Body mass              : %.2f kg\n',       resultName, ri, totalMass);
+    fprintf('[%s/result_%d] Distance               : %.3f m\n',        resultName, ri, distance_m);
+    fprintf('[%s/result_%d] Total metabolic energy : %.2f J\n',        resultName, ri, total_energy_J);
+    fprintf('[%s/result_%d] Average metabolic rate : %.2f W\n',        resultName, ri, avg_rate_W);
+    fprintf('[%s/result_%d] Cost of transport      : %.4f J/(kg*m)\n', resultName, ri, ...
             total_energy_J / (totalMass * distance_m));
 
-    %% Write .sto output
+    %% .sto 저장
     outName = sprintf('moco_WoC_solution_%s_metabolic.sto', iterTag);
     outPath = fullfile(mocoDir, outName);
 
     fid = fopen(outPath, 'w');
     if fid < 0
-        error('Cannot open output file: %s', outPath);
+        error('출력 파일을 열 수 없음: %s', outPath);
     end
 
     fprintf(fid, '%s\n',                                  outName(1:end-4));
@@ -171,5 +181,6 @@ for ri = 1:numel(resultFolders)
     end
 
     fclose(fid);
-    fprintf('[%s] Saved: %s\n', resultFolders(ri).name, outPath);
+    fprintf('[%s/result_%d] 저장 완료: %s\n', resultName, ri, outPath);
+end
 end
