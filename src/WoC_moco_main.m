@@ -32,6 +32,12 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
 %     .mocoTimeBound : Moco 시간 상한 [lb, ub] 또는 scalar (default = [0.4, 0.8])
 %     .mocoDistBound : pelvis_tx 최종 위치 bound [lb, ub] 또는 scalar (default = [0.4, 1.0])
+%
+%   저장 구조:
+%     results/<result_name>/baseline/analy_result/   ← 초기 guess kinematics 해석 결과
+%     results/<result_name>/result_i/analy_result/   ← iter i moco 결과 해석
+%     results/<result_name>/result_i/moco_result/    ← iter i 궤적/GRF/metabolic
+%     results/<result_name>/result_i/control_result/ ← iter i 보조 제어력
 
 close all;
 
@@ -273,40 +279,55 @@ else
 end
 
 %% --------------------------------------------------
+%  Pre-loop: Baseline analysis (일반 모드에서만 실행)
+%
+%  초기 guess kinematics(guess_init)를 분석해
+%  baseline/analy_result/ 에 저장한다.
+%  이 결과가 result_1의 control 생성 입력으로 사용된다.
+% ---------------------------------------------------
+if ~resume_mode
+    baselineAnalyDir = fullfile(OutputFolder, 'baseline', 'analy_result');
+    if ~exist(baselineAnalyDir, 'dir'), mkdir(baselineAnalyDir); end
+
+    fprintf('=== Baseline analysis (guess_init → baseline/analy_result) ===\n');
+    WoC_moco_analysis(AnalySetupPath, ...
+        'modelPath',         fullfile(modelPath, ModelNameOsim), ...
+        'kinematicsStoPath', guessInitSto, ...
+        'resultsDir',        baselineAnalyDir);
+    fprintf('Baseline analysis done.\n');
+end
+
+%% --------------------------------------------------
 %  3. 메인 루프
 % ---------------------------------------------------
 for i = startIter:endIter
     fprintf('===== Iteration %d / %d =====\n', i, iterNum+baseIter);
 
     %------------------------------------------------
-    % 3-1. 이번 iteration에서 사용할 경로 결정
+    % 3-1. 이전 iter의 analysis 결과 경로 및 GRF 경로 결정
+    %
+    %  prevAnalyDir : control 생성의 입력 데이터 소스
+    %    - i==1 (일반): baseline/analy_result/
+    %    - i==startIter (resume): resumeAbsDir/analy_result/
+    %    - 그 외: result_(i-1)/analy_result/
+    %
+    %  prevGrfPath : stance 검출용 GRF
+    %    - i==1 (일반): inputs/GRF_init_*.sto
+    %    - i==startIter (resume): resumeAbsDir/moco_result/...GRF.sto
+    %    - 그 외: result_(i-1)/moco_result/...GRF.sto
     %------------------------------------------------
-    if ~resume_mode
-        if i == 1
-            kinStoForAnaly    = guessInitSto;
-            grfStoPath        = grfInitSto;
-            modelPathForAnaly = fullfile(modelPath, ModelNameOsim);
-        else
-            prevResultDir     = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
-            kinStoForAnaly    = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i-1));
-            grfStoPath        = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', i-1));
-            prevAnalyDir      = fullfile(OutputFolder, sprintf('result_%d', i-1), 'analy_result');
-            modelPathForAnaly = fullfile(prevAnalyDir, sprintf('%s_%d.osim', modelName, i-1));
-        end
+    if ~resume_mode && i == 1
+        prevAnalyDir = fullfile(OutputFolder, 'baseline', 'analy_result');
+        prevGrfPath  = grfInitSto;
+    elseif resume_mode && i == startIter
+        prevAnalyDir = fullfile(resumeAbsDir, 'analy_result');
+        prevGrfPath  = fullfile(resumeAbsDir, 'moco_result', ...
+                           sprintf('moco_WoC_Solution_iter%02d_GRF.sto', baseIter));
     else
-        if i == startIter
-            prevResultDir     = fullfile(resumeAbsDir, 'moco_result');
-            kinStoForAnaly    = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', baseIter));
-            grfStoPath        = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', baseIter));
-            prevAnalyDir      = fullfile(resumeAbsDir, 'analy_result');
-            modelPathForAnaly = fullfile(prevAnalyDir, sprintf('%s_%d.osim', modelName, baseIter));
-        else
-            prevResultDir     = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
-            kinStoForAnaly    = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i-1));
-            grfStoPath        = fullfile(prevResultDir, sprintf('moco_WoC_Solution_iter%02d_GRF.sto', i-1));
-            prevAnalyDir      = fullfile(OutputFolder, sprintf('result_%d', i-1), 'analy_result');
-            modelPathForAnaly = fullfile(prevAnalyDir, sprintf('%s_%d.osim', modelName, i-1));
-        end
+        prevIdx      = i - 1;
+        prevAnalyDir = fullfile(OutputFolder, sprintf('result_%d', prevIdx), 'analy_result');
+        prevGrfPath  = fullfile(OutputFolder, sprintf('result_%d', prevIdx), 'moco_result', ...
+                           sprintf('moco_WoC_Solution_iter%02d_GRF.sto', prevIdx));
     end
 
     % 이번 iteration의 result_i 폴더들
@@ -322,25 +343,24 @@ for i = startIter:endIter
 
     %------------------------------------------------
     % 3-2 ~ 3-6. 모드별 control reference 생성
+    %
+    %  modeWoC    : QP 기반 WoC 제어기
+    %  modeOff    : 보조력 없음 (영벡터 control.sto 생성)
+    %  modeSpline : prevGrfPath에서 stance 추출 후 spline 생성
     %------------------------------------------------
     switch modeType
 
         case 'modeWoC'
             %--------------------------------------------
             % WoC mode: QP 기반 최적 보조 토크 계산
+            % (analysis 결과는 prevAnalyDir에서 읽음 — 이전 iter 결과)
             %--------------------------------------------
 
-            % 3-2. Analy 수행: CoM, CoP_R 좌표 .sto 추출
-            WoC_moco_analysis(AnalySetupPath, ...
-                'modelPath',         modelPathForAnaly, ...
-                'kinematicsStoPath', kinStoForAnaly, ...
-                'resultsDir',        AnalyResultDir);
-
-            CoMPath   = fullfile(AnalyResultDir, '2D_gait_AFO_pc_PointKinematics_CoM_pos.sto');
-            CoP_RPath = fullfile(AnalyResultDir, '2D_gait_AFO_pc_PointKinematics_CoP_R_pos.sto');
+            CoMPath   = fullfile(prevAnalyDir, '2D_gait_AFO_pc_PointKinematics_CoM_pos.sto');
+            CoP_RPath = fullfile(prevAnalyDir, '2D_gait_AFO_pc_PointKinematics_CoP_R_pos.sto');
 
             % 3-3. GRF에서 오른발 stance time 추출
-            [stanceTimeR_101, fullTime] = WoC_moco_detectStance(grfStoPath);
+            [stanceTimeR_101, fullTime] = WoC_moco_detectStance(prevGrfPath);
 
             % 3-4. QP input (eta, w, t) 계산
             optsCalQP = struct();
@@ -348,9 +368,9 @@ for i = startIter:endIter
             optsCalQP.CoP_RFields = {'state_0','state_1','state_2'};
             optsCalQP.apAxis   = 'x';
             optsCalQP.vertAxis = 'y';
-            optsCalQP.wPath  = fullfile(AnalyResultDir, '2D_gait_AFO_pc_Kinematics_u.sto');
+            optsCalQP.wPath  = fullfile(prevAnalyDir, '2D_gait_AFO_pc_Kinematics_u.sto');
             optsCalQP.wField = 'ankle_angle_r';
-            optsCalQP.vPath  = fullfile(AnalyResultDir, '2D_gait_AFO_pc_Kinematics_u.sto');
+            optsCalQP.vPath  = fullfile(prevAnalyDir, '2D_gait_AFO_pc_Kinematics_u.sto');
             optsCalQP.vField = 'pelvis_tx';
 
             [etaR_101, wR_101, v_101, dt] = WoC_moco_cal_QP_input( ...
@@ -414,7 +434,7 @@ for i = startIter:endIter
             %--------------------------------------------
 
             % Stance time 추출 (control 주입 시간 범위 + fullTime 필요)
-            [stanceTimeR_101, fullTime] = WoC_moco_detectStance(grfStoPath);
+            [stanceTimeR_101, fullTime] = WoC_moco_detectStance(prevGrfPath);
 
             % Spline control 생성 (정규화 도메인 → 101포인트 tau 벡터)
             tau_R = WoC_moco_buildSplineControl(modeParams, numel(stanceTimeR_101));
@@ -469,18 +489,32 @@ for i = startIter:endIter
 
     %------------------------------------------------
     % 3-8. Moco loop: control reference → 새로운 보행 궤적
+    %       주입된 osim은 AnalyResultDir에 저장됨
     %------------------------------------------------
     baseOsimPath = fullfile(modelPath, ModelNameOsim);
     sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, baseOsimPath, MocoOpts);
 
     %------------------------------------------------
-    % 3-9. Moco 결과 저장 (kinematics, GRF 등)
+    % 3-9. Moco 결과 저장 (kinematics, GRF, metabolic)
     %------------------------------------------------
     resOpts           = struct();
     resOpts.modelPath = fullfile(AnalyResultDir, sprintf('%s_%d.osim', modelName, i));
     resOpts.prefix    = sprintf('moco_WoC_Solution_iter%02d', i);
     resOpts.gaitMode  = gaitMode;
     moco_WoC_getResult(sol, mocoResultDir, resOpts);
+
+    %------------------------------------------------
+    % 3-10. 현재 iter 결과에 대한 analysis (전 모드 공통)
+    %
+    %  result_i/moco_result/kinematics.sto → result_i/analy_result/
+    %  다음 iter의 control 생성 입력으로 사용된다.
+    %------------------------------------------------
+    currKinPath = fullfile(mocoResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i));
+    currOsmPath = fullfile(AnalyResultDir, sprintf('%s_%d.osim', modelName, i));
+    WoC_moco_analysis(AnalySetupPath, ...
+        'modelPath',         currOsmPath, ...
+        'kinematicsStoPath', currKinPath, ...
+        'resultsDir',        AnalyResultDir);
 
     fprintf('Iteration %d done.\n', i);
 end
