@@ -1,4 +1,4 @@
-function [t_stance_101, t_full] = WoC_moco_determsctStance(grfStoPath, opts)
+function [t_stance_101, t_full] = WoC_moco_detectStance(grfStoPath, opts)
 % WoC_moco_detectStance
 %
 %   GRF .sto 파일에서 지정한 변수의 ground reaction force를 읽어
