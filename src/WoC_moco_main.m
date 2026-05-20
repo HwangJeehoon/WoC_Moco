@@ -16,12 +16,12 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %
 %   optMode (struct) — modeSpline 전용:
 %     .type    = 'modeSpline'
-%     .trigger : control 시작 시각 (정규화 도메인 [0, 0.6] 기준)
+%     .trigger : control 시작 시각 (정규화 도메인 [0, 1) 기준)
 %     .rise    : 상승 구간 길이
 %     .flat    : 최대값 유지 구간 길이
-%     .fall    : 하강 구간 길이
+%     .fall    : 하강 구간 길이 (trigger+rise+flat+fall > 1 이면 wrap-around)
 %     .maxVal  : 최대 출력값 (0 ~ 1)
-%     조건: trigger + rise + flat + fall <= 0.6
+%     조건: trigger < 1
 %
 %   opts (선택 struct):
 %     .QP_effort    : QP 비용 계수 (default = 0.01)
@@ -428,25 +428,26 @@ for i = startIter:endIter
             %--------------------------------------------
             % Spline mode: trapezoid cubic Hermite 보조력 프로파일
             %
-            %   stanceTime → [0, 0.6] 정규화 도메인에서 spline 생성 후
-            %   실제 stanceTime 축으로 매핑하여 control.sto 출력.
-            %   Analysis / QP 생략. GRF stance 검출만 수행.
+            %   보행 주기 [0, 1] 정규화 도메인에서 spline 생성 후
+            %   fullTime 전체 구간에 매핑하여 control.sto 출력.
+            %   trigger+rise+flat+fall > 1 이면 fall이 주기 초반에 wrap.
+            %   Analysis / QP 생략.
             %--------------------------------------------
 
-            % Stance time 추출 (control 주입 시간 범위 + fullTime 필요)
-            [stanceTimeR_101, fullTime] = WoC_moco_detectStance(prevGrfPath);
+            % fullTime 추출 (GRF 파일의 전체 시간 축)
+            [~, fullTime] = WoC_moco_detectStance(prevGrfPath);
 
-            % Spline control 생성 (정규화 도메인 → 101포인트 tau 벡터)
-            tau_R = WoC_moco_buildSplineControl(modeParams, numel(stanceTimeR_101));
+            % Spline control 생성 ([0, 1] 정규화 도메인 → fullTime 포인트 수 tau 벡터)
+            tau_R = WoC_moco_buildSplineControl(modeParams, numel(fullTime));
 
-            % Control.sto + data.csv 출력
+            % Control.sto + data.csv 출력 (전체 보행 주기에 적용)
             % (eta, w 는 modeSpline에서 의미 없으므로 placeholder 사용)
-            dummyEta             = zeros(numel(stanceTimeR_101), 1);
-            dummyW               = ones(numel(stanceTimeR_101), 1);
+            dummyEta             = zeros(numel(fullTime), 1);
+            dummyW               = ones(numel(fullTime), 1);
             writeOpts_sp         = struct();
             writeOpts_sp.dataColName = 'spline';
             WoC_moco_writeControl(controlResultDir, ...
-                fullTime, stanceTimeR_101, tau_R, dummyEta, dummyW, writeOpts_sp);
+                fullTime, fullTime, tau_R, dummyEta, dummyW, writeOpts_sp);
 
             controlRefStoPath = fullfile(controlResultDir, 'control.sto');
 
