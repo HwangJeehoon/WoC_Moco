@@ -247,7 +247,7 @@ if strcmpi(gaitMode, 'modeAsym')
     grfInitSto   = fullfile(inputPath, 'GRF_init_full.sto');
 else  % modeSym
     guessInitSto = fullfile(inputPath, 'guess_init_half.sto');
-    grfInitSto   = fullfile(inputPath, 'GRF_init_half.sto');
+    grfInitSto   = fullfile(inputPath, 'GRF_init_full.sto'); % GRF는 modeSym에서도 full 사용 -> 보조력 계산 시 full GRF traj가 필요
 end
 AnalySetupPath = fullfile(inputPath, 'analysis_setup.xml');
 modelPath      = fullfile(baseFolder, '..','models');
