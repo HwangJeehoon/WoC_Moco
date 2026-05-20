@@ -126,7 +126,7 @@ function [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsx
     try
         sheetData = readcell(xlsxFile, 'Sheet', 'models');
     catch
-        sheetData = {'endheader'; 'Names','origin','Date','thigh','shank','abnormal'};
+        sheetData = {'endheader'; 'Names','origin','Date','thigh','shank','afo','muscles','force_scale','fiber_scale'};
     end
 
     % endheader 행 위치 찾기
@@ -187,7 +187,7 @@ function updateModelsSheet(xlsxFile, newModelNames, originName, scalingFactors, 
 
     dateStr = datestr(now, 'yymmdd');
     nNew    = length(newModelNames);
-    COL_N   = 7;   % Names origin Date thigh shank afo abnormal
+    COL_N   = 9;   % Names origin Date thigh shank afo muscles force_scale fiber_scale
 
     % origin count 업데이트
     if isKey(originCounts, originName)
@@ -239,7 +239,7 @@ function updateModelsSheet(xlsxFile, newModelNames, originName, scalingFactors, 
     fullSheet{nOrigins + 1, 1} = 'endheader';
 
     % 컬럼 헤더
-    colHeaders = {'Names','origin','Date','thigh','shank','afo','abnormal'};
+    colHeaders = {'Names','origin','Date','thigh','shank','afo','muscles','force_scale','fiber_scale'};
     for c = 1:COL_N
         fullSheet{nOrigins + 2, c} = colHeaders{c};
     end
