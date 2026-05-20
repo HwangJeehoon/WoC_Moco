@@ -21,7 +21,8 @@ resultBaseDir = fullfile(resultsRootDir, resultName);
 if nargin < 2 || isempty(iterNums)
     found = dir(fullfile(resultBaseDir, 'result_*'));
     found = found([found.isdir]);
-    [~, ord] = sort({found.name});
+    nums = arrayfun(@(f) str2double(regexp(f.name, '\d+$', 'match', 'once')), found);
+    [~, ord] = sort(nums);
     found = found(ord);
     iterNums = arrayfun(@(f) str2double(regexp(f.name, '\d+', 'match', 'once')), found);
     iterNums = iterNums(~isnan(iterNums));
