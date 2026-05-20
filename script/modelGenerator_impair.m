@@ -38,10 +38,13 @@ function modelGenerator_impair()
     %     1.0   fiber2;
     %     1.0   fiber3;
     % ];
-        impairments = [
-        force1   1.00;
-        force2   1.00;
-        force3   1.00;
+    % impairments = [
+    %     force1   1.00;
+    %     force2   1.00;
+    %     force3   1.00;
+    % ];
+    impairments = [
+        force3   1;
     ];
 % =========================================================================
 
@@ -146,16 +149,11 @@ function modelGenerator_impair()
         model.print(outFile);
         fprintf('Saved: %s\n', outFile);
 
-        % abnormal 설명 생성
-        musStr = strjoin(muscleNames, '/');
-        parts  = {};
-        if modifyForce
-            parts{end+1} = sprintf('%s force %.2f%%', musStr, (fScale * 100)); 
-        end
-        if modifyFiber
-            parts{end+1} = sprintf('%s fiber %.2f%%', musStr, (bScale * 100)); 
-        end
-        abnormalDescs{i} = strjoin(parts, ' + ');
+        % muscles / force_scale / fiber_scale 분리 저장
+        musStr = strjoin(muscleNames, ',');
+        if modifyForce, forceVal = fScale; else, forceVal = 1; end
+        if modifyFiber, fiberVal = bScale; else, fiberVal = 1; end
+        abnormalDescs{i} = {musStr, forceVal, fiberVal};
     end
 
     % ── xlsx 업데이트 ──
@@ -176,7 +174,7 @@ function [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsx
     try
         sheetData = readcell(xlsxFile, 'Sheet', 'models');
     catch
-        sheetData = {'endheader'; {'Names','origin','Date','thigh','shank','afo','abnormal'}};
+        sheetData = {'endheader'; {'Names','origin','Date','thigh','shank','afo','muscles','force_scale','fiber_scale'}};
     end
 
     endHdrRow = [];
@@ -222,7 +220,7 @@ function updateModelsSheet(xlsxFile, newModelNames, originName, abnormalDescs, .
 
     dateStr = datestr(now, 'yymmdd');
     nNew    = length(newModelNames);
-    COL_N   = 7;   % Names origin Date thigh shank afo abnormal
+    COL_N   = 9;   % Names origin Date thigh shank afo muscles force_scale fiber_scale
 
     if isKey(originCounts, originName)
         originCounts(originName) = originCounts(originName) + nNew;
@@ -248,7 +246,10 @@ function updateModelsSheet(xlsxFile, newModelNames, originName, abnormalDescs, .
         newData{i, 2} = originName;
         newData{i, 3} = dateStr;
         % cols 4,5,6 (thigh, shank, afo): 해당 없으므로 비워둠
-        newData{i, 7} = abnormalDescs{i};
+        desc = abnormalDescs{i};   % {muscles_csv, force_scale, fiber_scale}
+        newData{i, 7} = desc{1};   % muscles (comma-separated)
+        newData{i, 8} = desc{2};   % force_scale (1 = 변경 없음)
+        newData{i, 9} = desc{3};   % fiber_scale (1 = 변경 없음)
     end
 
     originKeys    = keys(originCounts);
@@ -265,7 +266,7 @@ function updateModelsSheet(xlsxFile, newModelNames, originName, abnormalDescs, .
 
     fullSheet{nOrigins + 1, 1} = 'endheader';
 
-    colHeaders = {'Names','origin','Date','thigh','shank','afo','abnormal'};
+    colHeaders = {'Names','origin','Date','thigh','shank','afo','muscles','force_scale','fiber_scale'};
     for c = 1:COL_N
         fullSheet{nOrigins + 2, c} = colHeaders{c};
     end
