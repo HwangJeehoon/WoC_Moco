@@ -38,10 +38,13 @@ function modelGenerator_impair()
     %     1.0   fiber2;
     %     1.0   fiber3;
     % ];
-        impairments = [
-        force1   1.00;
-        force2   1.00;
-        force3   1.00;
+    % impairments = [
+    %     force1   1.00;
+    %     force2   1.00;
+    %     force3   1.00;
+    % ];
+    impairments = [
+        force3   1;
     ];
 % =========================================================================
 
@@ -148,8 +151,8 @@ function modelGenerator_impair()
 
         % muscles / force_scale / fiber_scale 분리 저장
         musStr = strjoin(muscleNames, ',');
-        if modifyForce, forceVal = fScale; else, forceVal = []; end
-        if modifyFiber, fiberVal = bScale; else, fiberVal = []; end
+        if modifyForce, forceVal = fScale; else, forceVal = 1; end
+        if modifyFiber, fiberVal = bScale; else, fiberVal = 1; end
         abnormalDescs{i} = {musStr, forceVal, fiberVal};
     end
 
@@ -243,10 +246,10 @@ function updateModelsSheet(xlsxFile, newModelNames, originName, abnormalDescs, .
         newData{i, 2} = originName;
         newData{i, 3} = dateStr;
         % cols 4,5,6 (thigh, shank, afo): 해당 없으므로 비워둠
-        desc = abnormalDescs{i};   % {muscles_csv, force_scale_or_[], fiber_scale_or_[]}
+        desc = abnormalDescs{i};   % {muscles_csv, force_scale, fiber_scale}
         newData{i, 7} = desc{1};   % muscles (comma-separated)
-        if ~isempty(desc{2}), newData{i, 8} = desc{2}; end   % force_scale
-        if ~isempty(desc{3}), newData{i, 9} = desc{3}; end   % fiber_scale
+        newData{i, 8} = desc{2};   % force_scale (1 = 변경 없음)
+        newData{i, 9} = desc{3};   % fiber_scale (1 = 변경 없음)
     end
 
     originKeys    = keys(originCounts);
