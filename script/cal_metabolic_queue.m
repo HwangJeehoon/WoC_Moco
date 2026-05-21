@@ -19,7 +19,7 @@ else
     thisFile = mfilename('fullpath');
 end
 scriptDir    = fileparts(thisFile);
-QUEUE_XLSX   = fullfile(scriptDir, 'simulation_queue_example.xlsx');
+QUEUE_XLSX   = fullfile(scriptDir, 'simulation_queue.xlsx');
 resultsRoot  = fullfile(scriptDir, '..', 'results');
 SHEET_DONE   = 'completed_queue';
 
