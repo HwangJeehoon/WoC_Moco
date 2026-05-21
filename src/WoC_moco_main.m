@@ -40,6 +40,7 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     results/<result_name>/result_i/control_result/ ← iter i 보조 제어력
 
 close all;
+import org.opensim.modeling.*
 
 %% --------------------------------------------------
 %  optMode 파싱 (string / struct 양쪽 허용)
@@ -516,6 +517,43 @@ for i = startIter:endIter
         'modelPath',         currOsmPath, ...
         'kinematicsStoPath', currKinPath, ...
         'resultsDir',        AnalyResultDir);
+
+    %------------------------------------------------
+    % 3-11. Inverse Dynamics (with / without assist)
+    %
+    %  id_withAssist.sto   : iter에서 사용한 model (analy_result에 저장된 model)
+    %  id_withoutAssist.sto: origin model (입력 model)
+    %  Results saved to analy_result/
+    %------------------------------------------------
+
+    idXmlPath      = fullfile(inputPath, 'id_setup.xml');
+    kinQStoPath    = fullfile(AnalyResultDir, '2D_gait_AFO_pc_Kinematics_q.sto');
+    % GRF_setup_id.xml이 analy_result/에 저장되므로 moco_result/는 상대경로 ../moco_result/
+    currGrfStoPath = sprintf('../moco_result/moco_WoC_Solution_iter%02d_GRF.sto', i);
+
+    % GRF_setup.xml의 datafile을 현재 iter GRF.sto 경로로 업데이트 후 임시 저장
+    grfXmlDoc = xmlread(fullfile(inputPath, 'GRF_setup.xml'));
+    grfXmlDoc.getElementsByTagName('datafile').item(0).setTextContent(currGrfStoPath);
+    tempGrfXml = fullfile(AnalyResultDir, 'GRF_setup_id.xml');
+    xmlwrite(tempGrfXml, grfXmlDoc);
+
+    % with assist (iter에서 사용한 model)
+    idTool = InverseDynamicsTool(idXmlPath);
+    idTool.setModelFileName(currOsmPath);
+    idTool.setCoordinatesFileName(kinQStoPath);
+    idTool.setExternalLoadsFileName(tempGrfXml);
+    idTool.setResultsDir(AnalyResultDir);
+    idTool.setOutputGenForceFileName('id_withAssist.sto');
+    idTool.run();
+
+    % without assist (origin model)
+    idTool2 = InverseDynamicsTool(idXmlPath);
+    idTool2.setModelFileName(baseOsimPath);
+    idTool2.setCoordinatesFileName(kinQStoPath);
+    idTool2.setExternalLoadsFileName(tempGrfXml);
+    idTool2.setResultsDir(AnalyResultDir);
+    idTool2.setOutputGenForceFileName('id_withoutAssist.sto');
+    idTool2.run();
 
     fprintf('Iteration %d done.\n', i);
 end
