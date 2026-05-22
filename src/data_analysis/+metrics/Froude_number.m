@@ -1,5 +1,5 @@
-function m = effort(path)
-    %% Optimal Force Reader
+function m = Froude_number(path)
+    %% Leg length Reader
     % path로부터 ID 가져오는 부분 (복사 사용 가능)
     parts_path = strsplit(path, '/');
     parts_path = parts_path(~cellfun('isempty', parts_path));
@@ -19,32 +19,40 @@ function m = effort(path)
     import matlab.io.xml.xpath.*
     e = Evaluator();
 
-    xml_femur_l = "//PathActuator[@name='AFO_r']/optimal_force";
+    xml_femur_l = "//Body[@name='femur_l']/mass_center";
+    xml_tibia_l = "//Body[@name='tibia_l']/mass_center";
     
     nodes = evaluate(e, xml_femur_l, model_path, EvalResultType.NodeSet);
     values = string({nodes.TextContent});
     nums = sscanf(char(values), '%f')';
-    optimal_force = abs(nums(1));
+    length_femur = 2 * abs(nums(2));
     
-    %% AFO control Reader
-    % GRF file 가져오는 함수 (범용적으로 사용 가능)
-    path_moco_result = path + "/control_result";
+    nodes = evaluate(e, xml_tibia_l, model_path, EvalResultType.NodeSet);
+    values = string({nodes.TextContent});
+    nums = sscanf(char(values), '%f')';
+    length_tibia = 2 * abs(nums(2));
+    
+    length_leg = length_femur + length_tibia;
+
+    %% Run data reader
+    path_moco_result = path + "/moco_result";
     d = dir(path_moco_result);
     d = d(~[d.isdir]);
     names = string({d.name});
 
-    tf = contains(names, "control", "IgnoreCase", true);
+    tf = contains(names, "kinematics", "IgnoreCase", true);
     matches = fullfile(path_moco_result, cellstr(names(tf))); % full paths as cell array
 
     [tmp, t] = readSTO_auto(matches{1});
 
     time = t.time;
-    afo_r = t.AFO_r;
+    elapsed_time = time(end) - time(1);   
 
-    integrated_control = cumtrapz(time, afo_r);
+    distance = t.x_jointset_groundPelvis_pelvis_tx_value;
+    vel_average = (distance(end) - distance(1)) / elapsed_time;
     
-    m = integrated_control(end) * optimal_force;
-    
+    m = vel_average^2 / 9.8 / length_leg;
+
 
 end
 

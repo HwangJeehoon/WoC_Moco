@@ -1,5 +1,5 @@
-function m = effort(path)
-    %% Optimal Force Reader
+function m = Normalized_step(path)
+    %% Leg length Reader
     % path로부터 ID 가져오는 부분 (복사 사용 가능)
     parts_path = strsplit(path, '/');
     parts_path = parts_path(~cellfun('isempty', parts_path));
@@ -19,35 +19,45 @@ function m = effort(path)
     import matlab.io.xml.xpath.*
     e = Evaluator();
 
-    xml_femur_l = "//PathActuator[@name='AFO_r']/optimal_force";
+    xml_femur_l = "//Body[@name='femur_l']/mass_center";
+    xml_tibia_l = "//Body[@name='tibia_l']/mass_center";
     
     nodes = evaluate(e, xml_femur_l, model_path, EvalResultType.NodeSet);
     values = string({nodes.TextContent});
     nums = sscanf(char(values), '%f')';
-    optimal_force = abs(nums(1));
+    length_femur = 2 * abs(nums(2));
     
-    %% AFO control Reader
+    nodes = evaluate(e, xml_tibia_l, model_path, EvalResultType.NodeSet);
+    values = string({nodes.TextContent});
+    nums = sscanf(char(values), '%f')';
+    length_tibia = 2 * abs(nums(2));
+    
+    length_leg = length_femur + length_tibia;
+
+
+    %% Step length Reader
     % GRF file 가져오는 함수 (범용적으로 사용 가능)
-    path_moco_result = path + "/control_result";
+    path_moco_result = path + "/moco_result";
     d = dir(path_moco_result);
     d = d(~[d.isdir]);
     names = string({d.name});
 
-    tf = contains(names, "control", "IgnoreCase", true);
+    tf = contains(names, "kinematics", "IgnoreCase", true);
     matches = fullfile(path_moco_result, cellstr(names(tf))); % full paths as cell array
 
     [tmp, t] = readSTO_auto(matches{1});
 
-    time = t.time;
-    afo_r = t.AFO_r;
-
-    integrated_control = cumtrapz(time, afo_r);
+    distance = t.x_jointset_groundPelvis_pelvis_tx_value;
     
-    m = integrated_control(end) * optimal_force;
+    % [XXX]: length_leg * 2로 나누는게 맞는지.
+    m = (distance(end) - distance(1)) / length_leg / 2;
+
+
     
 
 end
 
+%% Sub function
 function [headerLines, dataTbl] = readSTO_auto(filename)
 % readSTO_auto Read .sto file; avoid NaN in first row by auto-detecting
 % whether the first non-header line is variable names or numeric data.
