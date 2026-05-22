@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<OpenSimDocument Version="40500">
+<OpenSimDocument Version="40600">
 	<Model name="2D_gait_AFO_pc">
 		<!--List of components that this component owns and serializes.-->
 		<components>
@@ -8,7 +8,7 @@
 				<socket_sphere>/contactgeometryset/heel_r</socket_sphere>
 				<!--Path to a Component that satisfies the Socket 'half_space' of type ContactHalfSpace (description: The half-space participating in this contact.).-->
 				<socket_half_space>/contactgeometryset/floor</socket_half_space>
-				<!--The stiffness constant (i.e., plain strain modulus), default is 1 (N/m^2)-->
+				<!--The stiffness constant (i.e., plane strain modulus), default is 1 (N/m^2)-->
 				<stiffness>3067776</stiffness>
 				<!--The dissipation coefficient, default is 0 (s/m).-->
 				<dissipation>2</dissipation>
@@ -30,7 +30,7 @@
 				<socket_sphere>/contactgeometryset/heel_l</socket_sphere>
 				<!--Path to a Component that satisfies the Socket 'half_space' of type ContactHalfSpace (description: The half-space participating in this contact.).-->
 				<socket_half_space>/contactgeometryset/floor</socket_half_space>
-				<!--The stiffness constant (i.e., plain strain modulus), default is 1 (N/m^2)-->
+				<!--The stiffness constant (i.e., plane strain modulus), default is 1 (N/m^2)-->
 				<stiffness>3067776</stiffness>
 				<!--The dissipation coefficient, default is 0 (s/m).-->
 				<dissipation>2</dissipation>
@@ -52,7 +52,7 @@
 				<socket_sphere>/contactgeometryset/front_r</socket_sphere>
 				<!--Path to a Component that satisfies the Socket 'half_space' of type ContactHalfSpace (description: The half-space participating in this contact.).-->
 				<socket_half_space>/contactgeometryset/floor</socket_half_space>
-				<!--The stiffness constant (i.e., plain strain modulus), default is 1 (N/m^2)-->
+				<!--The stiffness constant (i.e., plane strain modulus), default is 1 (N/m^2)-->
 				<stiffness>3067776</stiffness>
 				<!--The dissipation coefficient, default is 0 (s/m).-->
 				<dissipation>2</dissipation>
@@ -74,7 +74,7 @@
 				<socket_sphere>/contactgeometryset/front_l</socket_sphere>
 				<!--Path to a Component that satisfies the Socket 'half_space' of type ContactHalfSpace (description: The half-space participating in this contact.).-->
 				<socket_half_space>/contactgeometryset/floor</socket_half_space>
-				<!--The stiffness constant (i.e., plain strain modulus), default is 1 (N/m^2)-->
+				<!--The stiffness constant (i.e., plane strain modulus), default is 1 (N/m^2)-->
 				<stiffness>3067776</stiffness>
 				<!--The dissipation coefficient, default is 0 (s/m).-->
 				<dissipation>2</dissipation>
@@ -239,17 +239,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -310,17 +310,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -387,17 +387,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -474,17 +474,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -534,8 +534,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 -1.9999700000000000255 -1.5707999999999999741 -1.4575199999999999267 -1.3962600000000000566 -1.0471999999999999087 -0.6981319999999999748 -0.5263910000000000533 -0.3490659999999999874 -0.1745329999999999937 0 0.00017452999999999999764 0.0003490699999999999901 0.027925300000000000122 0.087266499999999996851 0.1745329999999999937 2.0943999999999998174</x>
-												<y> 0.015580500000000000599 0.017993800000000000766 0.027508100000000000607 0.029656399999999999428 0.030761500000000000649 0.036569499999999997841 0.042207399999999999085 0.045090199999999996949 0.048391000000000003456 0.053429900000000002391 0.061757600000000002771 0.061766899999999999582 0.061776200000000003332 0.063308299999999997909 0.066993999999999997996 0.073303499999999993664 0.057348099999999999077</y>
+												<x> -2.0944 -1.99997 -1.5708 -1.45752 -1.39626 -1.0472 -0.698132 -0.526391 -0.349066 -0.174533 0 0.00017453 0.00034907 0.0279253 0.0872665 0.174533 2.0944</x>
+												<y> 0.0155805 0.0179938 0.0275081 0.0296564 0.0307615 0.0365695 0.0422074 0.0450902 0.048391 0.0534299 0.0617576 0.0617669 0.0617762 0.0633083 0.066994 0.0733035 0.0573481</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -546,8 +546,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 -1.9999700000000000255 -1.5707999999999999741 -1.4575199999999999267 -1.3962600000000000566 -1.0471999999999999087 -0.6981319999999999748 -0.5263910000000000533 -0.3490659999999999874 -0.1745329999999999937 0 0.00017452999999999999764 0.0003490699999999999901 0.027925300000000000122 0.087266499999999996851 0.1745329999999999937 2.0943999999999998174</x>
-												<y> 0.023411600000000001159 0.023761299999999999089 0.025114100000000000312 0.025279499999999999887 0.025314599999999999602 0.024918400000000000272 0.024237299999999999817 0.023844699999999999923 0.023419700000000001627 0.022764400000000000607 0.020983999999999999181 0.020981400000000000744 0.020978799999999998838 0.020522499999999999076 0.019175399999999998696 0.015955400000000001526 -0.067377400000000003955</y>
+												<x> -2.0944 -1.99997 -1.5708 -1.45752 -1.39626 -1.0472 -0.698132 -0.526391 -0.349066 -0.174533 0 0.00017453 0.00034907 0.0279253 0.0872665 0.174533 2.0944</x>
+												<y> 0.0234116 0.0237613 0.0251141 0.0252795 0.0253146 0.0249184 0.0242373 0.0238447 0.0234197 0.0227644 0.020984 0.0209814 0.0209788 0.0205225 0.0191754 0.0159554 -0.0673774</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -558,8 +558,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 0.17449999999999998845</x>
-												<y> 0.0013999999999999999858 0.0013999999999999999858</y>
+												<x> -2.0944 0.1745</x>
+												<y> 0.0014 0.0014</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -576,7 +576,7 @@
 					</PathWrapSet>
 				</GeometryPath>
 				<!--Maximum isometric force that the fibers can generate-->
-				<max_isometric_force>1169</max_isometric_force>
+				<max_isometric_force>146.125</max_isometric_force>
 				<!--Optimal length of the muscle fibers-->
 				<optimal_fiber_length>0.114154396713697</optimal_fiber_length>
 				<!--Resting length of the tendon-->
@@ -589,17 +589,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -655,8 +655,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 -1.9999700000000000255 -1.5707999999999999741 -1.4575199999999999267 -1.3962600000000000566 -1.0471999999999999087 -0.6981319999999999748 -0.5263910000000000533 -0.3490659999999999874 -0.1745329999999999937 0 0.00017452999999999999764 0.0003490699999999999901 0.027925300000000000122 0.087266499999999996851 0.1745329999999999937 2.0943999999999998174</x>
-												<y> 0.0082733000000000007923 0.010686599999999999225 0.020204199999999998549 0.02235300000000000134 0.023458300000000001373 0.029271499999999998909 0.034946499999999998398 0.037871000000000001884 0.041256899999999999129 0.046528699999999999226 0.055463199999999997225 0.055473500000000001975 0.05548369999999999691 0.057171699999999998909 0.061272000000000000075 0.068436800000000005961 0.064881800000000003359</y>
+												<x> -2.0944 -1.99997 -1.5708 -1.45752 -1.39626 -1.0472 -0.698132 -0.526391 -0.349066 -0.174533 0 0.00017453 0.00034907 0.0279253 0.0872665 0.174533 2.0944</x>
+												<y> 0.0082733 0.0106866 0.0202042 0.022353 0.0234583 0.0292715 0.0349465 0.037871 0.0412569 0.0465287 0.0554632 0.0554735 0.0554837 0.0571717 0.061272 0.0684368 0.0648818</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -667,8 +667,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 -1.9999700000000000255 -1.5707999999999999741 -1.4575199999999999267 -1.3962600000000000566 -1.0471999999999999087 -0.6981319999999999748 -0.5263910000000000533 -0.3490659999999999874 -0.1745329999999999937 0 0.00017452999999999999764 0.0003490699999999999901 0.027925300000000000122 0.087266499999999996851 0.1745329999999999937 2.0943999999999998174</x>
-												<y> 0.025599000000000000227 0.025948700000000001625 0.027312400000000000566 0.02747959999999999986 0.027515100000000000668 0.027136299999999998617 0.026573699999999998711 0.026307299999999998741 0.026118700000000001638 0.026012899999999998524 0.025292300000000000199 0.025291100000000000386 0.025289800000000001168 0.025052600000000001257 0.02421910000000000035 0.021828799999999998899 -0.068570599999999995444</y>
+												<x> -2.0944 -1.99997 -1.5708 -1.45752 -1.39626 -1.0472 -0.698132 -0.526391 -0.349066 -0.174533 0 0.00017453 0.00034907 0.0279253 0.0872665 0.174533 2.0944</x>
+												<y> 0.025599 0.0259487 0.0273124 0.0274796 0.0275151 0.0271363 0.0265737 0.0263073 0.0261187 0.0260129 0.0252923 0.0252911 0.0252898 0.0250526 0.0242191 0.0218288 -0.0685706</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -679,8 +679,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 2.0943999999999998174</x>
-												<y> 0.0017999999999999999507 0.0017999999999999999507</y>
+												<x> -2.0944 2.0944</x>
+												<y> 0.0018 0.0018</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -710,17 +710,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -772,7 +772,7 @@
 					</PathWrapSet>
 				</GeometryPath>
 				<!--Maximum isometric force that the fibers can generate-->
-				<max_isometric_force>2500</max_isometric_force>
+				<max_isometric_force>312.5</max_isometric_force>
 				<!--Optimal length of the muscle fibers-->
 				<optimal_fiber_length>0.086926079311056698</optimal_fiber_length>
 				<!--Resting length of the tendon-->
@@ -785,17 +785,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -837,7 +837,7 @@
 					</PathWrapSet>
 				</GeometryPath>
 				<!--Maximum isometric force that the fibers can generate-->
-				<max_isometric_force>5137</max_isometric_force>
+				<max_isometric_force>642.125</max_isometric_force>
 				<!--Optimal length of the muscle fibers-->
 				<optimal_fiber_length>0.048170551124502803</optimal_fiber_length>
 				<!--Resting length of the tendon-->
@@ -850,17 +850,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -908,7 +908,7 @@
 					</PathWrapSet>
 				</GeometryPath>
 				<!--Maximum isometric force that the fibers can generate-->
-				<max_isometric_force>3000</max_isometric_force>
+				<max_isometric_force>375</max_isometric_force>
 				<!--Optimal length of the muscle fibers-->
 				<optimal_fiber_length>0.093789916893817799</optimal_fiber_length>
 				<!--Resting length of the tendon-->
@@ -921,17 +921,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -992,17 +992,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -1063,17 +1063,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -1140,17 +1140,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -1227,17 +1227,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -1287,8 +1287,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 -1.9999700000000000255 -1.5707999999999999741 -1.4575199999999999267 -1.3962600000000000566 -1.0471999999999999087 -0.6981319999999999748 -0.5263910000000000533 -0.3490659999999999874 -0.1745329999999999937 0 0.00017452999999999999764 0.0003490699999999999901 0.027925300000000000122 0.087266499999999996851 0.1745329999999999937 2.0943999999999998174</x>
-												<y> 0.015580500000000000599 0.017993800000000000766 0.027508100000000000607 0.029656399999999999428 0.030761500000000000649 0.036569499999999997841 0.042207399999999999085 0.045090199999999996949 0.048391000000000003456 0.053429900000000002391 0.061757600000000002771 0.061766899999999999582 0.061776200000000003332 0.063308299999999997909 0.066993999999999997996 0.073303499999999993664 0.057348099999999999077</y>
+												<x> -2.0944 -1.99997 -1.5708 -1.45752 -1.39626 -1.0472 -0.698132 -0.526391 -0.349066 -0.174533 0 0.00017453 0.00034907 0.0279253 0.0872665 0.174533 2.0944</x>
+												<y> 0.0155805 0.0179938 0.0275081 0.0296564 0.0307615 0.0365695 0.0422074 0.0450902 0.048391 0.0534299 0.0617576 0.0617669 0.0617762 0.0633083 0.066994 0.0733035 0.0573481</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -1299,8 +1299,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 -1.9999700000000000255 -1.5707999999999999741 -1.4575199999999999267 -1.3962600000000000566 -1.0471999999999999087 -0.6981319999999999748 -0.5263910000000000533 -0.3490659999999999874 -0.1745329999999999937 0 0.00017452999999999999764 0.0003490699999999999901 0.027925300000000000122 0.087266499999999996851 0.1745329999999999937 2.0943999999999998174</x>
-												<y> 0.023411600000000001159 0.023761299999999999089 0.025114100000000000312 0.025279499999999999887 0.025314599999999999602 0.024918400000000000272 0.024237299999999999817 0.023844699999999999923 0.023419700000000001627 0.022764400000000000607 0.020983999999999999181 0.020981400000000000744 0.020978799999999998838 0.020522499999999999076 0.019175399999999998696 0.015955400000000001526 -0.067377400000000003955</y>
+												<x> -2.0944 -1.99997 -1.5708 -1.45752 -1.39626 -1.0472 -0.698132 -0.526391 -0.349066 -0.174533 0 0.00017453 0.00034907 0.0279253 0.0872665 0.174533 2.0944</x>
+												<y> 0.0234116 0.0237613 0.0251141 0.0252795 0.0253146 0.0249184 0.0242373 0.0238447 0.0234197 0.0227644 0.020984 0.0209814 0.0209788 0.0205225 0.0191754 0.0159554 -0.0673774</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -1311,8 +1311,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 0.17449999999999998845</x>
-												<y> -0.0013999999999999999858 -0.0013999999999999999858</y>
+												<x> -2.0944 0.1745</x>
+												<y> -0.0014 -0.0014</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -1342,17 +1342,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -1408,8 +1408,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 -1.9999700000000000255 -1.5707999999999999741 -1.4575199999999999267 -1.3962600000000000566 -1.0471999999999999087 -0.6981319999999999748 -0.5263910000000000533 -0.3490659999999999874 -0.1745329999999999937 0 0.00017452999999999999764 0.0003490699999999999901 0.027925300000000000122 0.087266499999999996851 0.1745329999999999937 2.0943999999999998174</x>
-												<y> 0.0082733000000000007923 0.010686599999999999225 0.020204199999999998549 0.02235300000000000134 0.023458300000000001373 0.029271499999999998909 0.034946499999999998398 0.037871000000000001884 0.041256899999999999129 0.046528699999999999226 0.055463199999999997225 0.055473500000000001975 0.05548369999999999691 0.057171699999999998909 0.061272000000000000075 0.068436800000000005961 0.064881800000000003359</y>
+												<x> -2.0944 -1.99997 -1.5708 -1.45752 -1.39626 -1.0472 -0.698132 -0.526391 -0.349066 -0.174533 0 0.00017453 0.00034907 0.0279253 0.0872665 0.174533 2.0944</x>
+												<y> 0.0082733 0.0106866 0.0202042 0.022353 0.0234583 0.0292715 0.0349465 0.037871 0.0412569 0.0465287 0.0554632 0.0554735 0.0554837 0.0571717 0.061272 0.0684368 0.0648818</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -1420,8 +1420,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 -1.9999700000000000255 -1.5707999999999999741 -1.4575199999999999267 -1.3962600000000000566 -1.0471999999999999087 -0.6981319999999999748 -0.5263910000000000533 -0.3490659999999999874 -0.1745329999999999937 0 0.00017452999999999999764 0.0003490699999999999901 0.027925300000000000122 0.087266499999999996851 0.1745329999999999937 2.0943999999999998174</x>
-												<y> 0.025599000000000000227 0.025948700000000001625 0.027312400000000000566 0.02747959999999999986 0.027515100000000000668 0.027136299999999998617 0.026573699999999998711 0.026307299999999998741 0.026118700000000001638 0.026012899999999998524 0.025292300000000000199 0.025291100000000000386 0.025289800000000001168 0.025052600000000001257 0.02421910000000000035 0.021828799999999998899 -0.068570599999999995444</y>
+												<x> -2.0944 -1.99997 -1.5708 -1.45752 -1.39626 -1.0472 -0.698132 -0.526391 -0.349066 -0.174533 0 0.00017453 0.00034907 0.0279253 0.0872665 0.174533 2.0944</x>
+												<y> 0.025599 0.0259487 0.0273124 0.0274796 0.0275151 0.0271363 0.0265737 0.0263073 0.0261187 0.0260129 0.0252923 0.0252911 0.0252898 0.0250526 0.0242191 0.0218288 -0.0685706</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -1432,8 +1432,8 @@
 									<MultiplierFunction>
 										<function>
 											<SimmSpline>
-												<x> -2.0943999999999998174 2.0943999999999998174</x>
-												<y> -0.0017999999999999999507 -0.0017999999999999999507</y>
+												<x> -2.0944 2.0944</x>
+												<y> -0.0018 -0.0018</y>
 											</SimmSpline>
 										</function>
 										<scale>0.96673215203466201</scale>
@@ -1463,17 +1463,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -1538,17 +1538,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -1603,17 +1603,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -1674,17 +1674,17 @@
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
 				<ignore_activation_dynamics>false</ignore_activation_dynamics>
-				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
+				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
-				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
+				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
 				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
-				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
+				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
-				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
+				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
 				<active_force_width_scale>1</active_force_width_scale>
-				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0.-->
+				<!--Use this property to define the linear damping force that is added to the total muscle fiber force. It is computed by multiplying this damping parameter by the normalized fiber velocity and the max isometric force. Default: 0. Bounds: [0, inf]-->
 				<fiber_damping>0.01</fiber_damping>
-				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049.-->
+				<!--Tendon strain at a tension of 1 normalized force. Default: 0.049. Bounds: (0, inf]-->
 				<tendon_strain_at_one_norm_force>0.049000000000000002</tendon_strain_at_one_norm_force>
 				<!--Make the passive fiber force 0. Default: false.-->
 				<ignore_passive_fiber_force>false</ignore_passive_fiber_force>
@@ -2749,17 +2749,17 @@
 		<ControllerSet name="controllerset">
 			<objects>
 				<PrescribedController name="AFO_controller">
+					<!--Paths to Components that satisfies the list Socket 'actuators' of type Actuator (description: The list of Actuators that this controller will control.).To specify multiple paths, put spaces between them.-->
+					<socket_actuators>/AFO_r /AFO_l</socket_actuators>
 					<!--Flag (true or false) indicating whether or not the controller is enabled.-->
 					<enabled>true</enabled>
-					<!--The names of the model actuators that this controller will control.The keyword ALL indicates the controller will control all the actuators in the model-->
-					<actuator_list>AFO_r AFO_l</actuator_list>
-					<!--Functions (one per control) describing the controls for actuatorsspecified for this controller.-->
+					<!--Functions (one per control) describing the controls for actuators specified for this controller. The control function set must match the number and order of connected actuators.-->
 					<FunctionSet name="ControlFunctions">
 						<objects>
 							<GCVSpline name="AFO_r">
 								<half_order>1</half_order>
 								<error_variance>0</error_variance>
-								<x> 0 0.0097935290000000004701 0.019587059000000000414 0.029380587999999999149 0.039174117000000001354 0.048967647000000003032 0.058761175999999998298 0.068554706000000006916 0.078348235000000002182 0.088141763999999997448 0.097935294000000006065 0.10772882300000000133 0.11752235299999999607 0.12731588199999999134 0.1371094109999999866 0.1469029410000000091 0.15669647000000000436 0.16648999899999999963 0.17628352899999999437 0.18607705799999998963 0.19587058800000001213 0.2056641170000000074 0.21545764600000000266 0.2252511759999999974 0.23504470499999999267 0.24483823399999998793 0.25463176399999998267 0.26442529300000000569 0.27421882300000000043 0.28401235200000002346 0.29380588099999999097 0.30359941099999998571 0.31339294000000000873 0.32318646899999997624 0.33297999900000002649 0.342773527999999994 0.35256705799999998874 0.36236058700000001176 0.37215411599999997927 0.38194764599999997401 0.39174117499999999703 0.40153470400000002005 0.41132823400000001479 0.4211217629999999823 0.43091529299999997704 0.44070882200000000006 0.45050235100000002308 0.46029588100000001782 0.47008940999999998533</x>
+								<x> 0 0.00979353 0.0195871 0.0293806 0.0391741 0.0489676 0.0587612 0.0685547 0.0783482 0.0881418 0.0979353 0.107729 0.117522 0.127316 0.137109 0.146903 0.156696 0.16649 0.176284 0.186077 0.195871 0.205664 0.215458 0.225251 0.235045 0.244838 0.254632 0.264425 0.274219 0.284012 0.293806 0.303599 0.313393 0.323186 0.33298 0.342774 0.352567 0.362361 0.372154 0.381948 0.391741 0.401535 0.411328 0.421122 0.430915 0.440709 0.450502 0.460296 0.470089</x>
 								<y> 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</y>
 								<weights> 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1</weights>
 								<coefficients> 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</coefficients>
@@ -2767,7 +2767,7 @@
 							<GCVSpline name="AFO_l">
 								<half_order>1</half_order>
 								<error_variance>0</error_variance>
-								<x> 0 0.0097935290000000004701 0.019587059000000000414 0.029380587999999999149 0.039174117000000001354 0.048967647000000003032 0.058761175999999998298 0.068554706000000006916 0.078348235000000002182 0.088141763999999997448 0.097935294000000006065 0.10772882300000000133 0.11752235299999999607 0.12731588199999999134 0.1371094109999999866 0.1469029410000000091 0.15669647000000000436 0.16648999899999999963 0.17628352899999999437 0.18607705799999998963 0.19587058800000001213 0.2056641170000000074 0.21545764600000000266 0.2252511759999999974 0.23504470499999999267 0.24483823399999998793 0.25463176399999998267 0.26442529300000000569 0.27421882300000000043 0.28401235200000002346 0.29380588099999999097 0.30359941099999998571 0.31339294000000000873 0.32318646899999997624 0.33297999900000002649 0.342773527999999994 0.35256705799999998874 0.36236058700000001176 0.37215411599999997927 0.38194764599999997401 0.39174117499999999703 0.40153470400000002005 0.41132823400000001479 0.4211217629999999823 0.43091529299999997704 0.44070882200000000006 0.45050235100000002308 0.46029588100000001782 0.47008940999999998533</x>
+								<x> 0 0.00979353 0.0195871 0.0293806 0.0391741 0.0489676 0.0587612 0.0685547 0.0783482 0.0881418 0.0979353 0.107729 0.117522 0.127316 0.137109 0.146903 0.156696 0.16649 0.176284 0.186077 0.195871 0.205664 0.215458 0.225251 0.235045 0.244838 0.254632 0.264425 0.274219 0.284012 0.293806 0.303599 0.313393 0.323186 0.33298 0.342774 0.352567 0.362361 0.372154 0.381948 0.391741 0.401535 0.411328 0.421122 0.430915 0.440709 0.450502 0.460296 0.470089</x>
 								<y> 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</y>
 								<weights> 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1</weights>
 								<coefficients> 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</coefficients>
