@@ -47,7 +47,7 @@ function get_metric(pathResult)
     
     % Update new run
     % 아예 처음 보는 Run이면 더미데이터 추가
-    for i = 1:1%height(completed_run_list)
+    for i = 1:height(completed_run_list)
         curID = completed_run_list{i, 1}{1};
         curID_split = split(curID, "-");
         curID_noIter = curID_split{1};
@@ -65,14 +65,35 @@ function get_metric(pathResult)
     
     % Update metric
     date_today = string(datetime("now", "Format", "yyyy-MM-dd"));
-    
+
+    totalRun = height(completed_run_list);
+    lastPrintedID = "";
+
+    fprintf("\n=== Metric update start ===\n");
+    fprintf("Total completed runs: %d\n\n", totalRun);
+
     for i = 1:height(metricDataTable)
         curID = metricDataTable{i, 1}{1};
         curIter = metricDataTable{i, 2};
+
+        runIdx = find(strcmp(completed_run_list{:,1}, curID), 1);
+        if ~strcmp(lastPrintedID, curID)
+
+            if isempty(runIdx)
+                fprintf("[?/ %d] Processing ID: %s\n", totalRun, curID);
+            else
+                fprintf("[%d / %d] Processing ID: %s\n", runIdx, totalRun, curID);
+            end
+
+            lastPrintedID = curID;
+            drawnow;
+        end
+
         date_curID = metricDataTable{i, 3};
         if date_curID == ""
             date_curID = datetime("2000-01-01");
         end
+
         for idxMetric = 1:height(metricListTable)
             try
                 date_cur_metric = metricListTable{idxMetric, 'function_date'};
@@ -94,7 +115,9 @@ function get_metric(pathResult)
                 
                 metricDataTable.Date(i) = date_today;
                 metricDataTable(i, nameCurMetric) = {metric};
-            catch
+            catch ME
+                warning("Metric 계산 중 오류 발생: ID=%s, Iter=%d, Metric=%s\n%s", ...
+                    curID, curIter, nameCurMetric, ME.message);
                 keyboard
                 
             end
