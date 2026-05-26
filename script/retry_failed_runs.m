@@ -11,7 +11,7 @@
 clc; close all;
 
 %% ─── 사용자 설정 ────────────────────────────────────────────────────────────
-QUEUE_XLSX  = 'simulation_queue.xlsx';   % ← 여기에 대상 xlsx 경로 지정
+QUEUE_XLSX  = 'simulation_queue_example.xlsx';   % ← 여기에 대상 xlsx 경로 지정
 SHEET_QUEUE = 'simulation_queue';
 %% ─────────────────────────────────────────────────────────────────────────────
 
