@@ -31,7 +31,7 @@ srcDir      = fullfile(projectRoot, 'src');
 inputPath   = fullfile(projectRoot, 'inputs');
 modelPath   = fullfile(projectRoot, 'models');
 resultsPath = fullfile(projectRoot, 'results');
-queueXlsx   = fullfile(scriptDir, 'simulation_queue_example.xlsx');
+queueXlsx   = fullfile(scriptDir, 'simulation_queue.xlsx');
 
 addpath(srcDir);
 addpath(fullfile(srcDir, 'WoC_moco'));
