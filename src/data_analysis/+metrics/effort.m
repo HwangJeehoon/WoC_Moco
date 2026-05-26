@@ -1,31 +1,49 @@
-function m = propulsion_PD(path)
+function m = effort(path)
+    %% Optimal Force Reader
+    % path로부터 ID 가져오는 부분 (복사 사용 가능)
+    parts_path = strsplit(path, '/');
+    parts_path = parts_path(~cellfun('isempty', parts_path));
+    run_id = parts_path{end - 1};
+    
+    % Run 정보 가져오는 부분
+    runInfo = readtable("simulation_queue.xlsx", "Sheet", 'completed_queue');
+    idCol = string(runInfo.ID);
+    rowIdx = (idCol == run_id);
+    rowTable = runInfo(rowIdx, :);
+    
+    model_name = rowTable{1, 3};
+
+    model_path= "../models/" + model_name{1};
+    
+    % model 정보로부터 leg length 추출
+    import matlab.io.xml.xpath.*
+    e = Evaluator();
+
+    xml_femur_l = "//PathActuator[@name='AFO_r']/optimal_force";
+    
+    nodes = evaluate(e, xml_femur_l, model_path, EvalResultType.NodeSet);
+    values = string({nodes.TextContent});
+    nums = sscanf(char(values), '%f')';
+    optimal_force = abs(nums(1));
+    
+    %% AFO control Reader
     % GRF file 가져오는 함수 (범용적으로 사용 가능)
-    path_moco_result = path + "/moco_result";
+    path_moco_result = path + "/control_result";
     d = dir(path_moco_result);
     d = d(~[d.isdir]);
     names = string({d.name});
 
-    tf = contains(names, "GRF", "IgnoreCase", true);
+    tf = contains(names, "control", "IgnoreCase", true);
     matches = fullfile(path_moco_result, cellstr(names(tf))); % full paths as cell array
 
     [tmp, t] = readSTO_auto(matches{1});
 
-    tf = contains(names, "kinematics", "IgnoreCase", true);
-    matches = fullfile(path_moco_result, cellstr(names(tf))); % full paths as cell array
+    time = t.time;
+    afo_r = t.AFO_r;
 
-    [tmp, t2] = readSTO_auto(mathces{1});
-
-    apGRF = t.ground_force_l_vx;
-    time = t2.time;
-    distance = t2.x_jointset_groundPelvis_pelvis_tx_value;
-
-    stride_length = distance(end) - distance(1);
-    elapsed_time = time(end) - time(1);
-
-    apGRF_positive = max(apGRF, 0);
-    integrated_apGRF_positive = cumtrapz(time, apGRF_positive);
+    integrated_control = cumtrapz(time, afo_r);
     
-    m = integrated_apGRF_positive(end) /stride_length;
+    m = integrated_control(end) * optimal_force;
     
 
 end

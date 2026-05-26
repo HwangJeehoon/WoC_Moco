@@ -47,7 +47,7 @@ function get_metric(pathResult)
     
     % Update new run
     % 아예 처음 보는 Run이면 더미데이터 추가
-    for i = 1:height(completed_run_list)
+    for i = 1:1%height(completed_run_list)
         curID = completed_run_list{i, 1}{1};
         curID_split = split(curID, "-");
         curID_noIter = curID_split{1};
@@ -74,25 +74,31 @@ function get_metric(pathResult)
             date_curID = datetime("2000-01-01");
         end
         for idxMetric = 1:height(metricListTable)
-            date_cur_metric = metricListTable{idxMetric, 'function_date'};
+            try
+                date_cur_metric = metricListTable{idxMetric, 'function_date'};
+    
+                if date_cur_metric < date_curID
+                    continue;
+                end
+                
+                nameCurMetric = metricListTable{idxMetric, 1}{1};
+                pathCurrentResult = pathResult + "/" + curID + "/result_" + curIter;
+                
+                % pathCurrentResult를 전달 -> full인지 half인지 알아야 할지도.
+                if ~isKey(metricRegistry, nameCurMetric)
+                    warning("등록되지 않은 metric입니다: %s", nameCurMetric);
+                    continue;
+                end
+                metricFunc = metricRegistry(nameCurMetric);
+                metric = metricFunc(pathCurrentResult);
+                
+                metricDataTable.Date(i) = date_today;
+                metricDataTable(i, nameCurMetric) = {metric};
+            catch
+                keyboard
+                
+            end
 
-            if date_cur_metric < date_curID
-                continue;
-            end
-            
-            nameCurMetric = metricListTable{idxMetric, 1}{1};
-            pathCurrentResult = pathResult + "/" + curID + "/result_" + curIter;
-            
-            % pathCurrentResult를 전달 -> full인지 half인지 알아야 할지도.
-            if ~isKey(metricRegistry, nameCurMetric)
-                warning("등록되지 않은 metric입니다: %s", nameCurMetric);
-                continue;
-            end
-            metricFunc = metricRegistry(nameCurMetric);
-            metric = metricFunc(pathCurrentResult);
-            
-            metricDataTable.Date(i) = date_today;
-            metricDataTable(i, nameCurMetric) = {metric};
         end
         
     end
@@ -129,6 +135,11 @@ function registry = makeMetricRegistry()
     registry("effort") = @metrics.effort;
     registry("work_COM") = @metrics.work_COM;
     registry("work_ankle") = @metrics.work_ankle;
+
+
+    % Non-dimensional numbers.
+    registry("Froude_number") = @metrics.Froude_number;
+    registry("Normalized_step") = @metrics.Normalized_step;
 
     
 

@@ -1,4 +1,4 @@
-function m = propulsion_PD(path)
+function m = work_angle(path)
     % GRF file 가져오는 함수 (범용적으로 사용 가능)
     path_moco_result = path + "/moco_result";
     d = dir(path_moco_result);
@@ -13,7 +13,7 @@ function m = propulsion_PD(path)
     tf = contains(names, "kinematics", "IgnoreCase", true);
     matches = fullfile(path_moco_result, cellstr(names(tf))); % full paths as cell array
 
-    [tmp, t2] = readSTO_auto(mathces{1});
+    [tmp, t2] = readSTO_auto(matches{1});
 
     apGRF = t.ground_force_l_vx;
     time = t2.time;

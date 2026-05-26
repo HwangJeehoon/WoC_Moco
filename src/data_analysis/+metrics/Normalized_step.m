@@ -1,42 +1,63 @@
-function m = work_COM(path)
+function m = Normalized_step(path)
+    %% Leg length Reader
+    % path로부터 ID 가져오는 부분 (복사 사용 가능)
+    parts_path = strsplit(path, '/');
+    parts_path = parts_path(~cellfun('isempty', parts_path));
+    run_id = parts_path{end - 1};
+    
+    % Run 정보 가져오는 부분
+    runInfo = readtable("simulation_queue.xlsx", "Sheet", 'completed_queue');
+    idCol = string(runInfo.ID);
+    rowIdx = (idCol == run_id);
+    rowTable = runInfo(rowIdx, :);
+    
+    model_name = rowTable{1, 3};
+
+    model_path= "../models/" + model_name{1};
+    
+    % model 정보로부터 leg length 추출
+    import matlab.io.xml.xpath.*
+    e = Evaluator();
+
+    xml_femur_l = "//Body[@name='femur_l']/mass_center";
+    xml_tibia_l = "//Body[@name='tibia_l']/mass_center";
+    
+    nodes = evaluate(e, xml_femur_l, model_path, EvalResultType.NodeSet);
+    values = string({nodes.TextContent});
+    nums = sscanf(char(values), '%f')';
+    length_femur = 2 * abs(nums(2));
+    
+    nodes = evaluate(e, xml_tibia_l, model_path, EvalResultType.NodeSet);
+    values = string({nodes.TextContent});
+    nums = sscanf(char(values), '%f')';
+    length_tibia = 2 * abs(nums(2));
+    
+    length_leg = length_femur + length_tibia;
+
+
+    %% Step length Reader
     % GRF file 가져오는 함수 (범용적으로 사용 가능)
     path_moco_result = path + "/moco_result";
     d = dir(path_moco_result);
     d = d(~[d.isdir]);
     names = string({d.name});
 
-    tf = contains(names, "GRF", "IgnoreCase", true);
+    tf = contains(names, "kinematics", "IgnoreCase", true);
     matches = fullfile(path_moco_result, cellstr(names(tf))); % full paths as cell array
 
     [tmp, t] = readSTO_auto(matches{1});
 
-    tf = contains(names, "kinematics", "IgnoreCase", true);
-    matches = fullfile(path_moco_result, cellstr(names(tf))); % full paths as cell array
-
-    [tmp, t2] = readSTO_auto(matches{1});
-
-    apGRF = t.ground_force_l_vx;
-    time = t2.time;
-    distance = t2.x_jointset_groundPelvis_pelvis_tx_value;
-    velocity_COM = zeros(height(distance), 1);
+    distance = t.x_jointset_groundPelvis_pelvis_tx_value;
     
-    for i=2:length(velocity_COM)
-        velocity_COM(i) = (distance(i) - distance(i-1)) / (time(i) - time(i-1));
-    end
+    % [XXX]: length_leg * 2로 나누는게 맞는지.
+    m = (distance(end) - distance(1)) / length_leg / 2;
 
-    stride_length = distance(end) - distance(1);
-    elapsed_time = time(end) - time(1);
 
-    apGRF_positive = max(apGRF, 0);
-    work = apGRF_positive .* velocity_COM;
-    
-    work = cumtrapz(time, work);
-    
-    m = work(end);
     
 
 end
 
+%% Sub function
 function [headerLines, dataTbl] = readSTO_auto(filename)
 % readSTO_auto Read .sto file; avoid NaN in first row by auto-detecting
 % whether the first non-header line is variable names or numeric data.
