@@ -2,3 +2,7 @@ results/
 *.log
 *.asv
 subresults/
+.idea/
+.streamlit_cach_files/
+__pycache__/
+venv/
