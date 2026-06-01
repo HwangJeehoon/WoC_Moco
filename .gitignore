@@ -3,6 +3,6 @@ results/
 *.asv
 subresults/
 .idea/
-.streamlit_cach_files/
+.streamlit_cache_files/
 __pycache__/
 venv/
