@@ -16,8 +16,10 @@ clear;
 close all;
 
 %% ─── 사용자 설정 ─────────────────────────────────────────────────────────────
-% plotRows = 9:55;   % completed_queue 에서 처리할 행 번호
-plotRows = [111 128]-8;   % completed_queue 에서 처리할 행 번호
+% plotRows : completed_queue 시트의 Excel 행 번호로 입력하세요.
+%   예) plotRows = 111:128;   또는   plotRows = [111 128];
+% plotRows = 9:55;
+plotRows = [111 128];
 %% ─── 경로 설정 ───────────────────────────────────────────────────────────────
 if isempty(mfilename)
     thisFile = matlab.desktop.editor.getActiveFilename;
@@ -33,18 +35,17 @@ SHEET_DONE   = 'completed_queue';
 
 %% ─── completed_queue 읽기 ────────────────────────────────────────────────────
 [hdr_d, colNames, data_d] = readSheet(QUEUE_XLSX, SHEET_DONE);
-nDataRows   = size(data_d, 1);
-headerRows  = size(hdr_d, 1) + 1;   % endheader 행 수 + 열 이름 행
+nDataRows  = size(data_d, 1);
+headerRows = size(hdr_d, 1) + 1;   % endheader 까지의 행 수 + 열 이름 행
 
-% plotRows 가 xlsx 행 번호로 입력된 경우(> nDataRows) 자동으로 데이터 인덱스로 변환
-if max(plotRows) > nDataRows
-    plotRows = plotRows - headerRows;
-    fprintf('plotRows 를 xlsx 행 번호로 감지 → 데이터 인덱스로 변환: %s\n', ...
-            mat2str(plotRows));
-end
+% plotRows 는 항상 xlsx Excel 행 번호로 해석 → 데이터 인덱스로 변환
+% (heuristic 자동 감지를 제거: nDataRows 크기에 따라 변환 여부가 달라지는 버그 방지)
+plotRows = plotRows - headerRows;
+fprintf('plotRows → 데이터 인덱스: %s  (headerRows=%d)\n', mat2str(plotRows), headerRows);
 
 if max(plotRows) > nDataRows || min(plotRows) < 1
-    error('plotRows(%s) 가 유효 범위(1~%d)를 벗어납니다.', mat2str(plotRows), nDataRows);
+    error('plotRows(%s) 가 유효 범위(1~%d)를 벗어납니다.\n  입력한 Excel 행 번호에서 headerRows(%d)를 뺀 값이 범위를 벗어났습니다.', ...
+          mat2str(plotRows), nDataRows, headerRows);
 end
 
 %% ─── 공통 필드 이름 (모델 구조 공통) ─────────────────────────────────────────
