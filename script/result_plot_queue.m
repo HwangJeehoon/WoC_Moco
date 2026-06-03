@@ -1,25 +1,41 @@
 % result_plot_queue.m
 %
-% simulation_queue.xlsx 의 completed_queue 를 읽어,
-% 지정한 행 범위에 해당하는 실험 결과를 일괄 플롯하고
-% results/<result_name>/Fig/ 에 저장하는 스크립트.
+% 실험 결과를 일괄 플롯하고 results/<result_name>/Fig/ 에 저장하는 스크립트.
 %
-% 사용법:
-%   1) plotRows 에 completed_queue 의 행 번호를 지정
-%      - Excel 에서 보이는 xlsx 행 번호 또는 데이터 인덱스(1-based) 모두 허용
-%      - xlsx 행 번호로 입력하면 헤더 행 수를 자동으로 제거해 변환
-%      - 예: 56:58  또는  [1 3 5]
-%   2) 스크립트 실행
+% ── 모드 1: Queue 모드 (simulation_queue.xlsx completed_queue 기반) ──────────
+%   plotRows 에 completed_queue 의 Excel 행 번호를 지정 (헤더 포함한 실제 행 번호).
+%   directFolders 는 비워두세요 (빈 셀 배열 {}).
+%
+% ── 모드 2: Direct 모드 (폴더명 직접 지정) ──────────────────────────────────
+%   directFolders 에 struct 배열로 폴더명과 iter 를 지정하세요.
+%   plotRows 는 무시됩니다.
+%   예)
+%     directFolders = {
+%         struct('result_name','fixedTimeSpline_0.8', 'iter',50),
+%         struct('result_name','fixedTimeSpline_1.0', 'iter',50, 'model','2D_gait_AFO_pc_50BW.osim'),
+%     };
+%   선택 필드:
+%     .model : optimalForce 결정용 모델명 (생략 시 300 N 기본값)
+%     .id    : 그래프 제목 접두사 (생략 시 result_name 사용)
 
 clc;
 clear;
 close all;
 
 %% ─── 사용자 설정 ─────────────────────────────────────────────────────────────
-% plotRows : completed_queue 시트의 Excel 행 번호로 입력하세요.
-%   예) plotRows = 111:128;   또는   plotRows = [111 128];
+
+% ── Queue 모드: completed_queue 의 Excel 행 번호 ──────────────────────────────
 % plotRows = 9:55;
-plotRows = [111 128];
+% plotRows = [111 128];
+
+% ── Direct 모드: 폴더명 직접 지정 (비워두면 Queue 모드로 동작) ────────────────
+directFolders = {};
+directFolders = {
+    % struct('result_name','fixedTimeSpline_0.8', 'iter',50),
+    struct('result_name','fixedTimeSpline_1', 'iter',50),
+    struct('result_name','fixedTimeSpline_1.2', 'iter',50),
+};
+
 %% ─── 경로 설정 ───────────────────────────────────────────────────────────────
 if isempty(mfilename)
     thisFile = matlab.desktop.editor.getActiveFilename;
@@ -33,19 +49,52 @@ inputFolder  = fullfile(rootFolder, 'inputs');
 QUEUE_XLSX   = fullfile(baseFolder, 'simulation_queue.xlsx');
 SHEET_DONE   = 'completed_queue';
 
-%% ─── completed_queue 읽기 ────────────────────────────────────────────────────
-[hdr_d, colNames, data_d] = readSheet(QUEUE_XLSX, SHEET_DONE);
-nDataRows  = size(data_d, 1);
-headerRows = size(hdr_d, 1) + 1;   % endheader 까지의 행 수 + 열 이름 행
+%% ─── jobs 배열 구성 (Queue 모드 / Direct 모드 공통) ─────────────────────────
+% jobs(k): .id_str / .result_name / .model_str / .iterNum
+if ~isempty(directFolders)
+    %% Direct 모드: directFolders → jobs
+    nJobs = numel(directFolders);
+    jobs  = struct('id_str',{}, 'result_name',{}, 'model_str',{}, 'iterNum',{});
+    for k = 1:nJobs
+        df = directFolders{k};
+        if ~isfield(df,'result_name') || isempty(df.result_name)
+            error('directFolders{%d}: result_name 이 지정되지 않았습니다.', k);
+        end
+        if ~isfield(df,'iter') || isempty(df.iter)
+            error('directFolders{%d}: iter 이 지정되지 않았습니다.', k);
+        end
+        jobs(k).result_name = df.result_name;
+        jobs(k).iterNum     = round(df.iter);
+        jobs(k).model_str   = getStructField(df, 'model', '');
+        jobs(k).id_str      = getStructField(df, 'id',    df.result_name);
+    end
+    fprintf('[Direct 모드] %d 개 폴더 처리\n', nJobs);
 
-% plotRows 는 항상 xlsx Excel 행 번호로 해석 → 데이터 인덱스로 변환
-% (heuristic 자동 감지를 제거: nDataRows 크기에 따라 변환 여부가 달라지는 버그 방지)
-plotRows = plotRows - headerRows;
-fprintf('plotRows → 데이터 인덱스: %s  (headerRows=%d)\n', mat2str(plotRows), headerRows);
+else
+    %% Queue 모드: plotRows → jobs
+    [hdr_d, colNames, data_d] = readSheet(QUEUE_XLSX, SHEET_DONE);
+    nDataRows  = size(data_d, 1);
+    headerRows = size(hdr_d, 1) + 1;   % endheader 까지의 행 수 + 열 이름 행
 
-if max(plotRows) > nDataRows || min(plotRows) < 1
-    error('plotRows(%s) 가 유효 범위(1~%d)를 벗어납니다.\n  입력한 Excel 행 번호에서 headerRows(%d)를 뺀 값이 범위를 벗어났습니다.', ...
-          mat2str(plotRows), nDataRows, headerRows);
+    % plotRows 는 항상 xlsx Excel 행 번호로 해석 → 데이터 인덱스로 변환
+    dataIdx = plotRows - headerRows;
+    fprintf('[Queue 모드] plotRows → 데이터 인덱스: %s  (headerRows=%d)\n', ...
+            mat2str(dataIdx), headerRows);
+
+    if max(dataIdx) > nDataRows || min(dataIdx) < 1
+        error('plotRows(%s) 가 유효 범위(1~%d)를 벗어납니다.\n  입력한 Excel 행 번호에서 headerRows(%d)를 뺀 값이 범위를 벗어났습니다.', ...
+              mat2str(dataIdx), nDataRows, headerRows);
+    end
+
+    nJobs = numel(dataIdx);
+    jobs  = struct('id_str',{}, 'result_name',{}, 'model_str',{}, 'iterNum',{});
+    for k = 1:nJobs
+        rowIdx = dataIdx(k);
+        jobs(k).id_str      = getCellStr(data_d{rowIdx, colIdx(colNames, 'ID')});
+        jobs(k).result_name = getCellStr(data_d{rowIdx, colIdx(colNames, 'result_name')});
+        jobs(k).model_str   = getCellStr(data_d{rowIdx, colIdx(colNames, 'model')});
+        jobs(k).iterNum     = round(getCellNum(data_d{rowIdx, colIdx(colNames, 'iter')}));
+    end
 end
 
 %% ─── 공통 필드 이름 (모델 구조 공통) ─────────────────────────────────────────
@@ -56,19 +105,33 @@ soleusField      = matlab.lang.makeValidName('/soleus_r/activation');
 ankleAngVelField = matlab.lang.makeValidName('ankle_angle_r');
 momentArmAFO     = 0.07;   % AFO moment arm [m]
 
-%% ─── 행별 플롯 ───────────────────────────────────────────────────────────────
-for rowIdx = plotRows
+%% ─── job 별 플롯 ─────────────────────────────────────────────────────────────
+statusLog = cell(nJobs, 2);   % {result_name, 'OK' / 'SKIP: ...'}
 
-    %% 메타 정보 추출
-    id_str      = getCellStr(data_d{rowIdx, colIdx(colNames, 'ID')});
-    result_name = getCellStr(data_d{rowIdx, colIdx(colNames, 'result_name')});
-    model_str   = getCellStr(data_d{rowIdx, colIdx(colNames, 'model')});
-    iterNum     = round(getCellNum(data_d{rowIdx, colIdx(colNames, 'iter')}));
+for k = 1:nJobs
+
+    %% 메타 정보
+    id_str      = jobs(k).id_str;
+    result_name = jobs(k).result_name;
+    model_str   = jobs(k).model_str;
+    iterNum     = jobs(k).iterNum;
 
     fprintf('\n[%s] result: %s  model: %s  iter: %d\n', ...
             id_str, result_name, model_str, iterNum);
 
     OutputFolder = fullfile(resultFolder, result_name);
+
+    %% 결과 폴더 존재 여부 확인 (시뮬레이션 미완 시 skip)
+    if ~exist(OutputFolder, 'dir')
+        msg = sprintf('결과 폴더 없음: %s', OutputFolder);
+        fprintf('  [SKIP] %s\n', msg);
+        statusLog{k,1} = result_name;
+        statusLog{k,2} = ['SKIP: ' msg];
+        continue;
+    end
+
+    try   % ← 파일 누락 등 오류 발생 시 skip하고 다음 job 진행
+
     FigureFolder = fullfile(OutputFolder, 'Fig');
     if ~exist(FigureFolder, 'dir')
         mkdir(FigureFolder);
@@ -337,9 +400,23 @@ for rowIdx = plotRows
     end
 
     fprintf('  -> Fig 저장 완료: %s\n', FigureFolder);
+    statusLog{k,1} = result_name;
+    statusLog{k,2} = 'OK';
+
+    catch ME   % ← try 대응
+        msg = ME.message;
+        fprintf('  [SKIP] 오류 발생: %s\n', msg);
+        statusLog{k,1} = result_name;
+        statusLog{k,2} = ['SKIP: ' msg];
+    end
 end
 
-fprintf('\n모든 플롯 완료.\n');
+%% ─── 완료 요약 ───────────────────────────────────────────────────────────────
+fprintf('\n======== 플롯 요약 ========\n');
+for k = 1:nJobs
+    fprintf('  [%d/%d] %-30s : %s\n', k, nJobs, statusLog{k,1}, statusLog{k,2});
+end
+fprintf('===========================\n');
 
 
 %% ─── 로컬 함수 ───────────────────────────────────────────────────────────────
@@ -489,5 +566,16 @@ function tf = isCellEmpty(x)
         tf = ismissing(x) || strlength(x) == 0;
     else
         tf = true;
+    end
+end
+
+% ─────────────────────────────────────────────────────────────────────────────
+
+function val = getStructField(s, field, defaultVal)
+% struct 에서 field 값을 읽고, 없거나 비어 있으면 defaultVal 반환.
+    if isfield(s, field) && ~isempty(s.(field))
+        val = s.(field);
+    else
+        val = defaultVal;
     end
 end
