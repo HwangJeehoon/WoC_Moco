@@ -4,12 +4,16 @@ function modelGenerator_length()
 % =========================================================================
 %  ★ 설정 영역 ★
 % =========================================================================
-    baseModelFile  = '2D_gait_AFO_pc.osim';   % models/ 폴더 기준 파일명
+    baseModelFile  = '2D_gait_AFO_pc_90kg.osim';   % models/ 폴더 기준 파일명
 
-    scalingFactors = [          % [thigh, shank] 각 행이 하나의 조합 -> 합이 2가 아니면 수렴을 안함
-        1.10  1.10;
-        0.90  0.90
+    scalingFactors = [           % [thigh, shank] 각 행이 하나의 조합 -> 합이 2가 아니면 일반 초기 조건이 수렴을 안함
+      0.92779863   0.88586621;   %  73.65 cm -> 150
+      0.98965187   0.94492396;   %  78.56 cm -> 160
+      1.05150512   1.00398171;   %  83.47 cm -> 170
+      1.11335836   1.06303945;   %  88.38 cm -> 180
+      1.17521160   1.12209720;   %  93.29 cm -> 190
     ];
+
     % vals = 0.90:0.02:1.10;   % deviation 
     % [thighGrid, shankGrid] = ndgrid(vals, vals);
     % mask = (thighGrid + shankGrid) == 2;

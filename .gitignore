@@ -5,4 +5,4 @@ subresults/
 .idea/
 .streamlit_cache_files/
 __pycache__/
-venv/
+.venv/
