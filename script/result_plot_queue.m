@@ -31,9 +31,11 @@ close all;
 % ── Direct 모드: 폴더명 직접 지정 (비워두면 Queue 모드로 동작) ────────────────
 directFolders = {};
 directFolders = {
+    % struct('result_name','fixedTimeSpline_0.6', 'iter',50),
     % struct('result_name','fixedTimeSpline_0.8', 'iter',50),
-    struct('result_name','fixedTimeSpline_1', 'iter',50),
-    struct('result_name','fixedTimeSpline_1.2', 'iter',50),
+    % struct('result_name','fixedTimeSpline_1', 'iter',50),
+    % struct('result_name','fixedTimeSpline_1.2', 'iter',50),
+    struct('result_name','fixedTimeSpline_1.4', 'iter',50),
 };
 
 %% ─── 경로 설정 ───────────────────────────────────────────────────────────────

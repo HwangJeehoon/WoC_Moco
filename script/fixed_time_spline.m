@@ -39,26 +39,26 @@ import org.opensim.modeling.*
 %%  job 구조체에서 동일 필드를 지정하면 해당 job 에서 덮어씁니다.
 %% =====================================================================
 
-defaults.model         = '2D_gait_AFO_pc_v1.osim'; % models/ 폴더 기준 파일명
+defaults.model         = '2D_gait_AFO_pc_50BW.osim'; % models/ 폴더 기준 파일명
 defaults.iter          = 50;                         % 반복 횟수
 
 % modeSpline 파라미터 (fixedInterval 내 정규화 도메인 [0,1])
-defaults.trigger       = 0.0;    % 보조 시작 위치
-defaults.rise          = 0.15;   % 상승 구간 길이
-defaults.flat          = 0.40;   % 최대값 유지 구간 길이
+defaults.trigger       = 0.00;    % 보조 시작 위치
+defaults.rise          = 0.60;   % 상승 구간 길이
+defaults.flat          = 0.0;   % 최대값 유지 구간 길이
 defaults.fall          = 0.20;   % 하강 구간 길이
-defaults.maxVal        = 0.5;    % 최대 출력값 (0 ~ 1)
+defaults.maxVal        = 1.0;    % 최대 출력값 (0 ~ 1)
 
 % 고정 보조 시간 구간 [t_start, t_end] (초)
-defaults.fixedInterval = [0.0, 0.6];
+defaults.fixedInterval = [0.0, 1.0];
 
 % Moco 비용 가중치
 defaults.mocoEffort    = 1;
 defaults.mocoFinalTime = 0.03;
 
 % Moco bounds
-defaults.mocoTimeBound = [0.4, 0.8];   % 반 걸음(modeSym) 기준 시간 [lb, ub]
-defaults.mocoDistBound = [0.4, 1.0];   % pelvis_tx 최종 위치 [lb, ub]
+defaults.mocoTimeBound = [0.1 3.2];   % 반 걸음(modeSym) 기준 시간 [lb, ub]
+defaults.mocoDistBound = [0.05 8];   % pelvis_tx 최종 위치 [lb, ub]
 
 % Gait mode: 'modeSym' (반 걸음+대칭) | 'modeAsym' (한 걸음+주기성)
 defaults.gaitMode      = 'modeSym';
@@ -94,21 +94,62 @@ defaults.gaitMode      = 'modeSym';
 
 jobs = {};
 
-jobs{end+1} = struct('result_name', 'test1', ...
-                     'fixedInterval', [0.0, 0.6], ...
-                     'maxVal', 0.5);
+% 1.2, 1.4는 보조 아예 안들어감. 1도 간당간당함
+% 셋업 : 
+% defaults.trigger       = 0.00;    % 보조 시작 위치
+% defaults.rise          = 0.30;   % 상승 구간 길이
+% defaults.flat          = 0.0;   % 최대값 유지 구간 길이
+% defaults.fall          = 0.10;   % 하강 구간 길이
+% defaults.maxVal        = 1.0;    % 최대 출력값 (0 ~ 1)
 
-jobs{end+1} = struct('result_name', 'test2', ...
-                     'fixedInterval', [0.1, 0.7], ...
-                     'maxVal', 0.7, ...
-                     'rise', 0.2, 'fall', 0.3);
+% jobs{1} = struct('result_name', 'fixedTimeSpline_0.6', ...
+%                      'fixedInterval', [0.0, 0.6]);
+% 
+% jobs{2} = struct('result_name', 'fixedTimeSpline_0.8', ...
+%                      'fixedInterval', [0.2, 0.8]);
+% 
+% jobs{3} = struct('result_name', 'fixedTimeSpline_1', ...
+%                      'fixedInterval', [0.4, 1.0]);
+% 
+% jobs{4} = struct('result_name', 'fixedTimeSpline_1.2', ...
+%                      'fixedInterval', [0.6, 1.2]);
+% 
+% jobs{5} = struct('result_name', 'fixedTimeSpline_1.4', ...
+%                      'fixedInterval', [0.8, 1.4]);
 
-jobs{end+1} = struct('result_name', 'test3', ...
-                     'model', '2D_gait_AFO_pc_v2.osim', ...
-                     'fixedInterval', [0.0, 0.5], ...
-                     'maxVal', 0.4, ...
-                     'iter', 5);
 
+% defaults.trigger       = 0.00;    % 보조 시작 위치
+% defaults.rise          = 0.60;   % 상승 구간 길이
+% defaults.flat          = 0.0;   % 최대값 유지 구간 길이
+% defaults.fall          = 0.20;   % 하강 구간 길이
+% defaults.maxVal        = 1.0;    % 최대 출력값 (0 ~ 1)
+
+jobs{1} = struct('result_name', 'fixedTimeSpline2_0.2', ...
+                     'fixedInterval', [0.0, 0.2]);
+
+jobs{2} = struct('result_name', 'fixedTimeSpline2_0.25', ...
+                     'fixedInterval', [0.05, 0.25]);
+
+jobs{3} = struct('result_name', 'fixedTimeSpline2_0.3', ...
+                     'fixedInterval', [0.1, 0.3]);
+
+jobs{4} = struct('result_name', 'fixedTimeSpline2_0.35', ...
+                     'fixedInterval', [0.15, 0.35]);
+
+jobs{5} = struct('result_name', 'fixedTimeSpline2_0.4', ...
+                     'fixedInterval', [0.2, 0.4]);
+
+jobs{6} = struct('result_name', 'fixedTimeSpline2_0.45', ...
+                     'fixedInterval', [0.25, 0.45]);
+
+jobs{7} = struct('result_name', 'fixedTimeSpline2_0.5', ...
+                     'fixedInterval', [0.3, 0.5]);
+
+jobs{8} = struct('result_name', 'fixedTimeSpline2_0.55', ...
+                     'fixedInterval', [0.35, 0.55]);
+
+jobs{9} = struct('result_name', 'fixedTimeSpline2_0.6', ...
+                     'fixedInterval', [0.4, 0.6]);
 %% =====================================================================
 %%  END OF CONFIGURATION — 이하 수정 불필요
 %% =====================================================================
