@@ -100,11 +100,15 @@ for i = 1:iterNum
     %   stanceTime : [t_start, t_end] 를 101점으로 균등 분할
     %   tau_R      : splineParams 를 [0,1] 정규화 도메인에서 평가
     %   fullTime   : 시뮬레이션 최대 시간을 충분히 커버 (GCVSpline 외삽 방지)
+    %
+    %   ※ fullTime의 총 점 수(N)를 작게 유지해야 함.
+    %     OpenSim GCVSpline 초기화는 O(N^3) 이므로 N=500이면 N=100 대비 ~125배 느려짐.
+    %     run_queue modeSpline은 GRF 파일 기준 N≈97을 사용하므로 101로 맞춤.
     stanceTime = linspace(t_start, t_end, 101)';
     tau_R      = WoC_moco_buildSplineControl(splineParams, 101);
 
     t_cover  = max(MocoOpts.mocoTimeBound(end) * 2, t_end * 1.5);
-    fullTime = linspace(0, t_cover, 500)';
+    fullTime = linspace(0, t_cover, 101)';
 
     writeOpts.dataColName = 'spline_fixed';
     WoC_moco_writeControl(controlResultDir, ...
