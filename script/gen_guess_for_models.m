@@ -31,9 +31,11 @@ baseModel = '2D_gait_AFO_pc.osim';
 
 % ── 보정할 모델 목록 (models/ 폴더 기준) ─────────────────────────────
 scaledModels = {
-    '2D_gait_AFO_pc_v1.osim',
-    '2D_gait_AFO_pc_v2.osim',
-    '2D_gait_AFO_pc_v3.osim',
+    '2D_gait_AFO_pc_50kg_150cm_R1.osim',
+    '2D_gait_AFO_pc_50kg_160cm_R1.osim',
+    '2D_gait_AFO_pc_50kg_170cm_R1.osim',
+    '2D_gait_AFO_pc_50kg_180cm_R1.osim',
+    '2D_gait_AFO_pc_50kg_190cm_R1.osim',
 };
 
 % ── 기준 guess 파일명 (inputs/ 폴더 기준) ────────────────────────────

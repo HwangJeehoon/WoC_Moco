@@ -25,18 +25,18 @@ close all;
 %% ─── 사용자 설정 ─────────────────────────────────────────────────────────────
 
 % ── Queue 모드: completed_queue 의 Excel 행 번호 ──────────────────────────────
-% plotRows = 9:55;
+plotRows = 85:99;
 % plotRows = [111 128];
 
 % ── Direct 모드: 폴더명 직접 지정 (비워두면 Queue 모드로 동작) ────────────────
 directFolders = {};
-directFolders = {
-    % struct('result_name','fixedTimeSpline_0.6', 'iter',50),
-    % struct('result_name','fixedTimeSpline_0.8', 'iter',50),
-    % struct('result_name','fixedTimeSpline_1', 'iter',50),
-    % struct('result_name','fixedTimeSpline_1.2', 'iter',50),
-    struct('result_name','fixedTimeSpline_1.4', 'iter',50),
-};
+% directFolders = {
+%     % struct('result_name','fixedTimeSpline_0.6', 'iter',50),
+%     % struct('result_name','fixedTimeSpline_0.8', 'iter',50),
+%     % struct('result_name','fixedTimeSpline_1', 'iter',50),
+%     % struct('result_name','fixedTimeSpline_1.2', 'iter',50),
+%     struct('result_name','fixedTimeSpline_1.4', 'iter',50),
+% };
 
 %% ─── 경로 설정 ───────────────────────────────────────────────────────────────
 if isempty(mfilename)

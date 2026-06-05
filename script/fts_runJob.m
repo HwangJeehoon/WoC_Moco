@@ -76,15 +76,16 @@ fprintf('  mocoDistBound : %s\n',   mat2str(MocoOpts.mocoDistBound));
 baselineAnalyDir = fullfile(OutputFolder, 'baseline', 'analy_result');
 if ~exist(baselineAnalyDir, 'dir'), mkdir(baselineAnalyDir); end
 
-fprintf('--- Baseline analysis ---\n');
+fprintf('[%.1f s] Baseline analysis 시작...\n', toc_global());
 WoC_moco_analysis(AnalySetupPath, ...
     'modelPath',         fullfile(modelBasePath, ModelNameOsim), ...
     'kinematicsStoPath', guessInitSto, ...
     'resultsDir',        baselineAnalyDir);
+fprintf('[%.1f s] Baseline analysis 완료.\n', toc_global());
 
 %% ── 메인 루프 ─────────────────────────────────────────────────────
 for i = 1:iterNum
-    fprintf('  --- Iter %d / %d ---\n', i, iterNum);
+    fprintf('\n[%.1f s] ===== Iter %d / %d =====\n', toc_global(), i, iterNum);
 
     iterRootDir      = fullfile(OutputFolder, sprintf('result_%d', i));
     AnalyResultDir   = fullfile(iterRootDir, 'analy_result');
@@ -96,14 +97,8 @@ for i = 1:iterNum
     if ~exist(mocoResultDir,    'dir'), mkdir(mocoResultDir);    end
     if ~exist(controlResultDir, 'dir'), mkdir(controlResultDir); end
 
-    % ── (1) 고정 시간 기반 spline control.sto 생성 ────────────────
-    %   stanceTime : [t_start, t_end] 를 101점으로 균등 분할
-    %   tau_R      : splineParams 를 [0,1] 정규화 도메인에서 평가
-    %   fullTime   : 시뮬레이션 최대 시간을 충분히 커버 (GCVSpline 외삽 방지)
-    %
-    %   ※ fullTime의 총 점 수(N)를 작게 유지해야 함.
-    %     OpenSim GCVSpline 초기화는 O(N^3) 이므로 N=500이면 N=100 대비 ~125배 느려짐.
-    %     run_queue modeSpline은 GRF 파일 기준 N≈97을 사용하므로 101로 맞춤.
+    % ── (1) control.sto 생성 ──────────────────────────────────────
+    fprintf('[%.1f s] (1) control.sto 생성...\n', toc_global());
     stanceTime = linspace(t_start, t_end, 101)';
     tau_R      = WoC_moco_buildSplineControl(splineParams, 101);
 
@@ -116,7 +111,7 @@ for i = 1:iterNum
 
     controlRefStoPath = fullfile(controlResultDir, 'control.sto');
 
-    % ── (2) Moco guess 경로 결정 ──────────────────────────────────
+    % ── (2) guess 경로 결정 ───────────────────────────────────────
     if i == 1
         guessStoPath = guessInitSto;
     else
@@ -132,21 +127,27 @@ for i = 1:iterNum
 
     % ── (3) Moco 최적화 ───────────────────────────────────────────
     baseOsimPath = fullfile(modelBasePath, ModelNameOsim);
+    fprintf('[%.1f s] (3) moco_WoC_loop 시작 (xmlread/xmlwrite/initSystem/CasADi)...\n', toc_global());
     sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, baseOsimPath, MocoOpts);
+    fprintf('[%.1f s] (3) moco_WoC_loop 완료.\n', toc_global());
 
-    % ── (4) 결과 저장 (kinematics, GRF, metabolic) ────────────────
+    % ── (4) 결과 저장 ─────────────────────────────────────────────
     resOpts.modelPath = fullfile(AnalyResultDir, sprintf('%s_%d.osim', modelName, i));
     resOpts.prefix    = sprintf('moco_WoC_Solution_iter%02d', i);
     resOpts.gaitMode  = gaitMode;
+    fprintf('[%.1f s] (4) moco_WoC_getResult (metabolic 계산)...\n', toc_global());
     moco_WoC_getResult(sol, mocoResultDir, resOpts);
+    fprintf('[%.1f s] (4) moco_WoC_getResult 완료.\n', toc_global());
 
     % ── (5) Analysis ──────────────────────────────────────────────
     currKinPath = fullfile(mocoResultDir, sprintf('moco_WoC_Solution_iter%02d_kinematics.sto', i));
     currOsmPath = fullfile(AnalyResultDir, sprintf('%s_%d.osim', modelName, i));
+    fprintf('[%.1f s] (5) WoC_moco_analysis...\n', toc_global());
     WoC_moco_analysis(AnalySetupPath, ...
         'modelPath',         currOsmPath, ...
         'kinematicsStoPath', currKinPath, ...
         'resultsDir',        AnalyResultDir);
+    fprintf('[%.1f s] (5) WoC_moco_analysis 완료.\n', toc_global());
 
     % ── (6) Inverse Dynamics ──────────────────────────────────────
     idXmlPath      = fullfile(inputPath, 'id_setup.xml');
@@ -158,6 +159,7 @@ for i = 1:iterNum
     tempGrfXml = fullfile(AnalyResultDir, 'GRF_setup_id.xml');
     xmlwrite(tempGrfXml, grfXmlDoc);
 
+    fprintf('[%.1f s] (6) ID with assist...\n', toc_global());
     idTool = InverseDynamicsTool(idXmlPath);
     idTool.setModelFileName(currOsmPath);
     idTool.setCoordinatesFileName(kinQStoPath);
@@ -166,6 +168,7 @@ for i = 1:iterNum
     idTool.setOutputGenForceFileName('id_withAssist.sto');
     idTool.run();
 
+    fprintf('[%.1f s] (6) ID without assist...\n', toc_global());
     idTool2 = InverseDynamicsTool(idXmlPath);
     idTool2.setModelFileName(baseOsimPath);
     idTool2.setCoordinatesFileName(kinQStoPath);
@@ -174,8 +177,20 @@ for i = 1:iterNum
     idTool2.setOutputGenForceFileName('id_withoutAssist.sto');
     idTool2.run();
 
-    fprintf('  Iter %d done.\n', i);
+    fprintf('[%.1f s] Iter %d done.\n', toc_global(), i);
 end
 
-fprintf('Job "%s" finished. → results/%s/\n', result_name, result_name);
+fprintf('[%.1f s] Job "%s" finished.\n', toc_global(), result_name);
+end
+
+
+%% ── 전역 타이머 헬퍼 ──────────────────────────────────────────────
+function t = toc_global()
+% 스크립트 시작부터의 경과 시간(초)을 반환.
+% fixed_time_spline.m 에서 global_tic 을 설정해야 함.
+persistent t0
+if isempty(t0)
+    t0 = tic;
+end
+t = toc(t0);
 end

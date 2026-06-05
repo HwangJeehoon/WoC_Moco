@@ -30,7 +30,7 @@
 clear; close all;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
-QUEUE_XLSX  = 'simulation_queue.xlsx';
+QUEUE_XLSX  = 'simulation_queue_example.xlsx';
 SHEET_QUEUE = 'simulation_queue';
 SHEET_DONE  = 'completed_queue';
 
