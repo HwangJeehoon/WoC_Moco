@@ -243,13 +243,25 @@ end
 %  2. 초기 데이터 경로 설정
 % ---------------------------------------------------
 inputPath      = fullfile(baseFolder, '..','inputs');
+
+% 모델명에서 height suffix 탐지 (예: _150cm, _160cm, ...)
+heightTok = regexp(modelName, '_(\d+cm)', 'tokens', 'once');
+if ~isempty(heightTok)
+    heightSuffix = ['_' heightTok{1}];
+else
+    heightSuffix = '';
+end
+
 if strcmpi(gaitMode, 'modeAsym')
-    guessInitSto = fullfile(inputPath, 'guess_init_full.sto');
+    guessInitSto = fullfile(inputPath, ['guess_init_full' heightSuffix '.sto']);
     grfInitSto   = fullfile(inputPath, 'GRF_init_full.sto');
 else  % modeSym
-    guessInitSto = fullfile(inputPath, 'guess_init_half.sto');
+    guessInitSto = fullfile(inputPath, ['guess_init_half' heightSuffix '.sto']);
     grfInitSto   = fullfile(inputPath, 'GRF_init_full.sto'); % GRF는 modeSym에서도 full 사용 -> 보조력 계산 시 full GRF traj가 필요
 end
+
+[~, guessInitName, guessInitExt] = fileparts(guessInitSto);
+fprintf('  initial guess : %s%s\n', guessInitName, guessInitExt);
 AnalySetupPath = fullfile(inputPath, 'analysis_setup.xml');
 modelPath      = fullfile(baseFolder, '..','models');
 
