@@ -30,56 +30,56 @@ function modelGenerator_impair()
 '2D_gait_AFO_pc_90kg_170cm_R1.osim';
 '2D_gait_AFO_pc_90kg_180cm_R1.osim';
 '2D_gait_AFO_pc_90kg_190cm_R1.osim';
-% '2D_gait_AFO_pc_50kg_150cm_R0.9.osim';
-% '2D_gait_AFO_pc_50kg_150cm_R1.1.osim';
-% '2D_gait_AFO_pc_50kg_160cm_R0.9.osim';
-% '2D_gait_AFO_pc_50kg_160cm_R1.1.osim';
-% '2D_gait_AFO_pc_50kg_170cm_R0.9.osim';
-% '2D_gait_AFO_pc_50kg_170cm_R1.1.osim';
-% '2D_gait_AFO_pc_50kg_180cm_R0.9.osim';
-% '2D_gait_AFO_pc_50kg_180cm_R1.1.osim';
-% '2D_gait_AFO_pc_50kg_190cm_R0.9.osim';
-% '2D_gait_AFO_pc_50kg_190cm_R1.1.osim';
-% '2D_gait_AFO_pc_60kg_150cm_R0.9.osim';
-% '2D_gait_AFO_pc_60kg_150cm_R1.1.osim';
-% '2D_gait_AFO_pc_60kg_160cm_R0.9.osim';
-% '2D_gait_AFO_pc_60kg_160cm_R1.1.osim';
-% '2D_gait_AFO_pc_60kg_170cm_R0.9.osim';
-% '2D_gait_AFO_pc_60kg_170cm_R1.1.osim';
-% '2D_gait_AFO_pc_60kg_180cm_R0.9.osim';
-% '2D_gait_AFO_pc_60kg_180cm_R1.1.osim';
-% '2D_gait_AFO_pc_60kg_190cm_R0.9.osim';
-% '2D_gait_AFO_pc_60kg_190cm_R1.1.osim';
-% '2D_gait_AFO_pc_70kg_150cm_R0.9.osim';
-% '2D_gait_AFO_pc_70kg_150cm_R1.1.osim';
-% '2D_gait_AFO_pc_70kg_160cm_R0.9.osim';
-% '2D_gait_AFO_pc_70kg_160cm_R1.1.osim';
-% '2D_gait_AFO_pc_70kg_170cm_R0.9.osim';
-% '2D_gait_AFO_pc_70kg_170cm_R1.1.osim';
-% '2D_gait_AFO_pc_70kg_180cm_R0.9.osim';
-% '2D_gait_AFO_pc_70kg_180cm_R1.1.osim';
-% '2D_gait_AFO_pc_70kg_190cm_R0.9.osim';
-% '2D_gait_AFO_pc_70kg_190cm_R1.1.osim';
-% '2D_gait_AFO_pc_80kg_150cm_R0.9.osim';
-% '2D_gait_AFO_pc_80kg_150cm_R1.1.osim';
-% '2D_gait_AFO_pc_80kg_160cm_R0.9.osim';
-% '2D_gait_AFO_pc_80kg_160cm_R1.1.osim';
-% '2D_gait_AFO_pc_80kg_170cm_R0.9.osim';
-% '2D_gait_AFO_pc_80kg_170cm_R1.1.osim';
-% '2D_gait_AFO_pc_80kg_180cm_R0.9.osim';
-% '2D_gait_AFO_pc_80kg_180cm_R1.1.osim';
-% '2D_gait_AFO_pc_80kg_190cm_R0.9.osim';
-% '2D_gait_AFO_pc_80kg_190cm_R1.1.osim';
-% '2D_gait_AFO_pc_90kg_150cm_R0.9.osim';
-% '2D_gait_AFO_pc_90kg_150cm_R1.1.osim';
-% '2D_gait_AFO_pc_90kg_160cm_R0.9.osim';
-% '2D_gait_AFO_pc_90kg_160cm_R1.1.osim';
-% '2D_gait_AFO_pc_90kg_170cm_R0.9.osim';
-% '2D_gait_AFO_pc_90kg_170cm_R1.1.osim';
-% '2D_gait_AFO_pc_90kg_180cm_R0.9.osim';
-% '2D_gait_AFO_pc_90kg_180cm_R1.1.osim';
-% '2D_gait_AFO_pc_90kg_190cm_R0.9.osim';
-% '2D_gait_AFO_pc_90kg_190cm_R1.1.osim';
+'2D_gait_AFO_pc_50kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_50kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_50kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_50kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_50kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_190cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_190cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_190cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_190cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_190cm_R1.1.osim';
     };
 
     % 변경할 근육 이름 (모델 내 이름과 동일하게)
@@ -115,17 +115,17 @@ function modelGenerator_impair()
     %     1.0   fiber3;
     % ];
 
-    impairments = [
-        1.0   fiber1;
-        1.0   fiber2;
-        1.0   fiber3;
-    ];
-
     % impairments = [
-    %     force1   1.00;
-    %     force2   1.00;
-    %     force3   1.00;
+    %     1.0   fiber1;
+    %     1.0   fiber2;
+    %     1.0   fiber3;
     % ];
+
+    impairments = [
+        force1   1.00;
+        force2   1.00;
+        force3   1.00;
+    ];
 
     recordToXlsx = false;   % false: 파일만 생성, xlsx 기록 생략
 % =========================================================================
@@ -157,7 +157,7 @@ function modelGenerator_impair()
         originName = [baseName '.osim'];
 
         % ── xlsx 기존 개수 확인 (이전 base model의 업데이트를 반영하기 위해 루프마다 새로 읽음) ──
-        startIdx = 1; % version 시작 명
+        startIdx = 7; % version 시작 명
         sheetData = {}; endHdrRow = 1; colHdrRow = 2;
         originCounts = containers.Map('KeyType','char','ValueType','double');
         if recordToXlsx
