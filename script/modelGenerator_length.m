@@ -4,17 +4,52 @@ function modelGenerator_length()
 % =========================================================================
 %  ★ 설정 영역 ★
 % =========================================================================
-    baseModelFile  = '2D_gait_AFO_pc_90kg.osim';   % models/ 폴더 기준 파일명
+    baseModelFiles = {                       % models/ 폴더 기준 파일명 (여러 개 지정 가능)
+        '2D_gait_AFO_pc_50kg_150cm_R1.osim';
+        '2D_gait_AFO_pc_50kg_160cm_R1.osim';
+        '2D_gait_AFO_pc_50kg_170cm_R1.osim';
+        '2D_gait_AFO_pc_50kg_180cm_R1.osim';
+        '2D_gait_AFO_pc_50kg_190cm_R1.osim';
 
-    scalingFactors = [           % [thigh, shank] 각 행이 하나의 조합 -> 합이 2가 아니면 일반 초기 조건이 수렴을 안함
-      0.92779863   0.88586621;   %  73.65 cm -> 150
-      0.98965187   0.94492396;   %  78.56 cm -> 160
-      1.05150512   1.00398171;   %  83.47 cm -> 170
-      1.11335836   1.06303945;   %  88.38 cm -> 180
-      1.17521160   1.12209720;   %  93.29 cm -> 190
+        '2D_gait_AFO_pc_60kg_150cm_R1.osim';
+        '2D_gait_AFO_pc_60kg_160cm_R1.osim';
+        '2D_gait_AFO_pc_60kg_170cm_R1.osim';
+        '2D_gait_AFO_pc_60kg_180cm_R1.osim';
+        '2D_gait_AFO_pc_60kg_190cm_R1.osim';
+
+        '2D_gait_AFO_pc_70kg_150cm_R1.osim';
+        '2D_gait_AFO_pc_70kg_160cm_R1.osim';
+        '2D_gait_AFO_pc_70kg_170cm_R1.osim';
+        '2D_gait_AFO_pc_70kg_180cm_R1.osim';
+        '2D_gait_AFO_pc_70kg_190cm_R1.osim';
+
+        '2D_gait_AFO_pc_80kg_150cm_R1.osim';
+        '2D_gait_AFO_pc_80kg_160cm_R1.osim';
+        '2D_gait_AFO_pc_80kg_170cm_R1.osim';
+        '2D_gait_AFO_pc_80kg_180cm_R1.osim';
+        '2D_gait_AFO_pc_80kg_190cm_R1.osim';
+
+        '2D_gait_AFO_pc_90kg_150cm_R1.osim';
+        '2D_gait_AFO_pc_90kg_160cm_R1.osim';
+        '2D_gait_AFO_pc_90kg_170cm_R1.osim';
+        '2D_gait_AFO_pc_90kg_180cm_R1.osim';
+        '2D_gait_AFO_pc_90kg_190cm_R1.osim';
+    };
+
+    % scalingFactors = [           % [thigh, shank] 각 행이 하나의 조합 -> 합이 2가 아니면 일반 초기 조건이 수렴을 안함
+    %   0.92779863   0.88586621;   %  73.65 cm -> 150
+    %   0.98965187   0.94492396;   %  78.56 cm -> 160
+    %   1.05150512   1.00398171;   %  83.47 cm -> 170
+    %   1.11335836   1.06303945;   %  88.38 cm -> 180
+    %   1.17521160   1.12209720;   %  93.29 cm -> 190
+    % ];
+
+    scalingFactors = [           % [thigh, shank] 각 행이 하나의 조합
+      1.0526   0.9474;  % shank / thigh = 0.9
+      0.9524   1.0476;  % shank / thigh = 1.1
     ];
 
-    % vals = 0.90:0.02:1.10;   % deviation 
+    % vals = 0.90:0.02:1.10;   % deviation
     % [thighGrid, shankGrid] = ndgrid(vals, vals);
     % mask = (thighGrid + shankGrid) == 2;
     % scalingFactors = [thighGrid(mask), shankGrid(mask)];
@@ -30,88 +65,99 @@ function modelGenerator_length()
 
     if ~exist(modelsDir, 'dir'), mkdir(modelsDir); end
 
-    % baseModelFile 위치 확인
-    if ~isfile(baseModelFile)
-        baseModelFile = fullfile(modelsDir, baseModelFile);
-    end
-    assert(isfile(baseModelFile), 'Base model not found: %s', baseModelFile);
+    totalGenerated = 0;
 
-    [~, baseName, ~] = fileparts(baseModelFile);
-    originName = [baseName '.osim'];
+    for bIdx = 1:length(baseModelFiles)
+        baseModelFile = baseModelFiles{bIdx};
 
-    % ===== xlsx에서 동일 origin의 기존 개수 → 시작 index 결정 =====
-    [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsxFile);
-    existingCount = 0;
-    if isKey(originCounts, originName)
-        existingCount = originCounts(originName);
-    end
-    startIdx = existingCount + 1;
-    fprintf('Origin: %s  (기존 %d개, v%d~v%d 생성 예정)\n', ...
-        originName, existingCount, startIdx, startIdx + size(scalingFactors,1) - 1);
-
-    % ===== AFO 벡터 저장 (스케일 전) =====
-    % P2(calcn)는 local 좌표 불변 → calcn과 함께 이동
-    % P1(tibia)은 "P2_new_ground + 원래 AFO 벡터(P1-P2)"로 재배치
-    % → AFO의 방향·길이가 완벽히 보존됨
-    refModel = Model(baseModelFile);
-    refState  = refModel.initSystem();
-    refAFO    = getAFOVectors(refModel, refState);
-
-    % ===== scaling 루프 =====
-    nNew          = size(scalingFactors, 1);
-    newModelNames = cell(nNew, 1);
-
-    for i = 1:nNew
-        scale_thigh = scalingFactors(i, 1);
-        scale_shank = scalingFactors(i, 2);
-        vIdx        = startIdx + i - 1;
-
-        fprintf('\n[%d/%d] v%d  thigh=%.4f  shank=%.4f\n', ...
-            i, nNew, vIdx, scale_thigh, scale_shank);
-
-        outName = sprintf('%s_v%d.osim', baseName, vIdx);
-        outFile = fullfile(modelsDir, outName);
-        newModelNames{i} = outName;
-
-        model = Model(baseModelFile);
-
-        scaler = ModelScaler();
-        scaler.setApply(true);
-        scaler.setPreserveMassDist(true);
-        scaler.setPrintResultFiles(false);
-        scaler.setOutputModelFileName([tempname '.osim']);
-        scaler.setOutputScaleFileName([tempname '.xml']);
-
-        order = ArrayStr();
-        order.append('manualScale');
-        scaler.setScalingOrder(order);
-
-        addBodyScale(scaler, 'femur_l', scale_thigh);
-        addBodyScale(scaler, 'femur_r', scale_thigh);
-        addBodyScale(scaler, 'tibia_l', scale_shank);
-        addBodyScale(scaler, 'tibia_r', scale_shank);
-
-        try
-            ok = scaler.processModel(model, '', -1);
-        catch ME
-            fprintf('processModel failed (v%d): %s\n', vIdx, ME.message);
-            rethrow(ME);
+        % baseModelFile 위치 확인
+        if ~isfile(baseModelFile)
+            baseModelFile = fullfile(modelsDir, baseModelFile);
         end
-        assert(ok == 1, 'ModelScaler.processModel() failed (v%d).', vIdx);
+        assert(isfile(baseModelFile), 'Base model not found: %s', baseModelFile);
 
-        % scaled 모델 초기화 후 P1 재배치 (P2 자연 이동 + AFO 벡터 유지)
-        scaledState = model.initSystem();
-        restoreAFOTibiaPoints(model, scaledState, refAFO);
+        [~, baseName, ~] = fileparts(baseModelFile);
+        originName = [baseName '.osim'];
 
-        model.print(outFile);
-        fprintf('Saved: %s\n', outFile);
+        % ===== xlsx에서 동일 origin의 기존 개수 → 시작 index 결정 =====
+        % (이전 base model의 업데이트를 반영하기 위해 루프마다 새로 읽음)
+        [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsxFile);
+        existingCount = 0;
+        if isKey(originCounts, originName)
+            existingCount = originCounts(originName);
+        end
+        startIdx = existingCount + 1;
+        fprintf('\n=== [%d/%d] Origin: %s  (기존 %d개, v%d~v%d 생성 예정) ===\n', ...
+            bIdx, length(baseModelFiles), originName, existingCount, ...
+            startIdx, startIdx + size(scalingFactors,1) - 1);
+
+        % ===== AFO 벡터 저장 (스케일 전) =====
+        % P2(calcn)는 local 좌표 불변 → calcn과 함께 이동
+        % P1(tibia)은 "P2_new_ground + 원래 AFO 벡터(P1-P2)"로 재배치
+        % → AFO의 방향·길이가 완벽히 보존됨
+        refModel = Model(baseModelFile);
+        refState  = refModel.initSystem();
+        refAFO    = getAFOVectors(refModel, refState);
+
+        % ===== scaling 루프 =====
+        nNew          = size(scalingFactors, 1);
+        newModelNames = cell(nNew, 1);
+
+        for i = 1:nNew
+            scale_thigh = scalingFactors(i, 1);
+            scale_shank = scalingFactors(i, 2);
+            vIdx        = startIdx + i - 1;
+
+            fprintf('\n[%d/%d] v%d  thigh=%.4f  shank=%.4f\n', ...
+                i, nNew, vIdx, scale_thigh, scale_shank);
+
+            outName = sprintf('%s_v%d.osim', baseName, vIdx);
+            outFile = fullfile(modelsDir, outName);
+            newModelNames{i} = outName;
+
+            model = Model(baseModelFile);
+
+            scaler = ModelScaler();
+            scaler.setApply(true);
+            scaler.setPreserveMassDist(true);
+            scaler.setPrintResultFiles(false);
+            scaler.setOutputModelFileName([tempname '.osim']);
+            scaler.setOutputScaleFileName([tempname '.xml']);
+
+            order = ArrayStr();
+            order.append('manualScale');
+            scaler.setScalingOrder(order);
+
+            addBodyScale(scaler, 'femur_l', scale_thigh);
+            addBodyScale(scaler, 'femur_r', scale_thigh);
+            addBodyScale(scaler, 'tibia_l', scale_shank);
+            addBodyScale(scaler, 'tibia_r', scale_shank);
+
+            try
+                ok = scaler.processModel(model, '', -1);
+            catch ME
+                fprintf('processModel failed (v%d): %s\n', vIdx, ME.message);
+                rethrow(ME);
+            end
+            assert(ok == 1, 'ModelScaler.processModel() failed (v%d).', vIdx);
+
+            % scaled 모델 초기화 후 P1 재배치 (P2 자연 이동 + AFO 벡터 유지)
+            scaledState = model.initSystem();
+            restoreAFOTibiaPoints(model, scaledState, refAFO);
+
+            model.print(outFile);
+            fprintf('Saved: %s\n', outFile);
+        end
+
+        % ===== xlsx 업데이트 =====
+        updateModelsSheet(xlsxFile, newModelNames, originName, scalingFactors, ...
+            sheetData, endHdrRow, colHdrRow, originCounts);
+
+        totalGenerated = totalGenerated + nNew;
     end
 
-    % ===== xlsx 업데이트 =====
-    updateModelsSheet(xlsxFile, newModelNames, originName, scalingFactors, ...
-        sheetData, endHdrRow, colHdrRow, originCounts);
-
-    fprintf('\nAll done. %d model(s) generated.\n', nNew);
+    fprintf('\nAll done. %d model(s) generated from %d base model(s).\n', ...
+        totalGenerated, length(baseModelFiles));
 end
 
 

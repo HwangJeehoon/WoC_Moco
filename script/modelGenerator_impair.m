@@ -4,21 +4,97 @@ function modelGenerator_impair()
 % =========================================================================
 %  ★ 설정 영역 ★
 % =========================================================================
-    baseModelFile = '2D_gait_AFO_pc.osim';   % models/ 폴더 기준 파일명
+    baseModelFiles = {                        % models/ 폴더 기준 파일명 (여러 개 지정 가능)
+'2D_gait_AFO_pc_50kg_150cm_R1.osim';
+'2D_gait_AFO_pc_50kg_160cm_R1.osim';
+'2D_gait_AFO_pc_50kg_170cm_R1.osim';
+'2D_gait_AFO_pc_50kg_180cm_R1.osim';
+'2D_gait_AFO_pc_50kg_190cm_R1.osim';
+'2D_gait_AFO_pc_60kg_150cm_R1.osim';
+'2D_gait_AFO_pc_60kg_160cm_R1.osim';
+'2D_gait_AFO_pc_60kg_170cm_R1.osim';
+'2D_gait_AFO_pc_60kg_180cm_R1.osim';
+'2D_gait_AFO_pc_60kg_190cm_R1.osim';
+'2D_gait_AFO_pc_70kg_150cm_R1.osim';
+'2D_gait_AFO_pc_70kg_160cm_R1.osim';
+'2D_gait_AFO_pc_70kg_170cm_R1.osim';
+'2D_gait_AFO_pc_70kg_180cm_R1.osim';
+'2D_gait_AFO_pc_70kg_190cm_R1.osim';
+'2D_gait_AFO_pc_80kg_150cm_R1.osim';
+'2D_gait_AFO_pc_80kg_160cm_R1.osim';
+'2D_gait_AFO_pc_80kg_170cm_R1.osim';
+'2D_gait_AFO_pc_80kg_180cm_R1.osim';
+'2D_gait_AFO_pc_80kg_190cm_R1.osim';
+'2D_gait_AFO_pc_90kg_150cm_R1.osim';
+'2D_gait_AFO_pc_90kg_160cm_R1.osim';
+'2D_gait_AFO_pc_90kg_170cm_R1.osim';
+'2D_gait_AFO_pc_90kg_180cm_R1.osim';
+'2D_gait_AFO_pc_90kg_190cm_R1.osim';
+'2D_gait_AFO_pc_50kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_50kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_50kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_50kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_50kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_50kg_190cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_60kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_60kg_190cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_70kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_70kg_190cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_80kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_80kg_190cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_150cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_150cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_160cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_160cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_170cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_170cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_180cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_180cm_R1.1.osim';
+'2D_gait_AFO_pc_90kg_190cm_R0.9.osim';
+'2D_gait_AFO_pc_90kg_190cm_R1.1.osim';
+    };
 
     % 변경할 근육 이름 (모델 내 이름과 동일하게)
     % muscleNames = {'soleus_r'};
     % muscleNames = {'gastroc_r'};
-    % muscleNames = {'soleus_r', 'gastroc_r'};
     % muscleNames = {'soleus_r', 'gastroc_r', 'tib_ant_r'};
     % muscleNames = {'soleus_r', 'gastroc_r', 'tib_ant_r', 'rect_fem_r'};
-    muscleNames = {'soleus_r', 'gastroc_r', 'tib_ant_r', 'rect_fem_r', 'hamstrings_r','bifemsh_r', 'glut_max_r', 'iliopsoas_r', 'vasti_r'};
+    % muscleNames = {'soleus_r', 'gastroc_r'}; % Right PF
+    muscleNames = {'soleus_r', 'gastroc_r', 'tib_ant_r', 'rect_fem_r', 'hamstrings_r','bifemsh_r', 'glut_max_r', 'iliopsoas_r', 'vasti_r'}; % Whole right
     
     % 변경 여부 선택 (둘 다 true이면 동시에 변경)
     modifyForce = true;   % max_isometric_force 변경 여부
     % modifyForce = false;   % max_isometric_force 변경 여부
-    % modifyFiber = true;  % optimal_fiber_length 변경 여부
-    modifyFiber = false;  % optimal_fiber_length 변경 여부
+    modifyFiber = true;  % optimal_fiber_length 변경 여부
+    % modifyFiber = false;  % optimal_fiber_length 변경 여부
 
     % 각 행 = 하나의 모델 조합
     % 사용하지 않는 열(modifyForce=false → forceScale 무시, modifyFiber=false → fiberScale 무시)
@@ -38,14 +114,18 @@ function modelGenerator_impair()
     %     1.0   fiber2;
     %     1.0   fiber3;
     % ];
+
+    impairments = [
+        1.0   fiber1;
+        1.0   fiber2;
+        1.0   fiber3;
+    ];
+
     % impairments = [
     %     force1   1.00;
     %     force2   1.00;
     %     force3   1.00;
     % ];
-    impairments = [
-        force3   1;
-    ];
 % =========================================================================
 
     import org.opensim.modeling.*
@@ -58,109 +138,114 @@ function modelGenerator_impair()
 
     if ~exist(modelsDir, 'dir'), mkdir(modelsDir); end
 
-    if ~isfile(baseModelFile)
-        baseModelFile = fullfile(modelsDir, baseModelFile);
-    end
-    assert(isfile(baseModelFile), 'Base model not found: %s', baseModelFile);
-
-    [~, baseName, ~] = fileparts(baseModelFile);
-    originName = [baseName '.osim'];
-
-    % ── suffix 결정 ──
     assert(modifyForce || modifyFiber, 'modifyForce와 modifyFiber 중 하나는 true여야 합니다.');
-    % suffix = '';
-    % if modifyForce, suffix = [suffix '_musWeak']; end
-    % if modifyFiber, suffix = [suffix '_fiberLength']; end
 
-    % ── xlsx 기존 개수 확인 ──
-    [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsxFile);
-    existingCount = 0;
-    if isKey(originCounts, originName)
-        existingCount = originCounts(originName);
-    end
-    startIdx = existingCount + 1;
     nNew = size(impairments, 1);
-    fprintf('Origin: %s  (기존 %d개, %d~%d 생성 예정)\n', ...
-        originName, existingCount, startIdx, startIdx + nNew - 1);
+    totalGenerated = 0;
 
-    % ── base model에서 원래 값 읽기 (getMuscles() 대신 component iterator 사용) ──
-    % getMuscles()는 sub-component 안에 있는 근육을 찾지 못함 (cal_meta_test.m 참고)
-    refModel   = Model(baseModelFile);
-    origForce  = containers.Map('KeyType','char','ValueType','double');
-    origFiber  = containers.Map('KeyType','char','ValueType','double');
-    musclePaths = containers.Map('KeyType','char','ValueType','char');
+    for bIdx = 1:length(baseModelFiles)
+        baseModelFile = baseModelFiles{bIdx};
 
-    compList = refModel.getComponentsList();
-    it = compList.begin();
-    while ~it.equals(compList.end())
-        comp = it.deref();
-        mus  = Muscle.safeDownCast(comp);
-        if ~isempty(mus)
-            mName = char(mus.getName());
-            if ismember(mName, muscleNames)
-                musclePaths(mName) = char(comp.getAbsolutePathString());
-                origForce(mName)   = mus.getMaxIsometricForce();
-                origFiber(mName)   = mus.getOptimalFiberLength();
-            end
+        if ~isfile(baseModelFile)
+            baseModelFile = fullfile(modelsDir, baseModelFile);
         end
-        it.next();
-    end
+        assert(isfile(baseModelFile), 'Base model not found: %s', baseModelFile);
 
-    fprintf('\n원본 근육 값:\n');
-    for k = 1:length(muscleNames)
-        mName = muscleNames{k};
-        assert(isKey(musclePaths, mName), 'Muscle not found in model: %s', mName);
-        fprintf('  %-22s  force=%8.2f N  fiber=%.6f m\n', ...
-            mName, origForce(mName), origFiber(mName));
-    end
+        [~, baseName, ~] = fileparts(baseModelFile);
+        originName = [baseName '.osim'];
 
-    % ── 모델 생성 루프 ──
-    newModelNames = cell(nNew, 1);
-    abnormalDescs = cell(nNew, 1);
+        % ── xlsx 기존 개수 확인 (이전 base model의 업데이트를 반영하기 위해 루프마다 새로 읽음) ──
+        [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsxFile);
+        existingCount = 0;
+        if isKey(originCounts, originName)
+            existingCount = originCounts(originName);
+        end
+        startIdx = existingCount + 1;
+        fprintf('\n=== [%d/%d] Origin: %s  (기존 %d개, %d~%d 생성 예정) ===\n', ...
+            bIdx, length(baseModelFiles), originName, existingCount, startIdx, startIdx + nNew - 1);
 
-    for i = 1:nNew
-        fScale = impairments(i, 1);
-        bScale = impairments(i, 2);
-        idx    = startIdx + i - 1;
+        % ── base model에서 원래 값 읽기 (getMuscles() 대신 component iterator 사용) ──
+        % getMuscles()는 sub-component 안에 있는 근육을 찾지 못함 (cal_meta_test.m 참고)
+        refModel    = Model(baseModelFile);
+        origForce   = containers.Map('KeyType','char','ValueType','double');
+        origFiber   = containers.Map('KeyType','char','ValueType','double');
+        musclePaths = containers.Map('KeyType','char','ValueType','char');
 
-        fprintf('\n[%d/%d] idx=%d', i, nNew, idx);
-        if modifyForce, fprintf('  force×%.4f', fScale); end
-        if modifyFiber, fprintf('  fiber×%.4f', bScale); end
-        fprintf('\n');
+        compList = refModel.getComponentsList();
+        it = compList.begin();
+        while ~it.equals(compList.end())
+            comp = it.deref();
+            mus  = Muscle.safeDownCast(comp);
+            if ~isempty(mus)
+                mName = char(mus.getName());
+                if ismember(mName, muscleNames)
+                    musclePaths(mName) = char(comp.getAbsolutePathString());
+                    origForce(mName)   = mus.getMaxIsometricForce();
+                    origFiber(mName)   = mus.getOptimalFiberLength();
+                end
+            end
+            it.next();
+        end
 
-        outName = sprintf('%s_v%d.osim', baseName, idx);
-        outFile = fullfile(modelsDir, outName);
-        newModelNames{i} = outName;
-
-        % 모델 복사 후 근육 값 수정 (절대 경로 + updComponent 사용)
-        model = Model(baseModelFile);
+        fprintf('\n원본 근육 값:\n');
         for k = 1:length(muscleNames)
             mName = muscleNames{k};
-            mus   = Muscle.safeDownCast(model.updComponent(musclePaths(mName)));
-            if modifyForce
-                mus.setMaxIsometricForce(origForce(mName) * fScale);
-            end
-            if modifyFiber
-                mus.setOptimalFiberLength(origFiber(mName) * bScale);
-            end
+            assert(isKey(musclePaths, mName), 'Muscle not found in model: %s', mName);
+            fprintf('  %-22s  force=%8.2f N  fiber=%.6f m\n', ...
+                mName, origForce(mName), origFiber(mName));
         end
 
-        model.initSystem();
-        model.print(outFile);
-        fprintf('Saved: %s\n', outFile);
+        % ── 모델 생성 루프 ──
+        newModelNames = cell(nNew, 1);
+        abnormalDescs = cell(nNew, 1);
 
-        % muscles / force_scale / fiber_scale 분리 저장
-        musStr = strjoin(muscleNames, ',');
-        if modifyForce, forceVal = fScale; else, forceVal = 1; end
-        if modifyFiber, fiberVal = bScale; else, fiberVal = 1; end
-        abnormalDescs{i} = {musStr, forceVal, fiberVal};
+        for i = 1:nNew
+            fScale = impairments(i, 1);
+            bScale = impairments(i, 2);
+            idx    = startIdx + i - 1;
+
+            fprintf('\n[%d/%d] idx=%d', i, nNew, idx);
+            if modifyForce, fprintf('  force×%.4f', fScale); end
+            if modifyFiber, fprintf('  fiber×%.4f', bScale); end
+            fprintf('\n');
+
+            outName = sprintf('%s_v%d.osim', baseName, idx);
+            outFile = fullfile(modelsDir, outName);
+            newModelNames{i} = outName;
+
+            % 모델 복사 후 근육 값 수정 (절대 경로 + updComponent 사용)
+            model = Model(baseModelFile);
+            for k = 1:length(muscleNames)
+                mName = muscleNames{k};
+                mus   = Muscle.safeDownCast(model.updComponent(musclePaths(mName)));
+                if modifyForce
+                    mus.setMaxIsometricForce(origForce(mName) * fScale);
+                end
+                if modifyFiber
+                    mus.setOptimalFiberLength(origFiber(mName) * bScale);
+                end
+            end
+
+            model.initSystem();
+            model.print(outFile);
+            fprintf('Saved: %s\n', outFile);
+
+            % muscles / force_scale / fiber_scale 분리 저장
+            musStr = strjoin(muscleNames, ',');
+            if modifyForce, forceVal = fScale; else, forceVal = 1; end
+            if modifyFiber, fiberVal = bScale; else, fiberVal = 1; end
+            abnormalDescs{i} = {musStr, forceVal, fiberVal};
+        end
+
+        % ── xlsx 업데이트 ──
+        updateModelsSheet(xlsxFile, newModelNames, originName, abnormalDescs, ...
+            sheetData, endHdrRow, colHdrRow, originCounts);
+
+        totalGenerated = totalGenerated + nNew;
     end
 
-    % ── xlsx 업데이트 ──
-    updateModelsSheet(xlsxFile, newModelNames, originName, abnormalDescs, ...
-        sheetData, endHdrRow, colHdrRow, originCounts);
-
-    fprintf('\nAll done. %d model(s) generated.\n', nNew);
+    fprintf('\nAll done. %d model(s) generated from %d base model(s).\n', ...
+        totalGenerated, length(baseModelFiles));
 end
 
 
