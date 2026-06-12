@@ -53,6 +53,8 @@ function modelGenerator_length()
     % [thighGrid, shankGrid] = ndgrid(vals, vals);
     % mask = (thighGrid + shankGrid) == 2;
     % scalingFactors = [thighGrid(mask), shankGrid(mask)];
+
+    recordToXlsx = true;   % false: 파일만 생성, xlsx 기록 생략
 % =========================================================================
 
     import org.opensim.modeling.*
@@ -81,14 +83,17 @@ function modelGenerator_length()
 
         % ===== xlsx에서 동일 origin의 기존 개수 → 시작 index 결정 =====
         % (이전 base model의 업데이트를 반영하기 위해 루프마다 새로 읽음)
-        [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsxFile);
-        existingCount = 0;
-        if isKey(originCounts, originName)
-            existingCount = originCounts(originName);
+        startIdx = 1;
+        sheetData = {}; endHdrRow = 1; colHdrRow = 2;
+        originCounts = containers.Map('KeyType','char','ValueType','double');
+        if recordToXlsx
+            [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsxFile);
+            if isKey(originCounts, originName)
+                startIdx = originCounts(originName) + 1;
+            end
         end
-        startIdx = existingCount + 1;
-        fprintf('\n=== [%d/%d] Origin: %s  (기존 %d개, v%d~v%d 생성 예정) ===\n', ...
-            bIdx, length(baseModelFiles), originName, existingCount, ...
+        fprintf('\n=== [%d/%d] Origin: %s  (v%d~v%d 생성 예정) ===\n', ...
+            bIdx, length(baseModelFiles), originName, ...
             startIdx, startIdx + size(scalingFactors,1) - 1);
 
         % ===== AFO 벡터 저장 (스케일 전) =====
@@ -150,8 +155,10 @@ function modelGenerator_length()
         end
 
         % ===== xlsx 업데이트 =====
-        updateModelsSheet(xlsxFile, newModelNames, originName, scalingFactors, ...
-            sheetData, endHdrRow, colHdrRow, originCounts);
+        if recordToXlsx
+            updateModelsSheet(xlsxFile, newModelNames, originName, scalingFactors, ...
+                sheetData, endHdrRow, colHdrRow, originCounts);
+        end
 
         totalGenerated = totalGenerated + nNew;
     end

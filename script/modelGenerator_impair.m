@@ -30,56 +30,56 @@ function modelGenerator_impair()
 '2D_gait_AFO_pc_90kg_170cm_R1.osim';
 '2D_gait_AFO_pc_90kg_180cm_R1.osim';
 '2D_gait_AFO_pc_90kg_190cm_R1.osim';
-'2D_gait_AFO_pc_50kg_150cm_R0.9.osim';
-'2D_gait_AFO_pc_50kg_150cm_R1.1.osim';
-'2D_gait_AFO_pc_50kg_160cm_R0.9.osim';
-'2D_gait_AFO_pc_50kg_160cm_R1.1.osim';
-'2D_gait_AFO_pc_50kg_170cm_R0.9.osim';
-'2D_gait_AFO_pc_50kg_170cm_R1.1.osim';
-'2D_gait_AFO_pc_50kg_180cm_R0.9.osim';
-'2D_gait_AFO_pc_50kg_180cm_R1.1.osim';
-'2D_gait_AFO_pc_50kg_190cm_R0.9.osim';
-'2D_gait_AFO_pc_50kg_190cm_R1.1.osim';
-'2D_gait_AFO_pc_60kg_150cm_R0.9.osim';
-'2D_gait_AFO_pc_60kg_150cm_R1.1.osim';
-'2D_gait_AFO_pc_60kg_160cm_R0.9.osim';
-'2D_gait_AFO_pc_60kg_160cm_R1.1.osim';
-'2D_gait_AFO_pc_60kg_170cm_R0.9.osim';
-'2D_gait_AFO_pc_60kg_170cm_R1.1.osim';
-'2D_gait_AFO_pc_60kg_180cm_R0.9.osim';
-'2D_gait_AFO_pc_60kg_180cm_R1.1.osim';
-'2D_gait_AFO_pc_60kg_190cm_R0.9.osim';
-'2D_gait_AFO_pc_60kg_190cm_R1.1.osim';
-'2D_gait_AFO_pc_70kg_150cm_R0.9.osim';
-'2D_gait_AFO_pc_70kg_150cm_R1.1.osim';
-'2D_gait_AFO_pc_70kg_160cm_R0.9.osim';
-'2D_gait_AFO_pc_70kg_160cm_R1.1.osim';
-'2D_gait_AFO_pc_70kg_170cm_R0.9.osim';
-'2D_gait_AFO_pc_70kg_170cm_R1.1.osim';
-'2D_gait_AFO_pc_70kg_180cm_R0.9.osim';
-'2D_gait_AFO_pc_70kg_180cm_R1.1.osim';
-'2D_gait_AFO_pc_70kg_190cm_R0.9.osim';
-'2D_gait_AFO_pc_70kg_190cm_R1.1.osim';
-'2D_gait_AFO_pc_80kg_150cm_R0.9.osim';
-'2D_gait_AFO_pc_80kg_150cm_R1.1.osim';
-'2D_gait_AFO_pc_80kg_160cm_R0.9.osim';
-'2D_gait_AFO_pc_80kg_160cm_R1.1.osim';
-'2D_gait_AFO_pc_80kg_170cm_R0.9.osim';
-'2D_gait_AFO_pc_80kg_170cm_R1.1.osim';
-'2D_gait_AFO_pc_80kg_180cm_R0.9.osim';
-'2D_gait_AFO_pc_80kg_180cm_R1.1.osim';
-'2D_gait_AFO_pc_80kg_190cm_R0.9.osim';
-'2D_gait_AFO_pc_80kg_190cm_R1.1.osim';
-'2D_gait_AFO_pc_90kg_150cm_R0.9.osim';
-'2D_gait_AFO_pc_90kg_150cm_R1.1.osim';
-'2D_gait_AFO_pc_90kg_160cm_R0.9.osim';
-'2D_gait_AFO_pc_90kg_160cm_R1.1.osim';
-'2D_gait_AFO_pc_90kg_170cm_R0.9.osim';
-'2D_gait_AFO_pc_90kg_170cm_R1.1.osim';
-'2D_gait_AFO_pc_90kg_180cm_R0.9.osim';
-'2D_gait_AFO_pc_90kg_180cm_R1.1.osim';
-'2D_gait_AFO_pc_90kg_190cm_R0.9.osim';
-'2D_gait_AFO_pc_90kg_190cm_R1.1.osim';
+% '2D_gait_AFO_pc_50kg_150cm_R0.9.osim';
+% '2D_gait_AFO_pc_50kg_150cm_R1.1.osim';
+% '2D_gait_AFO_pc_50kg_160cm_R0.9.osim';
+% '2D_gait_AFO_pc_50kg_160cm_R1.1.osim';
+% '2D_gait_AFO_pc_50kg_170cm_R0.9.osim';
+% '2D_gait_AFO_pc_50kg_170cm_R1.1.osim';
+% '2D_gait_AFO_pc_50kg_180cm_R0.9.osim';
+% '2D_gait_AFO_pc_50kg_180cm_R1.1.osim';
+% '2D_gait_AFO_pc_50kg_190cm_R0.9.osim';
+% '2D_gait_AFO_pc_50kg_190cm_R1.1.osim';
+% '2D_gait_AFO_pc_60kg_150cm_R0.9.osim';
+% '2D_gait_AFO_pc_60kg_150cm_R1.1.osim';
+% '2D_gait_AFO_pc_60kg_160cm_R0.9.osim';
+% '2D_gait_AFO_pc_60kg_160cm_R1.1.osim';
+% '2D_gait_AFO_pc_60kg_170cm_R0.9.osim';
+% '2D_gait_AFO_pc_60kg_170cm_R1.1.osim';
+% '2D_gait_AFO_pc_60kg_180cm_R0.9.osim';
+% '2D_gait_AFO_pc_60kg_180cm_R1.1.osim';
+% '2D_gait_AFO_pc_60kg_190cm_R0.9.osim';
+% '2D_gait_AFO_pc_60kg_190cm_R1.1.osim';
+% '2D_gait_AFO_pc_70kg_150cm_R0.9.osim';
+% '2D_gait_AFO_pc_70kg_150cm_R1.1.osim';
+% '2D_gait_AFO_pc_70kg_160cm_R0.9.osim';
+% '2D_gait_AFO_pc_70kg_160cm_R1.1.osim';
+% '2D_gait_AFO_pc_70kg_170cm_R0.9.osim';
+% '2D_gait_AFO_pc_70kg_170cm_R1.1.osim';
+% '2D_gait_AFO_pc_70kg_180cm_R0.9.osim';
+% '2D_gait_AFO_pc_70kg_180cm_R1.1.osim';
+% '2D_gait_AFO_pc_70kg_190cm_R0.9.osim';
+% '2D_gait_AFO_pc_70kg_190cm_R1.1.osim';
+% '2D_gait_AFO_pc_80kg_150cm_R0.9.osim';
+% '2D_gait_AFO_pc_80kg_150cm_R1.1.osim';
+% '2D_gait_AFO_pc_80kg_160cm_R0.9.osim';
+% '2D_gait_AFO_pc_80kg_160cm_R1.1.osim';
+% '2D_gait_AFO_pc_80kg_170cm_R0.9.osim';
+% '2D_gait_AFO_pc_80kg_170cm_R1.1.osim';
+% '2D_gait_AFO_pc_80kg_180cm_R0.9.osim';
+% '2D_gait_AFO_pc_80kg_180cm_R1.1.osim';
+% '2D_gait_AFO_pc_80kg_190cm_R0.9.osim';
+% '2D_gait_AFO_pc_80kg_190cm_R1.1.osim';
+% '2D_gait_AFO_pc_90kg_150cm_R0.9.osim';
+% '2D_gait_AFO_pc_90kg_150cm_R1.1.osim';
+% '2D_gait_AFO_pc_90kg_160cm_R0.9.osim';
+% '2D_gait_AFO_pc_90kg_160cm_R1.1.osim';
+% '2D_gait_AFO_pc_90kg_170cm_R0.9.osim';
+% '2D_gait_AFO_pc_90kg_170cm_R1.1.osim';
+% '2D_gait_AFO_pc_90kg_180cm_R0.9.osim';
+% '2D_gait_AFO_pc_90kg_180cm_R1.1.osim';
+% '2D_gait_AFO_pc_90kg_190cm_R0.9.osim';
+% '2D_gait_AFO_pc_90kg_190cm_R1.1.osim';
     };
 
     % 변경할 근육 이름 (모델 내 이름과 동일하게)
@@ -126,6 +126,8 @@ function modelGenerator_impair()
     %     force2   1.00;
     %     force3   1.00;
     % ];
+
+    recordToXlsx = false;   % false: 파일만 생성, xlsx 기록 생략
 % =========================================================================
 
     import org.opensim.modeling.*
@@ -155,14 +157,17 @@ function modelGenerator_impair()
         originName = [baseName '.osim'];
 
         % ── xlsx 기존 개수 확인 (이전 base model의 업데이트를 반영하기 위해 루프마다 새로 읽음) ──
-        [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsxFile);
-        existingCount = 0;
-        if isKey(originCounts, originName)
-            existingCount = originCounts(originName);
+        startIdx = 1; % version 시작 명
+        sheetData = {}; endHdrRow = 1; colHdrRow = 2;
+        originCounts = containers.Map('KeyType','char','ValueType','double');
+        if recordToXlsx
+            [sheetData, endHdrRow, colHdrRow, originCounts] = parseModelsSheet(xlsxFile);
+            if isKey(originCounts, originName)
+                startIdx = originCounts(originName) + 1;
+            end
         end
-        startIdx = existingCount + 1;
-        fprintf('\n=== [%d/%d] Origin: %s  (기존 %d개, %d~%d 생성 예정) ===\n', ...
-            bIdx, length(baseModelFiles), originName, existingCount, startIdx, startIdx + nNew - 1);
+        fprintf('\n=== [%d/%d] Origin: %s  (%d~%d 생성 예정) ===\n', ...
+            bIdx, length(baseModelFiles), originName, startIdx, startIdx + nNew - 1);
 
         % ── base model에서 원래 값 읽기 (getMuscles() 대신 component iterator 사용) ──
         % getMuscles()는 sub-component 안에 있는 근육을 찾지 못함 (cal_meta_test.m 참고)
@@ -238,8 +243,10 @@ function modelGenerator_impair()
         end
 
         % ── xlsx 업데이트 ──
-        updateModelsSheet(xlsxFile, newModelNames, originName, abnormalDescs, ...
-            sheetData, endHdrRow, colHdrRow, originCounts);
+        if recordToXlsx
+            updateModelsSheet(xlsxFile, newModelNames, originName, abnormalDescs, ...
+                sheetData, endHdrRow, colHdrRow, originCounts);
+        end
 
         totalGenerated = totalGenerated + nNew;
     end
