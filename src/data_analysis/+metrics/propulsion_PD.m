@@ -15,19 +15,25 @@ function m = propulsion_PD(path)
 
     [tmp, t2] = readSTO_auto(matches{1});
 
-    apGRF = t.ground_force_l_vx;
+    apGRF_left = t.ground_force_l_vx;
+    apGRF_right = t.ground_force_r_vx;
     time = t2.time;
     distance = t2.x_jointset_groundPelvis_pelvis_tx_value;
 
     stride_length = distance(end) - distance(1);
     elapsed_time = time(end) - time(1);
 
+    apGRF = apGRF_left;
     apGRF_positive = max(apGRF, 0);
     integrated_apGRF_positive = cumtrapz(time, apGRF_positive);
-    
-    m = integrated_apGRF_positive(end) /stride_length;
-    
+    m_left = integrated_apGRF_positive(end) / stride_length;
 
+    apGRF = apGRF_right;
+    apGRF_positive = max(apGRF_right, 0);
+    integrated_apGRF_positive = cumtrapz(time, apGRF_positive);
+    m_right = integrated_apGRF_positive(end) / stride_length;
+
+    m = [m_left m_right];
 end
 
 function [headerLines, dataTbl] = readSTO_auto(filename)
