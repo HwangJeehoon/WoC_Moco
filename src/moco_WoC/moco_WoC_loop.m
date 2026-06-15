@@ -267,9 +267,9 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     solver.set_num_mesh_intervals(50);
     solver.set_verbosity(2);
     solver.set_optim_solver('ipopt');
-    solver.set_optim_convergence_tolerance(1e-4);
-    solver.set_optim_constraint_tolerance(1e-4);
-    solver.set_optim_max_iterations(5000);
+    solver.set_optim_convergence_tolerance(1e-3);
+    solver.set_optim_constraint_tolerance(1e-3);
+    solver.set_optim_max_iterations(2500);
 
     guessTraj = MocoTrajectory(guessStoPath);
     solver.setGuess(guessTraj);
