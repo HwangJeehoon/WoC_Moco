@@ -10,8 +10,9 @@
 clear;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
-BASE_FORCE_50KG = 422;    % 50kg 기준 optimal_force 값 (N)
+BASE_FORCE_50KG = 397;    % 50kg 기준 optimal_force 값 (N) 
                          % 예) 50 → _60kg 모델은 60 N, _90kg 모델은 90 N
+                          % 0.5 Nm/kg * 50kg / 0.063m = 397 N
 
 DRY_RUN = false;          % true : 실제 파일 수정 없이 변경 내용만 출력
                          % false: 파일 직접 수정
