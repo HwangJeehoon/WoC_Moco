@@ -179,6 +179,8 @@ for i = 1:size(data_q, 1)
             if ~isempty(offGuessPath)
                 opts.guessInitSto = offGuessPath;
                 fprintf('[initial guess] modeOff 결과 사용: %s\n', offGuessPath);
+            elseif strcmpi(modeType, 'modeSpline')
+                error('modeSpline에 필요한 modeOff 결과를 찾을 수 없습니다 (model=%s).', model);
             end
         end
 
