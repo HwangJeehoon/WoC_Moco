@@ -10,15 +10,18 @@
 clear;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
-QUEUE_FILE = 'simulation_queue_example.xlsx';   % ← 대상 파일명
+QUEUE_FILE = 'simulation_queue.xlsx';   % ← 대상 파일명
 
-% completed_queue 데이터 행 기준(헤더 제외) 이 행부터 끝까지 처리
-START_ROW = 1;
+% xlsx 절대 행 번호 기준 범위 지정 (헤더 행 포함 카운트)
+% END_ROW를 비워 두면 끝까지 처리
+START_ROW = 1350;
+END_ROW   = [];
 
 % modeSpline 파라미터 세트 — 여러 개 지정하면 소스 행 1개당 N개 생성
 spline_params = {
-    struct('trigger', 0.1, 'rise', 0.1, 'flat', 0.1, 'fall', 0.1, 'maxVal', 1.0)
-    struct('trigger', 0.1, 'rise', 0.2, 'flat', 0.3, 'fall', 0.1, 'maxVal', 0.5)
+    struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 1.0) % 0.5 Nm/kg
+    struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 0.6) % 0.3 Nm/kg
+    struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 0.2) % 0.1 Nm/kg
 };
 
 %% ── 파일 읽기 ──────────────────────────────────────────────────────────────
@@ -35,11 +38,24 @@ end
 [hdr_d, ~,        data_d] = readSheet(QUEUE_XLSX, SHEET_DONE);
 
 %% ── 소스 행 필터링 ─────────────────────────────────────────────────────────
-if START_ROW > size(data_d, 1)
-    error('START_ROW(%d)가 completed_queue 행 수(%d)를 초과합니다.', ...
-        START_ROW, size(data_d, 1));
+% xlsx 절대 행 번호 → 데이터 인덱스 변환
+% hdr_d 행 수 = endheader까지의 header block, +1은 열 이름 행
+hdr_offset     = size(hdr_d, 1) + 1;  % header block + 열 이름 행
+data_start_idx = START_ROW - hdr_offset;
+if data_start_idx < 1, data_start_idx = 1; end
+if data_start_idx > size(data_d, 1)
+    error('START_ROW(%d)가 completed_queue 마지막 데이터 행(xlsx %d)을 초과합니다.', ...
+        START_ROW, hdr_offset + size(data_d, 1));
 end
-data_src = data_d(START_ROW:end, :);
+
+if isempty(END_ROW)
+    data_end_idx = size(data_d, 1);
+else
+    data_end_idx = END_ROW - hdr_offset;
+    if data_end_idx > size(data_d, 1), data_end_idx = size(data_d, 1); end
+end
+
+data_src = data_d(data_start_idx:data_end_idx, :);
 
 % modeOff 행만 선택
 ci_om = colIdx(colNames, 'optMode_type');
@@ -56,31 +72,9 @@ n_spline = numel(spline_params);
 fprintf('modeOff 소스 행: %d  ×  spline 세트: %d  →  총 %d 행 생성\n', ...
     n_src, n_spline, n_src * n_spline);
 
-%% ── ID 카운터 초기화 ────────────────────────────────────────────────────────
-known_prefixes = {'SF','SW','SP','AF','AW','AP'};
-id_max = struct();
-for k = 1:numel(known_prefixes)
-    id_max.(known_prefixes{k}) = getIDCounter(hdr_d, known_prefixes{k});
-end
-
-ci_id = colIdx(colNames, 'ID');
-if ci_id > 0
-    for k = 1:size(data_q, 1)
-        existing_id = getCellStr(data_q{k, ci_id});
-        tok = regexp(existing_id, '^([A-Za-z]{2})(\d+)-', 'tokens', 'once');
-        if numel(tok) == 2
-            pf  = upper(tok{1});
-            num = str2double(tok{2});
-            if ~isfield(id_max, pf), id_max.(pf) = 0; end
-            if num > id_max.(pf),    id_max.(pf) = num; end
-        end
-    end
-end
-id_counters = id_max;
-
 %% ── 새 행 생성 ─────────────────────────────────────────────────────────────
 nCols    = numel(colNames);
-today    = datestr(now, 'yyyymmdd');
+today    = datestr(now, 'yymmdd');
 n_new    = n_src * n_spline;
 new_rows = repmat({''}, n_new, nCols);
 
@@ -99,20 +93,36 @@ for s = 1:n_src
         gm = getCellStr(data_src{s, colIdx(colNames, 'gaitMode')});
         if isempty(gm), gm = 'modeSym'; end
 
-        % ID 생성
+        % ID 생성: 소스 번호/iter 그대로, prefix만 modeSpline으로 변경
+        % spline 세트가 여러 개면 _S1, _S2, ... 접미사 추가
         prefix = makeIDPrefix(gm, 'modeSpline');
-        if ~isfield(id_counters, prefix), id_counters.(prefix) = 0; end
-        id_counters.(prefix) = id_counters.(prefix) + 1;
-
-        src_iter = getCellNum(data_src{s, colIdx(colNames, 'iter')});
-        if isnan(src_iter), src_iter = 0; end
-        id_str = sprintf('%s%03d-%d', prefix, id_counters.(prefix), round(src_iter));
+        src_id = getCellStr(data_src{s, colIdx(colNames, 'ID')});
+        tok = regexp(src_id, '^[A-Za-z]{2}(\d+)-(\d+)$', 'tokens', 'once');
+        if numel(tok) == 2
+            num_part  = tok{1};
+            iter_part = tok{2};
+        else
+            warning('소스 ID 파싱 실패(%s), prefix만 교체합니다.', src_id);
+            num_part  = src_id(3:end);
+            iter_part = '';
+        end
+        if n_spline > 1
+            suffix = sprintf('_S%d', p);
+        else
+            suffix = '';
+        end
+        if isempty(iter_part)
+            id_str = sprintf('%s%s%s', prefix, num_part, suffix);
+        else
+            id_str = sprintf('%s%s%s-%s', prefix, num_part, suffix, iter_part);
+        end
 
         % 고정 메타
         row = wcol(row, colNames, 'ID',           id_str);
         row = wcol(row, colNames, 'Date',         today);
         row = wcol(row, colNames, 'result_name',  id_str);
         row = wcol(row, colNames, 'optMode_type', 'modeSpline');
+        row = wcol(row, colNames, 'Complete',     0);
 
         % 소스에서 상속: 문자열
         for fn = inherit_str
@@ -270,17 +280,6 @@ function C = replaceMissing(C)
     end
 end
 
-function cnt = getIDCounter(hdr_d, prefix)
-    cnt = 0;
-    for k = 1:size(hdr_d, 1)
-        cell_val = hdr_d{k, 1};
-        if ischar(cell_val) && strcmpi(strtrim(cell_val), prefix)
-            v = getCellNum(hdr_d{k, 2});
-            if ~isnan(v), cnt = v; end
-            return;
-        end
-    end
-end
 
 function prefix = makeIDPrefix(gait_mode, opt_mode_type)
     switch lower(gait_mode)
