@@ -32,6 +32,7 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
 %     .mocoTimeBound : Moco 시간 상한 [lb, ub] 또는 scalar (default = [0.4, 0.8])
 %     .mocoDistBound : pelvis_tx 최종 위치 bound [lb, ub] 또는 scalar (default = [0.4, 1.0])
+%     .guessInitSto  : Initial guess로 사용할 sto 위치
 %
 %   저장 구조:
 %     results/<result_name>/baseline/analy_result/   ← 초기 guess kinematics 해석 결과
@@ -471,7 +472,14 @@ for i = startIter:endIter
     %------------------------------------------------
     if ~resume_mode
         if i == 1
-            guessStoPath = guessInitSto;
+            if isfield(opts, 'guessInitSto') && ~isempty(opts.guessInitSto)
+                guessStoPath = opts.guessInitSto;
+                [~, gn, ge] = fileparts(opts.guessInitSto);
+                fprintf('  [PRECEDING OFF TRIAL -> Initial Guess] %s%s\n', gn, ge);
+            else
+                guessStoPath = guessInitSto;
+                fprintf('  [Default Initial Guess] \n');
+            end
         else
             prevMocoDir = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
             if strcmpi(gaitMode, 'modeSym')
