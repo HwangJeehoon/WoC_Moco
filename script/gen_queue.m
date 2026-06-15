@@ -10,7 +10,7 @@
 clear;
 
 %% ── 파일 설정 ──────────────────────────────────────────────────────────────
-QUEUE_FILE  = 'simulation_queue.xlsx';   % ← 대상 파일명을 여기서 지정
+QUEUE_FILE  = 'simulation_queue_example.xlsx';   % ← 대상 파일명을 여기서 지정
 
 thisDir     = fileparts(mfilename('fullpath'));
 QUEUE_XLSX  = fullfile(thisDir, QUEUE_FILE);
@@ -21,19 +21,41 @@ SHEET_DONE  = 'completed_queue';
 % ※ 여러 값을 지정하면 Cartesian product 로 모든 조합 생성.
 % ※ 빈 배열([]) 또는 빈 셀({}) → xlsx 에서 해당 열 공란 처리.
 
-models = {
-    '2D_gait_AFO_pc_50kg_150cm_R0.9.osim'
-    '2D_gait_AFO_pc_50kg_150cm_R1.osim'
-    '2D_gait_AFO_pc_50kg_150cm_R1.1.osim'
-};
+% models = {
+%     '2D_gait_AFO_pc_50kg_150cm_R0.9.osim'
+%     '2D_gait_AFO_pc_50kg_150cm_R1.osim'
+%     '2D_gait_AFO_pc_50kg_150cm_R1.1.osim'
+% };
+models = {};
+weights = [50 60 70 80 90];
+heights = [150 160 170 180 190];
+Rs = {'0.9', '1', '1.1'};
+idx = 1;
+for w = weights
+    for h = heights
+        for r = 1:length(Rs)
+            % base model: no _v suffix
+            models{idx,1} = sprintf('2D_gait_AFO_pc_%dkg_%dcm_R%s.osim', ...
+                w, h, Rs{r});
+            idx = idx + 1;
+            % _v1 ~ _v9
+            % for v = 1:9
+            %     models{idx,1} = sprintf('2D_gait_AFO_pc_%dkg_%dcm_R%s_v%d.osim', ...
+            %         w, h, Rs{r}, v);
+            %     idx = idx + 1;
+            % end
 
-p.iter          = 3;
-p.optMode_type  = {'modeOff'};       % 'modeOff' | 'modeWoC' | 'modeSpline'
+        end
+    end
+end
+
+p.iter          = 1;
+p.optMode_type  = {'modeSpline'};       % 'modeOff' | 'modeWoC' | 'modeSpline'
 p.gaitMode      = {'modeSym'};       % 'modeSym' | 'modeAsym'
-p.mocoEffort    = [];
-p.mocoFinalTime = [];
-p.mocoTimeBound = {};                % 예: {[0.4 0.8]} 또는 {[0.4 0.8],[0.3 0.9]}
-p.mocoDistBound = {};
+p.mocoEffort    = [1];
+p.mocoFinalTime = [0.003; 0.03; 0.3; 1];
+p.mocoTimeBound = {[0.1 3.2]};                % 예: {[0.4 0.8]} 또는 {[0.4 0.8],[0.3 0.9]}
+p.mocoDistBound = {[0.05 8]};
 p.QP_effort     = [];
 p.QP_smooth     = [];
 p.cost          = {};                % 'et' | 'etw' | 'etv'
