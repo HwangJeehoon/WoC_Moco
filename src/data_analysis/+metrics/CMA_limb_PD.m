@@ -1,5 +1,5 @@
 % 우선 임시로 soleus와 gastrocnemius 두 개의 activation을 더하는 방향으로 작성.
-function m = CMAPD(path)
+function m = CMA_gs_PD(path)
     % GRF file 가져오는 함수 (범용적으로 사용 가능)
     path_moco_result = path + "/moco_result";
     d = dir(path_moco_result);
@@ -11,23 +11,41 @@ function m = CMAPD(path)
 
     [tmp, t] = readSTO_auto(matches{1});
     
+    % interested muscle index
+    idx_muscle_gs = [7,8];
+    idx_muscle_shank = [7,8,9];
+    idx_muscle_4set = [5,7,8,9];
+    idx_muscle_limb = 1:9;
+
     time = t.time;
-    activation = t(:, 22:39);
+    activation_right = t(:, 22:30);
+    activation_left = t(:,31:39);
 
     distance = t.x_jointset_groundPelvis_pelvis_tx_value;
     distance = distance(end) - distance(1);
 
+    % Left calculation
     total_activation = zeros(height(time), 1);
-    for i=1:width(activation)
-        total_activation = total_activation + activation{:, i};
+    for i=idx_muscle_limb
+        total_activation = total_activation + activation_left{:, i};
     end
 
     sum_activation = cumtrapz(time, total_activation);
     sum_activation = sum_activation(end);
 
-    m = sum_activation / distance;
+    m_left = sum_activation / distance;
 
+    % RIght calculation
+    total_activation = zeros(height(time), 1);
+    for i=idx_muscle_limb
+        total_activation = total_activation + activation_right{:, i};
+    end
 
+    sum_activation = cumtrapz(time, total_activation);
+    sum_activation = sum_activation(end);
+
+    m_right = sum_activation / distance;
+    m = [m_left m_right];
 end
 
 function [headerLines, dataTbl] = readSTO_auto(filename)

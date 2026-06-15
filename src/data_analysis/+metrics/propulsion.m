@@ -10,13 +10,21 @@ function m = positive_apGRF_impulse(path)
 
     [tmp, t] = readSTO_auto(matches{1});
 
-    apGRF = t.ground_force_l_vx;
+    apGRF_left = t.ground_force_l_vx;
+    apGRF_right = t.ground_force_r_vx;
     time = t.time;
-
+    
+    apGRF = apGRF_left;
     apGRF_positive = max(apGRF, 0);
     integrated_apGRF_positive = cumtrapz(time, apGRF_positive);
-    m = integrated_apGRF_positive(end);
-    
+    m_left = integrated_apGRF_positive(end);
+
+    apGRF = apGRF_right;
+    apGRF_positive = max(apGRF_right, 0);
+    integrated_apGRF_positive = cumtrapz(time, apGRF_positive);
+    m_right = integrated_apGRF_positive(end);
+
+    m = [m_left m_right];
 
 end
 

@@ -24,30 +24,47 @@ function get_metric(pathResult)
     metricRegistry = makeMetricRegistry();
     
     
-    
     resultTable = readtable(pathResultRun, "Sheet", "completed_queue");
-    metricListTable = readtable(pathMetric, "Sheet", "metric");
+    metricListTable = filterEnabledMetrics(...
+        readtable(pathMetric, "Sheet", "metric"));
     metricDataTable = readtable(pathMetric, "Sheet", "data");
-    
+
     completed_run_list = resultTable(:,1);
     analyzed_run_list = metricDataTable{:,1};
-    
+
+    % 임시로 test할 때, 몇개까지 할건지 결정하는 meta parameter.
+    calculate_run_num = 10;   % enable
+    % calculate_run_num = 999999999; % disable
+
     % Update column(metric) list
-    curMetricList = metricDataTable.Properties.VariableNames;
+    % metric sheet의 output_type에 따라
+    % scalar -> metric_name
+    % vector -> metric_name_left, metric_name_right
+    curMetricList = string(metricDataTable.Properties.VariableNames);
     
-    for i=1:height(metricListTable)
-        curMetric = metricListTable{i, 1}{1};
-        
-        if ismember(curMetric, curMetricList)
-            continue;
+    for i = 1:height(metricListTable)
+    
+        nameBaseMetric = getTableString(metricListTable, i, 1);
+        outputType = getTableString(metricListTable, i, "output_type");
+    
+        metricColumns = getMetricColumnNames(nameBaseMetric, outputType);
+    
+        for j = 1:numel(metricColumns)
+            curCol = metricColumns(j);
+    
+            if ~ismember(curCol, curMetricList)
+                metricDataTable = addvars(metricDataTable, NaN(height(metricDataTable), 1), ...
+                    'NewVariableNames', char(curCol));
+            end
         end
-        
-        metricDataTable = addvars(metricDataTable, NaN(height(metricDataTable), 1), 'NewVariableNames', curMetric);
-    end    
+    
+        curMetricList = string(metricDataTable.Properties.VariableNames);
+    
+    end
     
     % Update new run
     % 아예 처음 보는 Run이면 더미데이터 추가
-    for i = 1:height(completed_run_list)
+    for i = 1:min(height(completed_run_list), calculate_run_num)
         curID = completed_run_list{i, 1}{1};
         curID_split = split(curID, "-");
         curID_noIter = curID_split{1};
@@ -72,7 +89,7 @@ function get_metric(pathResult)
     fprintf("\n=== Metric update start ===\n");
     fprintf("Total completed runs: %d\n\n", totalRun);
 
-    for i = 1:height(metricDataTable)
+    for i = 1:min(height(metricDataTable), calculate_run_num)
         curID = metricDataTable{i, 1}{1};
         curIter = metricDataTable{i, 2};
 
@@ -96,30 +113,50 @@ function get_metric(pathResult)
 
         for idxMetric = 1:height(metricListTable)
             try
+                nameCurMetric = getTableString(metricListTable, idxMetric, 1);
+                outputType = getTableString(metricListTable, idxMetric, "output_type");
+
+                metricColumns = getMetricColumnNames(nameCurMetric, outputType);
+
                 date_cur_metric = metricListTable{idxMetric, 'function_date'};
-    
-                if date_cur_metric < date_curID
+
+                isMetricMissing = false;
+                for idxCol = 1:numel(metricColumns)
+                    curCol = metricColumns(idxCol);
+
+                    if isnan(metricDataTable.(char(curCol))(i))
+                        isMetricMissing = true;
+                        break;
+                    end
+                end
+
+                if date_cur_metric < date_curID && ~isMetricMissing
                     continue;
                 end
-                
-                nameCurMetric = metricListTable{idxMetric, 1}{1};
+
                 pathCurrentResult = pathResult + "/" + curID + "/result_" + curIter;
-                
-                % pathCurrentResult를 전달 -> full인지 half인지 알아야 할지도.
-                if ~isKey(metricRegistry, nameCurMetric)
+
+                if ~isKey(metricRegistry, char(nameCurMetric))
                     warning("등록되지 않은 metric입니다: %s", nameCurMetric);
                     continue;
                 end
-                metricFunc = metricRegistry(nameCurMetric);
+
+                metricFunc = metricRegistry(char(nameCurMetric));
                 metric = metricFunc(pathCurrentResult);
-                
+
+                metric = formatMetricOutput(metric, outputType, nameCurMetric);
+
                 metricDataTable.Date(i) = date_today;
-                metricDataTable(i, nameCurMetric) = {metric};
+
+                for idxCol = 1:numel(metricColumns)
+                    curCol = metricColumns(idxCol);
+                    metricDataTable.(char(curCol))(i) = metric(idxCol);
+                end
+
             catch ME
                 warning("Metric 계산 중 오류 발생: ID=%s, Iter=%d, Metric=%s\n%s", ...
                     curID, curIter, nameCurMetric, ME.message);
                 keyboard
-                
             end
 
         end
@@ -204,3 +241,117 @@ function tf = canWriteFile(filename)
     end
 end
 
+function metricColumns = getMetricColumnNames(nameBaseMetric, outputType)
+    
+    nameBaseMetric = string(nameBaseMetric);
+    outputType = lower(string(outputType));
+    
+    switch outputType
+        case "scalar"
+            metricColumns = nameBaseMetric;
+    
+        case "vector"
+            metricColumns = [nameBaseMetric + "_left", ...
+                nameBaseMetric + "_right"];
+    
+        otherwise
+            error("알 수 없는 output_type입니다: %s. scalar 또는 vector를 사용하세요.", outputType);
+    end
+
+end
+
+function metric = formatMetricOutput(metric, outputType, nameCurMetric)
+    
+    outputType = lower(string(outputType));
+    metric = metric(:).';   % row vector로 정리
+    
+    switch outputType
+    
+        case "scalar"
+            if isscalar(metric)
+                % 그대로 사용
+                return;
+            end
+    
+            % 전환 과정에서 [x, x]가 들어오는 경우 허용
+            if numel(metric) == 2 && metric(1) == metric(2)
+                metric = metric(1);
+                return;
+            end
+    
+            error("Metric %s는 scalar로 등록되어 있으므로 scalar 값을 반환해야 합니다. 현재 반환 크기: %s", ...
+                nameCurMetric, mat2str(size(metric)));
+    
+        case "vector"
+            if numel(metric) == 2
+                return;
+            end
+    
+            % 기존 scalar 함수가 아직 남아있는 경우 임시 호환
+            if isscalar(metric)
+                metric = [metric, metric];
+                return;
+            end
+    
+            error("Metric %s는 vector로 등록되어 있으므로 [left, right] 2개 값을 반환해야 합니다. 현재 반환 크기: %s", ...
+                nameCurMetric, mat2str(size(metric)));
+    
+        otherwise
+            error("알 수 없는 output_type입니다: %s. scalar 또는 vector를 사용하세요.", outputType);
+    end
+
+end
+
+function value = getTableString(T, rowIdx, col)
+    
+    raw = T{rowIdx, col};
+    
+    if iscell(raw)
+        value = string(raw{1});
+    else
+        value = string(raw);
+    end
+
+end
+
+function metricListTable = filterEnabledMetrics(metricListTable)
+    % metric sheet의 enable column을 기준으로 사용할 metric만 남김
+    %
+    % enable == 1 : 사용
+    % enable == 0 : 무시
+    %
+    % enable column이 없으면 모든 metric을 enable로 간주
+    
+    if ~ismember("enable", string(metricListTable.Properties.VariableNames))
+        warning("metric sheet에 enable column이 없습니다. 모든 metric을 enable로 간주합니다.");
+        return;
+    end
+    
+    enableRaw = metricListTable.enable;
+    
+    if iscell(enableRaw)
+        enableValue = zeros(height(metricListTable), 1);
+    
+        for i = 1:height(metricListTable)
+            curVal = enableRaw{i};
+    
+            if isnumeric(curVal) || islogical(curVal)
+                enableValue(i) = double(curVal);
+            else
+                enableValue(i) = str2double(string(curVal));
+            end
+        end
+    
+    elseif isnumeric(enableRaw) || islogical(enableRaw)
+        enableValue = double(enableRaw);
+    
+    else
+        enableValue = str2double(string(enableRaw));
+    end
+    
+    % NaN은 disable로 처리
+    enableValue(isnan(enableValue)) = 0;
+    
+    metricListTable = metricListTable(enableValue == 1, :);
+
+end

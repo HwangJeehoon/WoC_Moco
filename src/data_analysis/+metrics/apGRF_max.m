@@ -5,13 +5,14 @@ function m = apGRF_max(path)
     d = d(~[d.isdir]);
     names = string({d.name});
 
-    tf = contains(names, "GRF", "IgnoreCase", true);
+    tf = contains(names, "GRF.sto", "IgnoreCase", true);
     matches = fullfile(path_moco_result, cellstr(names(tf))); % full paths as cell array
 
     [tmp, t] = readSTO_auto(matches{1});
 
-    apGRF = t.ground_force_l_vx;
-    m = max(apGRF);   
+    apGRF_left = t.ground_force_l_vx;
+    apGRF_right= t.ground_force_r_vx;
+    m = [max(apGRF_left) max(apGRF_right)];   
 
 end
 
