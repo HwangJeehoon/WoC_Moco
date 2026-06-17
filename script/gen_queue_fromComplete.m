@@ -1,10 +1,13 @@
 % gen_queue_fromComplete.m
 %
 % completed_queue 시트의 modeOff 완료 행을 읽어,
-% 각 행에 대응하는 modeSpline queue 행을 simulation_queue 에 추가하는 스크립트.
+% 각 행에 대응하는 modeSpline / modeTorqAmp queue 행을 simulation_queue 에 추가하는 스크립트.
 %
 % 사용법:
 %   1) 아래 "설정" 섹션을 편집
+%      - modeSpline 만 생성: spline_params 채우고 torqamp_params 비워둠
+%      - modeTorqAmp 만 생성: spline_params 비우고 torqamp_params 채움
+%      - 둘 다 생성: 둘 다 채움
 %   2) 스크립트 실행
 
 clear;
@@ -17,11 +20,18 @@ QUEUE_FILE = 'simulation_queue.xlsx';   % ← 대상 파일명
 START_ROW = 1350;
 END_ROW   = [];
 
-% modeSpline 파라미터 세트 — 여러 개 지정하면 소스 행 1개당 N개 생성
+% modeSpline 파라미터 세트 — 비워 두면 modeSpline 행을 생성하지 않음
 spline_params = {
     struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 1.0) % 0.5 Nm/kg
     struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 0.6) % 0.3 Nm/kg
     struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 0.2) % 0.1 Nm/kg
+};
+
+% modeTorqAmp 파라미터 세트 — 비워 두면 modeTorqAmp 행을 생성하지 않음
+torqamp_params = {
+    % struct('maxVal', 1.0)
+    % struct('maxVal', 0.6)
+    % struct('maxVal', 0.2)
 };
 
 %% ── 파일 읽기 ──────────────────────────────────────────────────────────────
@@ -67,15 +77,23 @@ for k = 1:size(data_src, 1)
 end
 data_src = data_src(is_modeOff, :);
 
-n_src    = size(data_src, 1);
-n_spline = numel(spline_params);
-fprintf('modeOff 소스 행: %d  ×  spline 세트: %d  →  총 %d 행 생성\n', ...
-    n_src, n_spline, n_src * n_spline);
+n_src     = size(data_src, 1);
+n_spline  = numel(spline_params);
+n_torqamp = numel(torqamp_params);
+
+if n_spline == 0 && n_torqamp == 0
+    error('spline_params 와 torqamp_params 가 모두 비어 있습니다. 하나 이상 설정하세요.');
+end
+
+fprintf('modeOff 소스 행: %d\n', n_src);
+if n_spline  > 0, fprintf('  modeSpline  세트: %d  →  %d 행\n', n_spline,  n_src * n_spline);  end
+if n_torqamp > 0, fprintf('  modeTorqAmp 세트: %d  →  %d 행\n', n_torqamp, n_src * n_torqamp); end
+fprintf('총 %d 행 생성\n', n_src * (n_spline + n_torqamp));
 
 %% ── 새 행 생성 ─────────────────────────────────────────────────────────────
 nCols    = numel(colNames);
 today    = datestr(now, 'yymmdd');
-n_new    = n_src * n_spline;
+n_new    = n_src * (n_spline + n_torqamp);
 new_rows = repmat({''}, n_new, nCols);
 
 inherit_str = {'model','gaitMode','cost'};
@@ -84,82 +102,55 @@ inherit_vec = {'mocoTimeBound','mocoDistBound'};
 
 row_idx = 0;
 for s = 1:n_src
+
+    % ── modeSpline 세트 ──
     for p = 1:n_spline
         row_idx = row_idx + 1;
-        row = repmat({''}, 1, nCols);
         sp  = spline_params{p};
-
-        % gaitMode 파악 (ID prefix 계산용)
-        gm = getCellStr(data_src{s, colIdx(colNames, 'gaitMode')});
+        gm  = getCellStr(data_src{s, colIdx(colNames, 'gaitMode')});
         if isempty(gm), gm = 'modeSym'; end
 
-        % ID 생성: 소스 번호/iter 그대로, prefix만 modeSpline으로 변경
-        % spline 세트가 여러 개면 _S1, _S2, ... 접미사 추가
-        prefix = makeIDPrefix(gm, 'modeSpline');
-        src_id = getCellStr(data_src{s, colIdx(colNames, 'ID')});
-        tok = regexp(src_id, '^[A-Za-z]{2}(\d+)-(\d+)$', 'tokens', 'once');
-        if numel(tok) == 2
-            num_part  = tok{1};
-            iter_part = tok{2};
-        else
-            warning('소스 ID 파싱 실패(%s), prefix만 교체합니다.', src_id);
-            num_part  = src_id(3:end);
-            iter_part = '';
-        end
-        if n_spline > 1
-            suffix = sprintf('_S%d', p);
-        else
-            suffix = '';
-        end
-        if isempty(iter_part)
-            id_str = sprintf('%s%s%s', prefix, num_part, suffix);
-        else
-            id_str = sprintf('%s%s%s-%s', prefix, num_part, suffix, iter_part);
-        end
+        if n_spline > 1, suffix = sprintf('_S%d', p); else, suffix = ''; end
+        id_str = makeNewID(getCellStr(data_src{s, colIdx(colNames,'ID')}), ...
+                           makeIDPrefix(gm, 'modeSpline'), suffix);
 
-        % 고정 메타
+        row = repmat({''}, 1, nCols);
         row = wcol(row, colNames, 'ID',           id_str);
         row = wcol(row, colNames, 'Date',         today);
         row = wcol(row, colNames, 'result_name',  id_str);
         row = wcol(row, colNames, 'optMode_type', 'modeSpline');
         row = wcol(row, colNames, 'Complete',     0);
+        row = inheritFields(row, data_src(s,:), colNames, inherit_str, inherit_num, inherit_vec);
 
-        % 소스에서 상속: 문자열
-        for fn = inherit_str
-            ci = colIdx(colNames, fn{1});
-            if ci > 0
-                v = getCellStr(data_src{s, ci});
-                if ~isempty(v), row = wcol(row, colNames, fn{1}, v); end
-            end
-        end
-
-        % 소스에서 상속: 숫자
-        for fn = inherit_num
-            ci = colIdx(colNames, fn{1});
-            if ci > 0
-                v = getCellNum(data_src{s, ci});
-                if ~isnan(v), row = wcol(row, colNames, fn{1}, v); end
-            end
-        end
-
-        % 소스에서 상속: 벡터
-        for fn = inherit_vec
-            ci = colIdx(colNames, fn{1});
-            if ci > 0
-                v = parseVecFromCell(data_src{s, ci});
-                if ~isempty(v), row = wcol(row, colNames, fn{1}, vecStr(v)); end
-            end
-        end
-
-        % spline 파라미터
         for fn = {'trigger','rise','flat','fall','maxVal'}
-            if isfield(sp, fn{1})
-                row = wcol(row, colNames, fn{1}, sp.(fn{1}));
-            end
+            if isfield(sp, fn{1}), row = wcol(row, colNames, fn{1}, sp.(fn{1})); end
         end
-
         new_rows(row_idx, :) = row;
     end
+
+    % ── modeTorqAmp 세트 ──
+    for p = 1:n_torqamp
+        row_idx = row_idx + 1;
+        tp  = torqamp_params{p};
+        gm  = getCellStr(data_src{s, colIdx(colNames, 'gaitMode')});
+        if isempty(gm), gm = 'modeSym'; end
+
+        if n_torqamp > 1, suffix = sprintf('_T%d', p); else, suffix = ''; end
+        id_str = makeNewID(getCellStr(data_src{s, colIdx(colNames,'ID')}), ...
+                           makeIDPrefix(gm, 'modeTorqAmp'), suffix);
+
+        row = repmat({''}, 1, nCols);
+        row = wcol(row, colNames, 'ID',           id_str);
+        row = wcol(row, colNames, 'Date',         today);
+        row = wcol(row, colNames, 'result_name',  id_str);
+        row = wcol(row, colNames, 'optMode_type', 'modeTorqAmp');
+        row = wcol(row, colNames, 'Complete',     0);
+        row = inheritFields(row, data_src(s,:), colNames, inherit_str, inherit_num, inherit_vec);
+
+        if isfield(tp, 'maxVal'), row = wcol(row, colNames, 'maxVal', tp.maxVal); end
+        new_rows(row_idx, :) = row;
+    end
+
 end
 
 %% ── simulation_queue 에 append 후 저장 ─────────────────────────────────────
@@ -174,6 +165,49 @@ end
 
 
 %% ══ 로컬 함수 ══════════════════════════════════════════════════════════════
+
+function id_str = makeNewID(src_id, prefix, suffix)
+% 소스 ID 에서 번호/iter 부분을 추출해 새 prefix + suffix 로 조합.
+    tok = regexp(src_id, '^[A-Za-z]{2}(\d+)-(\d+)$', 'tokens', 'once');
+    if numel(tok) == 2
+        num_part  = tok{1};
+        iter_part = tok{2};
+    else
+        warning('소스 ID 파싱 실패(%s), prefix만 교체합니다.', src_id);
+        num_part  = src_id(3:end);
+        iter_part = '';
+    end
+    if isempty(iter_part)
+        id_str = sprintf('%s%s%s', prefix, num_part, suffix);
+    else
+        id_str = sprintf('%s%s%s-%s', prefix, num_part, suffix, iter_part);
+    end
+end
+
+function row = inheritFields(row, src_row, colNames, str_fields, num_fields, vec_fields)
+% 소스 행에서 str/num/vec 필드를 row 에 복사.
+    for fn = str_fields
+        ci = colIdx(colNames, fn{1});
+        if ci > 0
+            v = getCellStr(src_row{ci});
+            if ~isempty(v), row = wcol(row, colNames, fn{1}, v); end
+        end
+    end
+    for fn = num_fields
+        ci = colIdx(colNames, fn{1});
+        if ci > 0
+            v = getCellNum(src_row{ci});
+            if ~isnan(v), row = wcol(row, colNames, fn{1}, v); end
+        end
+    end
+    for fn = vec_fields
+        ci = colIdx(colNames, fn{1});
+        if ci > 0
+            v = parseVecFromCell(src_row{ci});
+            if ~isempty(v), row = wcol(row, colNames, fn{1}, vecStr(v)); end
+        end
+    end
+end
 
 function row = wcol(row, colNames, name, val)
     ci = colIdx(colNames, name);
@@ -287,10 +321,11 @@ function prefix = makeIDPrefix(gait_mode, opt_mode_type)
         otherwise,       sym_ch = 'S';
     end
     switch lower(strtrim(opt_mode_type))
-        case 'modeoff',    mode_ch = 'F';
-        case 'modewoc',    mode_ch = 'W';
-        case 'modespline', mode_ch = 'P';
-        otherwise,         mode_ch = 'W';
+        case 'modeoff',     mode_ch = 'F';
+        case 'modewoc',     mode_ch = 'W';
+        case 'modespline',  mode_ch = 'P';
+        case 'modetorqamp', mode_ch = 'T';
+        otherwise,          mode_ch = 'W';
     end
     prefix = [sym_ch, mode_ch];
 end
