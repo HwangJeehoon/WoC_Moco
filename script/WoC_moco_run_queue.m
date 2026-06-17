@@ -36,7 +36,7 @@ SHEET_DONE  = 'completed_queue';
 
 % results 폴더 경로 (findModeOffGuess 에서 파일 경로 조립 시 사용)
 thisScriptDir = fileparts(mfilename('fullpath'));
-RESULTS_BASE  = fullfile(thisScriptDir, '..', 'results_initial');
+RESULTS_BASE  = fullfile(thisScriptDir, '..', 'results');
 
 %% ── 읽기 ──────────────────────────────────────────────────────────────────
 if ~isfile(QUEUE_XLSX)
@@ -144,6 +144,11 @@ for i = 1:size(data_q, 1)
         elseif strcmpi(modeType, 'modeTorqAmp')
             optMode.type   = 'modeTorqAmp';
             optMode.maxVal = getSheetNum(data_q, i, colNames, 'maxVal');
+            ci_co = colIdx(colNames, 'cutoffHz');
+            if ci_co > 0
+                v = getCellNum(data_q{i, ci_co});
+                if ~isnan(v), optMode.cutoffHz = v; end
+            end
         else
             optMode = modeType;
         end

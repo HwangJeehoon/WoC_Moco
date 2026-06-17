@@ -86,6 +86,9 @@ if strcmpi(modeType, 'modeTorqAmp')
     if modeParams.maxVal < 0 || modeParams.maxVal > 1
         error('modeTorqAmp: maxVal 은 [0, 1] 범위여야 합니다 (%.4f).', modeParams.maxVal);
     end
+    if isfield(modeParams, 'cutoffHz') && modeParams.cutoffHz <= 0
+        error('modeTorqAmp: cutoffHz 는 양수여야 합니다 (%.4f). 필터 비활성화는 cutoffHz=0 대신 필드를 생략하세요.', modeParams.cutoffHz);
+    end
 end
 
 %% --------------------------------------------------
@@ -499,7 +502,8 @@ for i = startIter:endIter
             end
             fprintf('[modeTorqAmp] 발목 토크 참조 파일: %s\n', idStoPath);
 
-            [tau_R, fullTime] = WoC_moco_buildTorqAmpControl(idStoPath, modeParams.maxVal);
+            cutoffHz_ta = getOpt(modeParams, 'cutoffHz', 6);
+            [tau_R, fullTime] = WoC_moco_buildTorqAmpControl(idStoPath, modeParams.maxVal, cutoffHz_ta);
 
             dummyEta_ta          = zeros(numel(fullTime), 1);
             dummyW_ta            = ones(numel(fullTime), 1);

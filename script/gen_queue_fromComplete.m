@@ -147,7 +147,8 @@ for s = 1:n_src
         row = wcol(row, colNames, 'Complete',     0);
         row = inheritFields(row, data_src(s,:), colNames, inherit_str, inherit_num, inherit_vec);
 
-        if isfield(tp, 'maxVal'), row = wcol(row, colNames, 'maxVal', tp.maxVal); end
+        if isfield(tp, 'maxVal'),    row = wcol(row, colNames, 'maxVal',   tp.maxVal);    end
+        if isfield(tp, 'cutoffHz'), row = wcol(row, colNames, 'cutoffHz', tp.cutoffHz); end
         new_rows(row_idx, :) = row;
     end
 

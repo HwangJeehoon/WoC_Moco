@@ -1,4 +1,4 @@
-function [tau, t] = WoC_moco_buildTorqAmpControl(idStoPath, maxVal)
+function [tau, t] = WoC_moco_buildTorqAmpControl(idStoPath, maxVal, cutoffHz)
 % WoC_moco_buildTorqAmpControl
 %
 %   id_withAssist.sto 에서 ankle_angle_r_moment 를 읽어
@@ -7,16 +7,23 @@ function [tau, t] = WoC_moco_buildTorqAmpControl(idStoPath, maxVal)
 %
 %   처리 순서:
 %     1) ankle_angle_r_moment 부호 반전 (plantarflexion = 양수)
-%     2) 음수값(dorsiflexion moment) → 0 으로 클리핑
-%     3) peak 값으로 정규화 후 maxVal 스케일
+%     2) 2차 Butterworth low-pass filter (zero-phase, filtfilt)
+%     3) 음수값(dorsiflexion moment) → 0 으로 클리핑
+%     4) peak 값으로 정규화 후 maxVal 스케일
 %
 %   입력:
 %     idStoPath : id_withAssist.sto 경로
 %     maxVal    : 출력 최대값 [0, 1]
+%     cutoffHz  : low-pass filter 차단 주파수 (Hz, 기본값 6)
+%                 0 이하로 설정하면 필터 적용 안 함
 %
 %   출력:
 %     tau : [N×1] 제어값 (0 ~ maxVal)
 %     t   : [N×1] 시간 벡터 (id_withAssist.sto 의 time 열)
+
+    if nargin < 3 || isempty(cutoffHz)
+        cutoffHz = 6;
+    end
 
     if maxVal < 0 || maxVal > 1
         error('WoC_moco_buildTorqAmpControl: maxVal 은 [0, 1] 범위여야 합니다 (%.4f).', maxVal);
@@ -33,7 +40,18 @@ function [tau, t] = WoC_moco_buildTorqAmpControl(idStoPath, maxVal)
 
     t   = data.time(:);
     raw = -data.ankle_angle_r_moment(:);  % plantarflexion 방향을 양수로 반전
-    raw(raw < 0) = 0;                      % dorsiflexion moment 무시
+
+    % Low-pass filter
+    fs = 1 / mean(diff(t));
+    if cutoffHz > 0 && cutoffHz < fs / 2
+        [b, a] = butter(2, cutoffHz / (fs / 2), 'low');
+        raw = filtfilt(b, a, raw);
+        fprintf('[modeTorqAmp] LPF 적용: %.4g Hz  (fs=%.1f Hz)\n', cutoffHz, fs);
+    elseif cutoffHz > 0
+        warning('WoC_moco_buildTorqAmpControl: cutoffHz(%.4g) >= Nyquist(%.1f). 필터 생략.', cutoffHz, fs/2);
+    end
+
+    raw(raw < 0) = 0;  % dorsiflexion moment 무시
 
     peakVal = max(raw);
     if peakVal <= 0
