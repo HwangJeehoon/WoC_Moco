@@ -135,7 +135,7 @@ for s = 1:n_src
         gm  = getCellStr(data_src{s, colIdx(colNames, 'gaitMode')});
         if isempty(gm), gm = 'modeSym'; end
 
-        if n_torqamp > 1, suffix = sprintf('_T%d', p); else, suffix = ''; end
+        if n_torqamp > 1, suffix = sprintf('_S%d', p); else, suffix = ''; end
         id_str = makeNewID(getCellStr(data_src{s, colIdx(colNames,'ID')}), ...
                            makeIDPrefix(gm, 'modeTorqAmp'), suffix);
 
