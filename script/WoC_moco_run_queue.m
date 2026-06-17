@@ -141,6 +141,9 @@ for i = 1:size(data_q, 1)
             optMode.flat    = getSheetNum(data_q, i, colNames, 'flat');
             optMode.fall    = getSheetNum(data_q, i, colNames, 'fall');
             optMode.maxVal  = getSheetNum(data_q, i, colNames, 'maxVal');
+        elseif strcmpi(modeType, 'modeTorqAmp')
+            optMode.type   = 'modeTorqAmp';
+            optMode.maxVal = getSheetNum(data_q, i, colNames, 'maxVal');
         else
             optMode = modeType;
         end
@@ -181,6 +184,8 @@ for i = 1:size(data_q, 1)
                 fprintf('[initial guess] modeOff 결과 사용: %s\n', offGuessPath);
             elseif strcmpi(modeType, 'modeSpline')
                 error('modeSpline에 필요한 modeOff 결과를 찾을 수 없습니다 (model=%s).', model);
+            elseif strcmpi(modeType, 'modeTorqAmp')
+                error('modeTorqAmp에 필요한 modeOff 결과를 찾을 수 없습니다 (model=%s).', model);
             end
         end
 
@@ -435,10 +440,11 @@ function prefix = makeIDPrefix(gait_mode, opt_mode_type)
         otherwise,       sym_ch = 'S';   % modeSym 또는 미입력
     end
     switch lower(strtrim(opt_mode_type))
-        case 'modeoff',    mode_ch = 'F';
-        case 'modewoc',    mode_ch = 'W';
-        case 'modespline', mode_ch = 'P';
-        otherwise,         mode_ch = 'W';
+        case 'modeoff',     mode_ch = 'F';
+        case 'modewoc',     mode_ch = 'W';
+        case 'modespline',  mode_ch = 'P';
+        case 'modetorqamp', mode_ch = 'T';
+        otherwise,          mode_ch = 'W';
     end
     prefix = [sym_ch, mode_ch];
 end

@@ -63,9 +63,9 @@ else
     error('optMode는 string 또는 struct 이어야 합니다.');
 end
 
-validModes = {'modeWoC', 'modeOff', 'modeSpline'};
+validModes = {'modeWoC', 'modeOff', 'modeSpline', 'modeTorqAmp'};
 if ~ismember(modeType, validModes)
-    error('Unknown optMode: ''%s''. Valid options: modeWoC, modeOff, modeSpline.', modeType);
+    error('Unknown optMode: ''%s''. Valid options: modeWoC, modeOff, modeSpline, modeTorqAmp.', modeType);
 end
 
 % modeSpline 필수 필드 검증 (루프 진입 전에 미리 확인)
@@ -75,6 +75,16 @@ if strcmpi(modeType, 'modeSpline')
         if ~isfield(modeParams, sf{1})
             error('modeSpline: optMode.%s 가 필요합니다.', sf{1});
         end
+    end
+end
+
+% modeTorqAmp 필수 필드 검증
+if strcmpi(modeType, 'modeTorqAmp')
+    if ~isfield(modeParams, 'maxVal')
+        error('modeTorqAmp: optMode.maxVal 가 필요합니다.');
+    end
+    if modeParams.maxVal < 0 || modeParams.maxVal > 1
+        error('modeTorqAmp: maxVal 은 [0, 1] 범위여야 합니다 (%.4f).', modeParams.maxVal);
     end
 end
 
@@ -462,6 +472,41 @@ for i = startIter:endIter
             writeOpts_sp.dataColName = 'spline';
             WoC_moco_writeControl(controlResultDir, ...
                 fullTime, fullTime, tau_R, dummyEta, dummyW, writeOpts_sp);
+
+            controlRefStoPath = fullfile(controlResultDir, 'control.sto');
+
+        case 'modeTorqAmp'
+            %--------------------------------------------
+            % TorqAmp mode: modeOff 결과의 발목 토크 프로파일을 보조력으로 사용.
+            %
+            %   modeOff 마지막 iter 의 id_withAssist.sto 에서
+            %   ankle_angle_r_moment 를 읽어 부호 반전(plantarflexion=양수),
+            %   음수 클리핑 후 [0, maxVal] 로 스케일한 control.sto 출력.
+            %   Analysis / QP 생략.
+            %--------------------------------------------
+
+            % opts.guessInitSto = modeOff 마지막 iter의 moco_result/kinematics*.sto
+            % id_withAssist.sto 는 같은 iter 의 analy_result/ 에 있음
+            if ~isfield(opts, 'guessInitSto') || isempty(opts.guessInitSto)
+                error('modeTorqAmp: opts.guessInitSto (modeOff 결과 경로) 가 설정되지 않았습니다.');
+            end
+            mocoResDir_off = fileparts(opts.guessInitSto);       % .../moco_result/
+            iterRootDir_off = fileparts(mocoResDir_off);          % .../result_N/
+            idStoPath = fullfile(iterRootDir_off, 'analy_result', 'id_withAssist.sto');
+
+            if ~isfile(idStoPath)
+                error('modeTorqAmp: id_withAssist.sto 를 찾을 수 없습니다: %s', idStoPath);
+            end
+            fprintf('[modeTorqAmp] 발목 토크 참조 파일: %s\n', idStoPath);
+
+            [tau_R, fullTime] = WoC_moco_buildTorqAmpControl(idStoPath, modeParams.maxVal);
+
+            dummyEta_ta          = zeros(numel(fullTime), 1);
+            dummyW_ta            = ones(numel(fullTime), 1);
+            writeOpts_ta         = struct();
+            writeOpts_ta.dataColName = 'torqAmp';
+            WoC_moco_writeControl(controlResultDir, ...
+                fullTime, fullTime, tau_R, dummyEta_ta, dummyW_ta, writeOpts_ta);
 
             controlRefStoPath = fullfile(controlResultDir, 'control.sto');
 
