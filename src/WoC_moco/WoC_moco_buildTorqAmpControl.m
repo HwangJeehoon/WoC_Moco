@@ -41,11 +41,11 @@ function [tau, t] = WoC_moco_buildTorqAmpControl(idStoPath, maxVal, cutoffHz)
     t   = data.time(:);
     raw = -data.ankle_angle_r_moment(:);  % plantarflexion 방향을 양수로 반전
 
-    % Low-pass filter
+    % Low-pass filter (Signal Processing Toolbox 없이 구현)
     fs = 1 / mean(diff(t));
     if cutoffHz > 0 && cutoffHz < fs / 2
-        [b, a] = butter(2, cutoffHz / (fs / 2), 'low');
-        raw = filtfilt(b, a, raw);
+        [b, a] = butter2_lp(cutoffHz, fs);
+        raw = filtfilt_nodep(b, a, raw);
         fprintf('[modeTorqAmp] LPF 적용: %.4g Hz  (fs=%.1f Hz)\n', cutoffHz, fs);
     elseif cutoffHz > 0
         warning('WoC_moco_buildTorqAmpControl: cutoffHz(%.4g) >= Nyquist(%.1f). 필터 생략.', cutoffHz, fs/2);
@@ -62,6 +62,24 @@ function [tau, t] = WoC_moco_buildTorqAmpControl(idStoPath, maxVal, cutoffHz)
     end
 end
 
+
+%% ---- 2차 Butterworth LP 필터 계수 (Signal Processing Toolbox 불필요) ----
+function [b, a] = butter2_lp(fc, fs)
+% bilinear transform으로 유도한 2차 Butterworth LP 필터 계수.
+% fc: 차단 주파수(Hz), fs: 샘플링 주파수(Hz)
+    Wn = tan(pi * fc / fs);          % pre-warped analog cutoff
+    k  = 1 + sqrt(2)*Wn + Wn^2;
+    b  = [Wn^2,  2*Wn^2,            Wn^2           ] / k;
+    a  = [1,     2*(Wn^2 - 1)/k,    (1 - sqrt(2)*Wn + Wn^2)/k];
+end
+
+%% ---- zero-phase forward-backward 필터 (filtfilt 대체) ----
+function y = filtfilt_nodep(b, a, x)
+% filter를 전방향·후방향 두 번 적용해 위상 지연 없는 필터링.
+% (base MATLAB의 filter 함수만 사용)
+    y = filter(b, a, x(:));
+    y = flipud(filter(b, a, flipud(y)));
+end
 
 %% ---- STO 파일 읽기 헬퍼 ----
 function outputStructure = readSTO(filename)
