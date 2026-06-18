@@ -242,7 +242,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -313,7 +313,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -390,7 +390,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -477,7 +477,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -592,7 +592,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -713,7 +713,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -788,7 +788,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -853,7 +853,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -924,7 +924,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -995,7 +995,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -1066,7 +1066,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -1143,7 +1143,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -1230,7 +1230,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -1345,7 +1345,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -1466,7 +1466,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -1541,7 +1541,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -1606,7 +1606,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
@@ -1677,7 +1677,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds.-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds.-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.050000000000000003</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5.-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0.-->
