@@ -88,13 +88,15 @@ function modelGenerator_impair()
     % muscleNames = {'soleus_r', 'gastroc_r', 'tib_ant_r'};
     % muscleNames = {'soleus_r', 'gastroc_r', 'tib_ant_r', 'rect_fem_r'};
     % muscleNames = {'soleus_r', 'gastroc_r'}; % Right PF
-    muscleNames = {'soleus_r', 'gastroc_r', 'tib_ant_r', 'rect_fem_r', 'hamstrings_r','bifemsh_r', 'glut_max_r', 'iliopsoas_r', 'vasti_r'}; % Whole right
-    
+    % muscleNames = {'soleus_r', 'gastroc_r', 'tib_ant_r', 'rect_fem_r', 'hamstrings_r','bifemsh_r', 'glut_max_r', 'iliopsoas_r', 'vasti_r'}; % Whole right
+    muscleNames = {'soleus_r', 'gastroc_r', 'tib_ant_r', 'rect_fem_r', 'hamstrings_r','bifemsh_r', 'glut_max_r', 'iliopsoas_r', 'vasti_r', ...
+                   'soleus_l', 'gastroc_l', 'tib_ant_l', 'rect_fem_l', 'hamstrings_l','bifemsh_l', 'glut_max_l', 'iliopsoas_l', 'vasti_l'}; % Whole body
+
     % 변경 여부 선택 (둘 다 true이면 동시에 변경)
     modifyForce = true;   % max_isometric_force 변경 여부
-    % modifyForce = false;   % max_isometric_force 변경 여부
-    modifyFiber = true;  % optimal_fiber_length 변경 여부
-    % modifyFiber = false;  % optimal_fiber_length 변경 여부
+    % modifyForce = false;   
+    % modifyFiber = true;  % optimal_fiber_length 변경 여부
+    modifyFiber = false;  
 
     % 각 행 = 하나의 모델 조합
     % 사용하지 않는 열(modifyForce=false → forceScale 무시, modifyFiber=false → fiberScale 무시)
@@ -102,6 +104,7 @@ function modelGenerator_impair()
     force1 = 0.25;
     force2 = 0.125;
     force3 = 0.0625;
+    force4 = 0.7;
     fiber1 = 0.85;
     fiber2 = 0.70;
     fiber3 = 0.55;
@@ -121,13 +124,16 @@ function modelGenerator_impair()
     %     1.0   fiber3;
     % ];
 
+    % impairments = [
+    %     force1   1.00;
+    %     force2   1.00;
+    %     force3   1.00;
+    % ];
+    
     impairments = [
-        force1   1.00;
-        force2   1.00;
-        force3   1.00;
+        force4   1.00;
     ];
-
-    recordToXlsx = false;   % false: 파일만 생성, xlsx 기록 생략
+    recordToXlsx = true;   % false: 파일만 생성, xlsx 기록 생략
 % =========================================================================
 
     import org.opensim.modeling.*
