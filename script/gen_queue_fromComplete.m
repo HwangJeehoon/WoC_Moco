@@ -17,7 +17,7 @@ QUEUE_FILE = 'simulation_queue.xlsx';   % ← 대상 파일명
 
 % xlsx 절대 행 번호 기준 범위 지정 (헤더 행 포함 카운트)
 % END_ROW를 비워 두면 끝까지 처리
-START_ROW = 1350;
+START_ROW = 9;
 END_ROW   = [];
 
 % modeSpline 파라미터 세트 — 비워 두면 modeSpline 행을 생성하지 않음
