@@ -60,6 +60,14 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Bash Permission Requests
+
+**Always explain before asking.**
+
+When requesting permission to run a Bash command:
+- Briefly state what the command does and why it's needed.
+- Do this every time, even for seemingly simple commands.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

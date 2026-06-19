@@ -8,3 +8,4 @@ __pycache__/
 .venv/
 script/delete_this_to_stop_optimization__*.txt
 .bak
+*.md
