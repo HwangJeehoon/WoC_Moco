@@ -10,7 +10,7 @@
 clear;
 
 %% ── 파일 설정 ──────────────────────────────────────────────────────────────
-QUEUE_FILE  = 'simulation_queue_example.xlsx';   % ← 대상 파일명을 여기서 지정
+QUEUE_FILE  = 'simulation_queue.xlsx';   % ← 대상 파일명을 여기서 지정
 
 thisDir     = fileparts(mfilename('fullpath'));
 QUEUE_XLSX  = fullfile(thisDir, QUEUE_FILE);
@@ -34,24 +34,26 @@ idx = 1;
 for w = weights
     for h = heights
         for r = 1:length(Rs)
-            % base model: no _v suffix
-            models{idx,1} = sprintf('2D_gait_AFO_pc_%dkg_%dcm_R%s.osim', ...
-                w, h, Rs{r});
-            idx = idx + 1;
-            % _v1 ~ _v9
-            % for v = 1:9
-            %     models{idx,1} = sprintf('2D_gait_AFO_pc_%dkg_%dcm_R%s_v%d.osim', ...
-            %         w, h, Rs{r}, v);
-            %     idx = idx + 1;
-            % end
+            % % base model: no _v suffix
+            % models{idx,1} = sprintf('2D_gait_AFO_pc_%dkg_%dcm_R%s.osim', ...
+            %     w, h, Rs{r});
+            % idx = idx + 1;
+            % _v1 ~ _v10
+            for v = 1:9
+            % for v = 10
+                models{idx,1} = sprintf('2D_gait_AFO_pc_%dkg_%dcm_R%s_v%d.osim', ...
+                    w, h, Rs{r}, v);
+                idx = idx + 1;
+            end
 
         end
     end
 end
 
 p.iter          = 1;
-p.optMode_type  = {'modeSpline'};       % 'modeOff' | 'modeWoC' | 'modeSpline'
-p.gaitMode      = {'modeSym'};       % 'modeSym' | 'modeAsym'
+p.optMode_type  = {'modeOff'};       % 'modeOff' | 'modeWoC' | 'modeSpline'
+% p.gaitMode      = {'modeSym'};       % 'modeSym' | 'modeAsym'
+p.gaitMode      = {'modeAsym'};       % 'modeSym' | 'modeAsym'
 p.mocoEffort    = [1];
 p.mocoFinalTime = [0.003; 0.03; 0.3; 1];
 p.mocoTimeBound = {[0.1 3.2]};                % 예: {[0.4 0.8]} 또는 {[0.4 0.8],[0.3 0.9]}
