@@ -30,12 +30,12 @@
 clear; close all;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
-QUEUE_XLSX  = 'simulation_queue_JJDT_C3.xlsx';
+thisScriptDir = fileparts(mfilename('fullpath'));
+QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'simulation_queue_JHDT_OFF.xlsx');
 SHEET_QUEUE = 'simulation_queue';
 SHEET_DONE  = 'completed_queue';
 
 % results 폴더 경로 (findModeOffGuess 에서 파일 경로 조립 시 사용)
-thisScriptDir = fileparts(mfilename('fullpath'));
 RESULTS_BASE  = fullfile(thisScriptDir, '..', 'results_initial');
 
 %% ── 읽기 ──────────────────────────────────────────────────────────────────
