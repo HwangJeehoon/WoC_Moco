@@ -22,16 +22,16 @@ END_ROW   = [];
 
 % modeSpline 파라미터 세트 — 비워 두면 modeSpline 행을 생성하지 않음
 spline_params = {
-    struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 1.0) % 0.5 Nm/kg
-    struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 0.6) % 0.3 Nm/kg
-    struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 0.2) % 0.1 Nm/kg
+    % struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 1.0) % 0.5 Nm/kg
+    % struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 0.6) % 0.3 Nm/kg
+    % struct('trigger', 0.27, 'rise', 0.26, 'flat', 0.0, 'fall', 0.1, 'maxVal', 0.2) % 0.1 Nm/kg
 };
 
 % modeTorqAmp 파라미터 세트 — 비워 두면 modeTorqAmp 행을 생성하지 않음
 torqamp_params = {
-    % struct('maxVal', 1.0)
-    % struct('maxVal', 0.6)
-    % struct('maxVal', 0.2)
+    struct('maxVal', 1.0)
+    struct('maxVal', 0.6)
+    struct('maxVal', 0.2)
 };
 
 %% ── 파일 읽기 ──────────────────────────────────────────────────────────────
