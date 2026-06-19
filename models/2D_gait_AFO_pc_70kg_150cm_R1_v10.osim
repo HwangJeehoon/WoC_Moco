@@ -234,7 +234,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -242,7 +242,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -305,7 +305,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.40142572999999998</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -313,7 +313,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -382,7 +382,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -390,7 +390,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -469,7 +469,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.13962633999999999</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -477,7 +477,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -584,7 +584,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.087266460000000004</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -592,7 +592,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -705,7 +705,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.052359879999999998</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -713,7 +713,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -780,7 +780,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.29670596999999999</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -788,7 +788,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -845,7 +845,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.43633231</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -853,7 +853,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -916,7 +916,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.087266460000000004</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -924,7 +924,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -987,7 +987,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -995,7 +995,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -1058,7 +1058,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.40142572999999998</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -1066,7 +1066,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -1135,7 +1135,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -1143,7 +1143,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -1222,7 +1222,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.13962633999999999</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -1230,7 +1230,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -1337,7 +1337,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.087266460000000004</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -1345,7 +1345,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -1458,7 +1458,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.052359879999999998</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -1466,7 +1466,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -1533,7 +1533,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.29670596999999999</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -1541,7 +1541,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -1598,7 +1598,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.43633231</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -1606,7 +1606,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
@@ -1669,7 +1669,7 @@
 				<!--Angle between tendon and fibers at optimal fiber length expressed in radians-->
 				<pennation_angle_at_optimal>0.087266460000000004</pennation_angle_at_optimal>
 				<!--Maximum contraction velocity of the fibers, in optimal fiberlengths/second-->
-				<max_contraction_velocity>8</max_contraction_velocity>
+				<max_contraction_velocity>10</max_contraction_velocity>
 				<!--Compute muscle dynamics ignoring tendon compliance. Tendon is assumed to be rigid.-->
 				<ignore_tendon_compliance>true</ignore_tendon_compliance>
 				<!--Compute muscle dynamics ignoring activation dynamics. Activation is equivalent to excitation.-->
@@ -1677,7 +1677,7 @@
 				<!--Smaller value means activation can increase more rapidly. Default: 0.015 seconds. Bounds: (0, inf]-->
 				<activation_time_constant>0.014999999999999999</activation_time_constant>
 				<!--Smaller value means activation can decrease more rapidly. Default: 0.060 seconds. Bounds: (0, inf]-->
-				<deactivation_time_constant>0.059999999999999998</deactivation_time_constant>
+				<deactivation_time_constant>0.05</deactivation_time_constant>
 				<!--Value of activation in the default state returned by initSystem(). Default: 0.5. Bounds: (0, inf]-->
 				<default_activation>0.01</default_activation>
 				<!--Scale factor for the width of the active force-length curve. Larger values make the curve wider. Default: 1.0. Bounds: [1, inf]-->
