@@ -226,7 +226,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 
     % Effort goal (공통)
     effortGoal = MocoControlGoal('effort', weight_effort);
-    effortGoal.setExponent(3);
+    effortGoal.setExponent(2); % 2로 사용
     effortGoal.setDivideByDisplacement(true);
     problem.addGoal(effortGoal);
 
