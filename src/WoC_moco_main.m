@@ -308,18 +308,66 @@ end
 %% --------------------------------------------------
 %  Pre-loop: Baseline analysis (일반 모드에서만 실행)
 %
-%  초기 guess kinematics(guess_init)를 분석해
-%  baseline/analy_result/ 에 저장한다.
-%  이 결과가 result_1의 control 생성 입력으로 사용된다.
+%  opts.guessInitSto 가 있으면 (preceding modeOff trial 존재):
+%    - preceding modeOff 의 GRF → baseline/moco_result/baseline_GRF.sto 복사
+%    - preceding modeOff 의 id_withAssist.sto → baseline/analy_result/ 복사
+%    - baseline analysis 입력 kinematics = opts.guessInitSto
+%  없으면:
+%    - baseline analysis 입력 kinematics = default guess_init
 % ---------------------------------------------------
 if ~resume_mode
     baselineAnalyDir = fullfile(OutputFolder, 'baseline', 'analy_result');
+    baselineMocoDir  = fullfile(OutputFolder, 'baseline', 'moco_result');
     if ~exist(baselineAnalyDir, 'dir'), mkdir(baselineAnalyDir); end
 
-    fprintf('=== Baseline analysis (guess_init → baseline/analy_result) ===\n');
+    hasPrecedingOff = isfield(opts, 'guessInitSto') && ~isempty(opts.guessInitSto);
+
+    if hasPrecedingOff
+        mocoResDir_off  = fileparts(opts.guessInitSto);
+        iterRootDir_off = fileparts(mocoResDir_off);
+        analyResDir_off = fullfile(iterRootDir_off, 'analy_result');
+
+        if ~exist(baselineMocoDir, 'dir'), mkdir(baselineMocoDir); end
+
+        % GRF 복사 → baseline/moco_result/baseline_GRF.sto
+        grfFiles = dir(fullfile(mocoResDir_off, '*_GRF.sto'));
+        if ~isempty(grfFiles)
+            copyfile(fullfile(mocoResDir_off, grfFiles(1).name), ...
+                     fullfile(baselineMocoDir, 'baseline_GRF.sto'));
+            fprintf('[baseline] GRF copied: %s → baseline_GRF.sto\n', grfFiles(1).name);
+        else
+            warning('[baseline] preceding modeOff moco_result 에서 *_GRF.sto 를 찾지 못했습니다.');
+        end
+
+        % kinematics 복사 → baseline/moco_result/ (파일명 그대로)
+        kinFiles = dir(fullfile(mocoResDir_off, '*_kinematics*.sto'));
+        for kf = kinFiles'
+            copyfile(fullfile(mocoResDir_off, kf.name), fullfile(baselineMocoDir, kf.name));
+            fprintf('[baseline] kinematics copied: %s\n', kf.name);
+        end
+        if isempty(kinFiles)
+            warning('[baseline] preceding modeOff moco_result 에서 *_kinematics*.sto 를 찾지 못했습니다.');
+        end
+
+        % id_withAssist.sto 복사 → baseline/analy_result/
+        idStoSrc = fullfile(analyResDir_off, 'id_withAssist.sto');
+        if isfile(idStoSrc)
+            copyfile(idStoSrc, fullfile(baselineAnalyDir, 'id_withAssist.sto'));
+            fprintf('[baseline] id_withAssist.sto copied\n');
+        else
+            warning('[baseline] preceding modeOff analy_result 에서 id_withAssist.sto 를 찾지 못했습니다: %s', analyResDir_off);
+        end
+
+        baselineKinPath = opts.guessInitSto;
+        fprintf('=== Baseline analysis (preceding modeOff → baseline/analy_result) ===\n');
+    else
+        baselineKinPath = guessInitSto;
+        fprintf('=== Baseline analysis (guess_init → baseline/analy_result) ===\n');
+    end
+
     WoC_moco_analysis(AnalySetupPath, ...
         'modelPath',         fullfile(modelPath, ModelNameOsim), ...
-        'kinematicsStoPath', guessInitSto, ...
+        'kinematicsStoPath', baselineKinPath, ...
         'resultsDir',        baselineAnalyDir);
     fprintf('Baseline analysis done.\n');
 end
@@ -344,8 +392,13 @@ for i = startIter:endIter
     %    - 그 외: result_(i-1)/moco_result/...GRF.sto
     %------------------------------------------------
     if ~resume_mode && i == 1
-        prevAnalyDir = fullfile(OutputFolder, 'baseline', 'analy_result');
-        prevGrfPath  = grfInitSto;
+        prevAnalyDir    = fullfile(OutputFolder, 'baseline', 'analy_result');
+        baselineGrfPath = fullfile(OutputFolder, 'baseline', 'moco_result', 'baseline_GRF.sto');
+        if isfield(opts, 'guessInitSto') && ~isempty(opts.guessInitSto) && isfile(baselineGrfPath)
+            prevGrfPath = baselineGrfPath;
+        else
+            prevGrfPath = grfInitSto;
+        end
     elseif resume_mode && i == startIter
         prevAnalyDir = fullfile(resumeAbsDir, 'analy_result');
         prevGrfPath  = fullfile(resumeAbsDir, 'moco_result', ...
@@ -480,22 +533,23 @@ for i = startIter:endIter
 
         case 'modeTorqAmp'
             %--------------------------------------------
-            % TorqAmp mode: modeOff 결과의 발목 토크 프로파일을 보조력으로 사용.
-            %
-            %   modeOff 마지막 iter 의 id_withAssist.sto 에서
+            % TorqAmp mode: 이전 iter 의 id_withAssist.sto 에서
             %   ankle_angle_r_moment 를 읽어 부호 반전(plantarflexion=양수),
             %   음수 클리핑 후 [0, maxVal] 로 스케일한 control.sto 출력.
             %   Analysis / QP 생략.
+            %
+            %   i==1        : baseline/analy_result/id_withAssist.sto  (preceding modeOff 복사본)
+            %   i==startIter(resume): resumeAbsDir/analy_result/id_withAssist.sto
+            %   i>1         : result_(i-1)/analy_result/id_withAssist.sto
             %--------------------------------------------
 
-            % opts.guessInitSto = modeOff 마지막 iter의 moco_result/kinematics*.sto
-            % id_withAssist.sto 는 같은 iter 의 analy_result/ 에 있음
-            if ~isfield(opts, 'guessInitSto') || isempty(opts.guessInitSto)
-                error('modeTorqAmp: opts.guessInitSto (modeOff 결과 경로) 가 설정되지 않았습니다.');
+            if ~resume_mode && i == 1
+                idStoPath = fullfile(OutputFolder, 'baseline', 'analy_result', 'id_withAssist.sto');
+            elseif resume_mode && i == startIter
+                idStoPath = fullfile(resumeAbsDir, 'analy_result', 'id_withAssist.sto');
+            else
+                idStoPath = fullfile(OutputFolder, sprintf('result_%d', i-1), 'analy_result', 'id_withAssist.sto');
             end
-            mocoResDir_off = fileparts(opts.guessInitSto);       % .../moco_result/
-            iterRootDir_off = fileparts(mocoResDir_off);          % .../result_N/
-            idStoPath = fullfile(iterRootDir_off, 'analy_result', 'id_withAssist.sto');
 
             if ~isfile(idStoPath)
                 error('modeTorqAmp: id_withAssist.sto 를 찾을 수 없습니다: %s', idStoPath);
