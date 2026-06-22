@@ -21,6 +21,8 @@
 %   Complete=0  → 시뮬레이션 실행
 %     성공(1)   → Completed_queue 로 이동 + ID 카운터 증가
 %                 simulation_queue 에서 해당 행 제거
+%     미수렴(-2)→ simulation_queue 에 Complete=-2 로 그대로 유지
+%                 (_unseal 결과는 moco_result/ 에 저장됨)
 %     실패(-1)  → simulation_queue 에 Complete=-1 로 그대로 유지
 %
 % 사용법:
@@ -31,12 +33,12 @@ clear; close all;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
 thisScriptDir = fileparts(mfilename('fullpath'));
-QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'simulation_queue_JHDT_SPLINE_test.xlsx');
+QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'simulation_queue_.xlsx'); % 사용할 queue.xlsx 이름 넣기
 SHEET_QUEUE = 'simulation_queue';
 SHEET_DONE  = 'completed_queue';
 
 % results 폴더 경로 (findModeOffGuess 에서 파일 경로 조립 시 사용)
-RESULTS_BASE  = fullfile(thisScriptDir, '..', 'results');
+RESULTS_BASE  = fullfile(thisScriptDir, '..', 'results'); % legacy: result_init 안쓰니까 조심
 
 %% ── 읽기 ──────────────────────────────────────────────────────────────────
 if ~isfile(QUEUE_XLSX)
@@ -218,8 +220,14 @@ for i = 1:size(data_q, 1)
         fprintf('\n[완료] 행 %d (%s) — Completed_queue 로 이동.\n', i, id_str);
 
     catch ME
-        fprintf('\n[오류] 행 %d (%s): %s\n', i, id_str, ME.message);
-        data_q{i, ci_complete} = -1;
+        if strcmp(ME.identifier, 'WoC:sealedSolution')
+            fprintf('\n[미수렴] 행 %d (%s): %s\n', i, id_str, ME.message);
+            data_q{i, ci_complete} = -2;
+            % rows_to_move(i) 는 false 유지 → simulation_queue 에 잔류
+        else
+            fprintf('\n[오류] 행 %d (%s): %s\n', i, id_str, ME.message);
+            data_q{i, ci_complete} = -1;
+        end
     end
 
     % ── 즉시 저장 ──────────────────────────────────────────────────────

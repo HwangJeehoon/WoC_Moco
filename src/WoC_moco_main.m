@@ -375,6 +375,9 @@ end
 %% --------------------------------------------------
 %  3. 메인 루프
 % ---------------------------------------------------
+sealedOccurred = false;
+sealedIter     = -1;
+
 for i = startIter:endIter
     fprintf('===== Iteration %d / %d =====\n', i, iterNum+baseIter);
 
@@ -620,6 +623,24 @@ for i = startIter:endIter
     sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, baseOsimPath, MocoOpts);
 
     %------------------------------------------------
+    % 3-8b. Sealed 검사: solver 실패(미수렴/max iter) 시
+    %        unseal 후 _unseal 접미사로 저장하고 루프 종료.
+    %        수렴하지 않은 궤적을 이후 analysis / ID에 넘기지 않는다.
+    %------------------------------------------------
+    if sol.isSealed()
+        warning('[Iter %d] Solver did not converge (solution sealed). Saving partial result and stopping.', i);
+        sol.unseal();
+        resOpts_unseal           = struct();
+        resOpts_unseal.modelPath = fullfile(AnalyResultDir, sprintf('%s_%d.osim', modelName, i));
+        resOpts_unseal.prefix    = sprintf('moco_WoC_Solution_iter%02d_unseal', i);
+        resOpts_unseal.gaitMode  = gaitMode;
+        moco_WoC_getResult(sol, mocoResultDir, resOpts_unseal);
+        sealedOccurred = true;
+        sealedIter     = i;
+        break;
+    end
+
+    %------------------------------------------------
     % 3-9. Moco 결과 저장 (kinematics, GRF, metabolic)
     %------------------------------------------------
     resOpts           = struct();
@@ -679,6 +700,12 @@ for i = startIter:endIter
     idTool2.run();
 
     fprintf('Iteration %d done.\n', i);
+end
+
+if sealedOccurred
+    error('WoC:sealedSolution', ...
+        'Solver did not converge at iteration %d (solution sealed). Partial result saved with _unseal suffix.', ...
+        sealedIter);
 end
 
 fprintf('All iterations finished.\n');
