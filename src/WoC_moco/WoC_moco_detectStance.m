@@ -4,31 +4,37 @@ function [t_stance_101, t_full] = WoC_moco_detectStance(grfStoPath, opts)
 %   GRF .sto 파일에서 지정한 변수의 ground reaction force를 읽어
 %   stance phase (GRF가 threshold 위에 있는 구간)의
 %   시작(상승)과 끝(하강)을 찾아내고
-%   해당 stance 구간을 101×1 time vector로 리샘플해서 반환하는 함수
+%   해당 stance 구간을 101×1 time vector로 리샘플해서 반환하는 함수.
+%
+%   여러 stance 구간이 감지될 경우 가장 긴 구간을 사용한다.
+%   t_full은 stance = gait cycle의 stanceFraction(default 0.6)이라 가정해
+%   full gait cycle 구간으로 산출한다.
 %
 % 입력:
 %   grfStoPath : GRF .sto 파일 경로
 %
 %   opts : struct (전부 선택)
-%       .timeField   : 시간 필드 이름 (default = 'time')
-%       .grfField    : GRF 값이 들어 있는 필드 이름 (default = 'ground_force_r_vy')
-%       .threshold   : stance 판단용 GRF 임계값
-%                      (default = 50 (N))
-%       .minDuration : stance 최소 시간(초) 조건 (default = 0, 사용 안 함 수준)
-%       .targetLength: 출력 time vector 길이 (default = 101)
+%       .timeField     : 시간 필드 이름 (default = 'time')
+%       .grfField      : GRF 값이 들어 있는 필드 이름 (default = 'ground_force_r_vy')
+%       .threshold     : stance 판단용 GRF 임계값 (default = 30 N)
+%       .minDuration   : stance 최소 시간(초) 조건 (default = 0)
+%       .targetLength  : 출력 time vector 길이 (default = 101)
+%       .stanceFraction: stance가 gait cycle에서 차지하는 비율 (default = 0.6)
 %
 % 출력:
 %   t_stance_101 : [targetLength x 1] stance phase 구간의 시간 벡터
+%   t_full       : [round(targetLength/stanceFraction) x 1] full gait cycle 시간 벡터
 
     %% 0) 옵션 & 데이터 읽기
     if nargin < 2
         opts = struct();
     end
 
-    timeField    = getOpt(opts, 'timeField',    'time');
-    grfField     = getOpt(opts, 'grfField',     'ground_force_r_vy');
-    targetLength = getOpt(opts, 'targetLength', 101);
-    minDuration  = getOpt(opts, 'minDuration',  0.0);
+    timeField      = getOpt(opts, 'timeField',      'time');
+    grfField       = getOpt(opts, 'grfField',       'ground_force_r_vy');
+    targetLength   = getOpt(opts, 'targetLength',   101);
+    minDuration    = getOpt(opts, 'minDuration',    0.0);
+    stanceFraction = getOpt(opts, 'stanceFraction', 0.6);
 
     grfData = readSTO(grfStoPath);
 
@@ -37,7 +43,6 @@ function [t_stance_101, t_full] = WoC_moco_detectStance(grfStoPath, opts)
         error('Time field "%s" not found in GRF data.', timeField);
     end
     t = grfData.(timeField)(:);
-    t_full = t;
     if numel(t) < 2
         error('Time vector must have at least 2 samples.');
     end
@@ -62,8 +67,8 @@ function [t_stance_101, t_full] = WoC_moco_detectStance(grfStoPath, opts)
     if isfield(opts, 'threshold') && ~isempty(opts.threshold)
         thr = opts.threshold;
     else
-        % default: 50
-        thr = 50;
+        % default: 30
+        thr = 30;
     end
 
     % 이진 마스크: stance 여부
@@ -104,26 +109,23 @@ function [t_stance_101, t_full] = WoC_moco_detectStance(grfStoPath, opts)
         error('Could not find a valid (start, end) stance pair.');
     end
 
-    % 최소 기간 조건 적용 (첫 번째로 duration >= minDuration인 구간 선택)
-    stanceIdx = [];
-    for i = 1:size(stancePairs,1)
-        sIdx = stancePairs(i,1);
-        eIdx = stancePairs(i,2);
-        duration = t(eIdx) - t(sIdx);
-        if duration >= minDuration
-            stanceIdx = [sIdx, eIdx];
-            break;
-        end
+    % 최소 기간 조건 적용 후 가장 긴 구간 선택
+    durations = t(stancePairs(:,2)) - t(stancePairs(:,1));
+    validMask = durations >= minDuration;
+
+    if any(validMask)
+        validPairs     = stancePairs(validMask, :);
+        validDurations = durations(validMask);
+    else
+        % minDuration을 만족하는 구간이 없으면 전체 중 가장 긴 것 사용
+        warning('No stance pair satisfied minDuration=%.4f. Using longest stance pair.', minDuration);
+        validPairs     = stancePairs;
+        validDurations = durations;
     end
 
-    if isempty(stanceIdx)
-        % 최소 기간 조건을 만족하는 구간이 없으면 그냥 첫 번째 페어 사용
-        stanceIdx = stancePairs(1,:);
-        warning('No stance pair satisfied minDuration=%.4f. Using first stance pair.', minDuration);
-    end
-
-    sIdx = stanceIdx(1);
-    eIdx = stanceIdx(2);
+    [~, maxI] = max(validDurations);
+    sIdx = validPairs(maxI, 1);
+    eIdx = validPairs(maxI, 2);
 
     % stance 구간 time 서브셋
     t_stance = t(sIdx:eIdx);
@@ -134,6 +136,12 @@ function [t_stance_101, t_full] = WoC_moco_detectStance(grfStoPath, opts)
     end
 
     t_stance_101 = linspace(t_stance(1), t_stance(end), targetLength).';
+
+    %% 4) full gait cycle time 계산 (stance = stanceFraction of full cycle)
+    stance_dur = t_stance(end) - t_stance(1);
+    full_dur   = stance_dur / stanceFraction;
+    n_full     = round(targetLength / stanceFraction);
+    t_full     = linspace(t_stance(1), t_stance(1) + full_dur, n_full).';
 end
 
 
