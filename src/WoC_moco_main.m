@@ -529,6 +529,13 @@ for i = startIter:endIter
             dummyW               = ones(numel(fullTime), 1);
             writeOpts_sp         = struct();
             writeOpts_sp.dataColName = 'spline';
+            % modeSym: AFO_r 의 50~100% 구간을 AFO_l 의 0~50% 구간에 매핑
+            % (왼발이 오른발과 50% 위상차를 가지므로, 반 주기 풀기에서 누락되는
+            %  오른발 50%+ 보조력을 왼발 0%+ 에 주입)
+            if strcmpi(gaitMode, 'modeSym')
+                T_half = (fullTime(end) - fullTime(1)) / 2;
+                writeOpts_sp.controlLeft = interp1(fullTime, tau_R, fullTime + T_half, 'linear', 0);
+            end
             WoC_moco_writeControl(controlResultDir, ...
                 fullTime, fullTime, tau_R, dummyEta, dummyW, writeOpts_sp);
 
@@ -560,12 +567,27 @@ for i = startIter:endIter
             fprintf('[modeTorqAmp] 발목 토크 참조 파일: %s\n', idStoPath);
 
             cutoffHz_ta = getOpt(modeParams, 'cutoffHz', 6);
-            [tau_R, fullTime] = WoC_moco_buildTorqAmpControl(idStoPath, modeParams.maxVal, cutoffHz_ta);
+            [tau_R_raw, t_id] = WoC_moco_buildTorqAmpControl(idStoPath, modeParams.maxVal, cutoffHz_ta);
+            if strcmpi(gaitMode, 'modeSym')
+                % i=1 에서 id_withAssist.sto 가 half-cycle만 커버할 수 있으므로
+                % GRF 기반 fullTime 에 보간하여 time 축을 full gait cycle 로 통일
+                [~, fullTime] = WoC_moco_detectStance(prevGrfPath);
+                tau_R = interp1(t_id, tau_R_raw, fullTime, 'linear', 0);
+            else  % modeAsym
+                % id_withAssist.sto 가 항상 full gait cycle을 커버하므로 시간축 직접 사용
+                fullTime = t_id;
+                tau_R    = tau_R_raw;
+            end
 
             dummyEta_ta          = zeros(numel(fullTime), 1);
             dummyW_ta            = ones(numel(fullTime), 1);
             writeOpts_ta         = struct();
             writeOpts_ta.dataColName = 'torqAmp';
+            % modeSym: 오른발 50~100% plantarflexion torque 를 왼발 0~50% 에 주입
+            if strcmpi(gaitMode, 'modeSym')
+                T_half = (fullTime(end) - fullTime(1)) / 2;
+                writeOpts_ta.controlLeft = interp1(fullTime, tau_R, fullTime + T_half, 'linear', 0);
+            end
             WoC_moco_writeControl(controlResultDir, ...
                 fullTime, fullTime, tau_R, dummyEta_ta, dummyW_ta, writeOpts_ta);
 

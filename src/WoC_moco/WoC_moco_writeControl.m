@@ -61,7 +61,16 @@ function WoC_moco_writeControl(outputDir, fullTime, stanceTime, tau_R, eta, w, o
 
     %% 1) fullTime 전체에서 control 값 embed
     controlRight = zeros(N, 1);
-    controlLeft  = zeros(N, 1); % 항상 0
+    controlLeft  = zeros(N, 1);
+
+    % opts.controlLeft 가 제공되면 왼발 제어값 override
+    if isfield(opts, 'controlLeft') && ~isempty(opts.controlLeft)
+        cL = opts.controlLeft(:);
+        if numel(cL) ~= N
+            error('opts.controlLeft 길이(%d)가 fullTime 길이(%d)와 다릅니다.', numel(cL), N);
+        end
+        controlLeft = cL;
+    end
 
     stanceMask = (fullTime >= stanceStart) & (fullTime <= stanceEnd);
     if any(stanceMask)
