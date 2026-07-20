@@ -73,6 +73,30 @@ opts.QP_effort = 0.03;
 opts.QP_smooth = 0.1;
 opts.gaitMode = 'modeAsym';
 WoC_moco_main('2D_gait_AFO_pc.osim', 2, optMode, 'test7', opts)
+
+clc; clear; close all;
+optMode.type    = 'modeSpline';
+optMode.trigger = 0.25;
+optMode.rise    = 0.25;
+optMode.flat    = 0.0;
+optMode.fall    = 0.1;
+optMode.maxVal  = 0.8;
+opts.gaitMode = 'modeSym';
+WoC_moco_main('2D_gait_AFO_pc.osim', 2, optMode, 'test_modeS2', opts)
+
+clc; clear; close all;
+optMode.type    = 'modeTorqAmp';
+optMode.maxVal  = 0.8;
+opts.gaitMode = 'modeSym';
+opts.guessInitSto = 'C:\Users\Jeehoon_Hwang\Desktop\Sim\WoC_Moco\results_initial\SF681-1\result_1\moco_result\moco_WoC_Solution_iter01_kinematics_half.sto';
+WoC_moco_main('2D_gait_AFO_pc.osim', 2, optMode, 'test_torqA2', opts)
+
+clc; clear; close all;
+optMode.type    = 'modeTorqAmp';
+optMode.maxVal  = 0.8;
+opts.gaitMode = 'modeSym';
+opts.guessInitSto = 'C:\Users\Jeehoon_Hwang\Desktop\Sim\WoC_Moco\results_initial\SF682-1\result_1\moco_result\moco_WoC_Solution_iter01_kinematics_half.sto';
+WoC_moco_main('2D_gait_AFO_pc.osim', 2, optMode, 'test_torqA3', opts)
 %% modeWoC 예시
 
 clear; close all;

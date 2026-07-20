@@ -33,7 +33,7 @@ clear; close all;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
 thisScriptDir = fileparts(mfilename('fullpath'));
-QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'simulation_queue_.xlsx'); % 사용할 queue.xlsx 이름 넣기
+QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'simulation_queue_JHDT_SPLINE_test.xlsx'); % 사용할 queue.xlsx 이름 넣기
 SHEET_QUEUE = 'simulation_queue';
 SHEET_DONE  = 'completed_queue';
 
