@@ -4,7 +4,7 @@ pathCurrent= fileparts(mfilename('fullpath'));
 pathMain = pathCurrent + "/../src/data_analysis";
 addpath(pathMain);
 
-% moco_git\result 폴더 위치 지정
-pathResult = "E:\OneDrive-JJ\OneDrive\results";
+% moco_git/results 폴더 위치 지정
+pathResult = fullfile(pathCurrent, '..', 'results');
 
 get_metric(pathResult);

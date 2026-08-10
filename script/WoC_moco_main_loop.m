@@ -102,7 +102,12 @@ WoC_moco_main('2D_gait_AFO_pc.osim', 2, optMode, 'test_torqA3', opts)
 clc; clear; close all;
 optMode.type    = 'modeOff';
 opts.gaitMode = 'modeAsym';
-opts.guessInitSto = 'C:\Users\Jeehoon_Hwang\OneDrive\SRBL\WearableOptimizedControl\Optimizer\Moco_git\inputs\guess_init_full_gait2354.sto';
+if isempty(mfilename)
+    thisFile = matlab.desktop.editor.getActiveFilename;
+else
+    thisFile = mfilename("fullpath");
+end
+opts.guessInitSto = fullfile(fileparts(thisFile), '..', 'inputs', 'guess_init_full_gait2354.sto');
 WoC_moco_main('gait2354_afo.osim', 1, optMode, 'test_gait2354', opts)
 
 %% modeWoC 예시
@@ -293,7 +298,7 @@ ModelPath = fullfile(baseFolder,'..','models',Model);
 guessInit ='guess_init_full.sto';
 guessPath = fullfile(baseFolder,'..','inputs',guessInit);
 sol = moco_WoC_loop_asym(guessPath,ModelPath);
-resultDir = fullfile(baseFolder,'..',"results\Compare_Asym");
+resultDir = fullfile(baseFolder,'..','results','Compare_Asym');
 resOpts.modelPath = ModelPath;
 moco_WoC_getResult(sol,resultDir,resOpts);
 
@@ -302,17 +307,17 @@ ModelPath = fullfile(baseFolder,'..','models',Model);
 guessInit ='guess_init_half.sto';
 guessPath = fullfile(baseFolder,'..','inputs',guessInit);
 sol = moco_WoC_loop_extractOff(guessPath,ModelPath);
-resultDir = fullfile(baseFolder,'..',"results\Compare_Sym");
+resultDir = fullfile(baseFolder,'..','results','Compare_Sym');
 resOpts.modelPath = ModelPath;
 moco_WoC_getResult(sol,resultDir,resOpts);
 
-dataAsym = fullfile(baseFolder,'..',"results\Compare_Asym\moco_WoC_Solution_kinematics_half.sto");
+dataAsym = fullfile(baseFolder,'..','results','Compare_Asym','moco_WoC_Solution_kinematics_half.sto');
 dataAsym = get_opensim_STO2(dataAsym);
-grfAsym = fullfile(baseFolder,'..',"results\Compare_Asym\moco_WoC_Solution_GRF.sto");
+grfAsym = fullfile(baseFolder,'..','results','Compare_Asym','moco_WoC_Solution_GRF.sto');
 grfAsym = get_opensim_STO2(grfAsym);
-dataSym  = fullfile(baseFolder,'..',"results\Compare_Sym\moco_WoC_Solution_kinematics.sto");
+dataSym  = fullfile(baseFolder,'..','results','Compare_Sym','moco_WoC_Solution_kinematics.sto');
 dataSym = get_opensim_STO2(dataSym);
-grfSym = fullfile(baseFolder,'..',"results\Compare_Sym\moco_WoC_Solution_GRF.sto");
+grfSym = fullfile(baseFolder,'..','results','Compare_Sym','moco_WoC_Solution_GRF.sto');
 grfSym = get_opensim_STO2(grfSym);
 
 figure; hold on

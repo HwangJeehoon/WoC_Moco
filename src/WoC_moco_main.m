@@ -7,7 +7,7 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     WoC_moco_main(model, iter, 'modeWoC', 'my_result', opts)
 %
 %     % Resume 실행 (optResume.resume_name 이 있으면 자동으로 resume mode)
-%     optResume.resume_name = 'my_result\result_300';
+%     optResume.resume_name = 'my_result/result_300';
 %     WoC_moco_main(model, iter, 'modeWoC', 'my_result_continued', opts, optResume)
 %
 %   optMode (string):
@@ -288,8 +288,10 @@ if ~resume_mode
     endIter   = iterNum;
     fprintf('=== [%s] Normal mode: result_1 -> result_%d ===\n', modeType, endIter);
 else
-    % resume_name 가 baseFolder 기준 상대경로 (예: 'my_result\result_300')
-    resumeAbsDir = fullfile(baseFolder,'..','results', resume_name);
+    % resume_name 가 baseFolder 기준 상대경로 (예: 'my_result/result_300')
+    % '\' 와 '/' 구분자를 모두 허용 (Windows/Ubuntu 호환)
+    resumeParts = strsplit(resume_name, {'\', '/'});
+    resumeAbsDir = fullfile(baseFolder,'..','results', resumeParts{:});
 
     % result_XXX에서 XXX 파싱
     [~, resumeFolderName] = fileparts(resumeAbsDir);
