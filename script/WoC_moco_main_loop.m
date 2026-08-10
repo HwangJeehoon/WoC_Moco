@@ -97,6 +97,14 @@ optMode.maxVal  = 0.8;
 opts.gaitMode = 'modeSym';
 opts.guessInitSto = 'C:\Users\Jeehoon_Hwang\Desktop\Sim\WoC_Moco\results_initial\SF682-1\result_1\moco_result\moco_WoC_Solution_iter01_kinematics_half.sto';
 WoC_moco_main('2D_gait_AFO_pc.osim', 2, optMode, 'test_torqA3', opts)
+
+%% gait2354 example
+clc; clear; close all;
+optMode.type    = 'modeOff';
+opts.gaitMode = 'modeAsym';
+opts.guessInitSto = 'C:\Users\Jeehoon_Hwang\OneDrive\SRBL\WearableOptimizedControl\Optimizer\Moco_git\inputs\guess_init_full_gait2354.sto';
+WoC_moco_main('gait2354_afo.osim', 1, optMode, 'test_gait2354', opts)
+
 %% modeWoC 예시
 
 clear; close all;
