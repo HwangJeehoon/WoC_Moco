@@ -33,7 +33,9 @@ clear; close all;
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
 thisScriptDir = fileparts(mfilename('fullpath'));
-QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'simulation_queue_JHDT_SPLINE_test.xlsx'); % 사용할 queue.xlsx 이름 넣기
+addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
+
+QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'simulation_queue_JHDT_SPLINE.xlsx'); % 사용할 queue.xlsx 이름 넣기
 SHEET_QUEUE = 'simulation_queue';
 SHEET_DONE  = 'completed_queue';
 
@@ -185,7 +187,7 @@ for i = 1:size(data_q, 1)
 
         % ── modeOff 결과를 initial guess로 대체 (modeSpline / modeWoC 에서만) ──
         if ~strcmpi(modeType, 'modeOff')
-            offGuessPath = findModeOffGuess(data_d, colNames, model, opts, RESULTS_BASE);
+            offGuessPath = findModeOffGuess(data_d, colNames, id_str, opts, RESULTS_BASE);
             if ~isempty(offGuessPath)
                 opts.guessInitSto = offGuessPath;
                 fprintf('[initial guess] modeOff 결과 사용: %s\n', offGuessPath);
@@ -506,59 +508,35 @@ end
 
 % ─────────────────────────────────────────────────────────────────────────
 
-function guessStoPath = findModeOffGuess(data_d, colNames, model_str, opts, resultsBase)
-% completed_queue 에서 조건이 동일한 modeOff 결과를 찾아 guess 경로를 반환.
-% 매칭 조건: model, gaitMode, mocoEffort, mocoFinalTime, mocoTimeBound, mocoDistBound
+function guessStoPath = findModeOffGuess(data_d, colNames, cur_id, opts, resultsBase)
+% completed_queue 에서 현재 ID와 같은 family(동일 gait문자 + index번호)의
+% modeOff 결과(ID가 '<gait>F<index>'로 시작하는 행)를 찾아 guess 경로를 반환.
+% ID rule: 'S(Sym)/A(Asym)' + 'F(Off)/W(WoC)/P(Spline)/T(TorqAmp)' + index번호 + ...
+% 예: AT300-1, AP300_S1-1 → AF300... 을 참조. ST400-1, SP400-1 → SF400... 을 참조.
+% (동일 index번호는 항상 동일 model+params 조합을 가리키는 대기열 운영 규칙에 의존)
 % 여러 개 매칭 시 마지막(가장 최근 완료) 행 사용. 없거나 파일 없으면 '' 반환.
     guessStoPath = '';
-    if isempty(data_d), return; end
+    if isempty(data_d) || isempty(cur_id), return; end
 
-    % 현재 job의 유효 파라미터 (WoC_moco_main 기본값과 동일)
-    cur_gaitMode      = getOptLocal(opts, 'gaitMode',      'modeSym');
-    cur_mocoEffort    = getOptLocal(opts, 'mocoEffort',    1);
-    cur_mocoFinalTime = getOptLocal(opts, 'mocoFinalTime', 0.03);
-    cur_timeBound     = getOptLocal(opts, 'mocoTimeBound', [0.4 0.8]);
-    cur_distBound     = getOptLocal(opts, 'mocoDistBound', [0.4 1.0]);
+    tok = regexp(cur_id, '^([SA])[A-Z](\d+)', 'tokens', 'once');
+    if isempty(tok)
+        warning('[findModeOffGuess] ID ''%s'' 에서 gait문자/index번호를 파싱할 수 없습니다.', cur_id);
+        return;
+    end
+    target_prefix = [tok{1}, 'F', tok{2}];   % 예: 'AF300'
+    match_pat     = ['^', target_prefix, '(?!\d)'];  % 'AF300' 뒤에 숫자가 더 오면 제외 (AF3001 오매칭 방지)
 
-    ci_mod  = colIdx(colNames, 'model');
-    ci_om   = colIdx(colNames, 'optMode_type');
-    ci_gm   = colIdx(colNames, 'gaitMode');
-    ci_eff  = colIdx(colNames, 'mocoEffort');
-    ci_ft   = colIdx(colNames, 'mocoFinalTime');
-    ci_tb   = colIdx(colNames, 'mocoTimeBound');
-    ci_db   = colIdx(colNames, 'mocoDistBound');
+    cur_gaitMode = getOptLocal(opts, 'gaitMode', 'modeSym');
+
+    ci_id_d = colIdx(colNames, 'ID');
     ci_res  = colIdx(colNames, 'result_name');
     ci_iter = colIdx(colNames, 'iter');
+    if ci_id_d == 0, return; end
 
     last_match = 0;
     for k = 1:size(data_d, 1)
-        if ci_mod > 0 && ~strcmp(getCellStr(data_d{k, ci_mod}), model_str), continue; end
-        if ci_om  > 0 && ~strcmpi(getCellStr(data_d{k, ci_om}),  'modeOff'), continue; end
-
-        gm = 'modeSym';
-        if ci_gm > 0
-            s = getCellStr(data_d{k, ci_gm});
-            if ~isempty(s), gm = s; end
-        end
-        if ~strcmpi(gm, cur_gaitMode), continue; end
-
-        if ci_eff > 0
-            v = getCellNum(data_d{k, ci_eff}); if isnan(v), v = 1; end
-            if abs(v - cur_mocoEffort) > 1e-9, continue; end
-        end
-        if ci_ft > 0
-            v = getCellNum(data_d{k, ci_ft}); if isnan(v), v = 0.03; end
-            if abs(v - cur_mocoFinalTime) > 1e-9, continue; end
-        end
-        if ci_tb > 0
-            v = parseVecFromCell(data_d{k, ci_tb}, [0.4 0.8]);
-            if ~vecEq(v, cur_timeBound), continue; end
-        end
-        if ci_db > 0
-            v = parseVecFromCell(data_d{k, ci_db}, [0.4 1.0]);
-            if ~vecEq(v, cur_distBound), continue; end
-        end
-
+        id_k = getCellStr(data_d{k, ci_id_d});
+        if isempty(regexp(id_k, match_pat, 'once')), continue; end
         last_match = k;
     end
 
@@ -593,28 +571,3 @@ function val = getOptLocal(opts, field, default_val)
     end
 end
 
-% ─────────────────────────────────────────────────────────────────────────
-
-function v = parseVecFromCell(raw, default_val)
-% readcell 값에서 숫자 벡터 추출. 실패하면 default_val 반환.
-    if isnumeric(raw) && ~isscalar(raw)
-        v = raw;
-    elseif isnumeric(raw) && isscalar(raw) && ~isnan(raw)
-        v = raw;
-    else
-        s = getCellStr(raw);
-        if isempty(s)
-            v = default_val;
-        else
-            parsed = str2num(s); %#ok<ST2NM>
-            if isempty(parsed), v = default_val; else, v = parsed; end
-        end
-    end
-end
-
-% ─────────────────────────────────────────────────────────────────────────
-
-function tf = vecEq(a, b)
-% 두 숫자 벡터가 허용 오차(1e-9) 내에서 동일한지 확인.
-    tf = (numel(a) == numel(b)) && all(abs(a(:) - b(:)) <= 1e-9);
-end
