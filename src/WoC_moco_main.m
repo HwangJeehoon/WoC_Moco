@@ -111,23 +111,27 @@ runID   = getOpt(opts, 'ID',   '');
 runDate = getOpt(opts, 'Date', '');
 
 % opts 기본값
+% QP_effort / QP_smooth / cost 는 modeWoC 에서만 사용되므로,
+% 다른 mode에서는 미지정이어도 경고를 띄우지 않는다.
+isWoC = strcmpi(modeType, 'modeWoC');
+
 if ~isfield(opts, 'QP_effort') || isempty(opts.QP_effort)
     QP_effort = 0.01;
-    warning('WoC_moco_main: opts.QP_effort 가 지정되지 않아 default(0.01) 를 사용합니다.');
+    if isWoC, warning('WoC_moco_main: opts.QP_effort 가 지정되지 않아 default(0.01) 를 사용합니다.'); end
 else
     QP_effort = opts.QP_effort;
 end
 
 if ~isfield(opts, 'QP_smooth') || isempty(opts.QP_smooth)
     QP_smooth = 0;
-    warning('WoC_moco_main: opts.QP_smooth 가 지정되지 않아 default(0) 를 사용합니다.');
+    if isWoC, warning('WoC_moco_main: opts.QP_smooth 가 지정되지 않아 default(0) 를 사용합니다.'); end
 else
     QP_smooth = opts.QP_smooth;
 end
 
 if ~isfield(opts, 'cost') || isempty(opts.cost)
     cost = 'et';
-    warning('WoC_moco_main: opts.cost 가 지정되지 않아 default(et) 를 사용합니다.');
+    if isWoC, warning('WoC_moco_main: opts.cost 가 지정되지 않아 default(et) 를 사용합니다.'); end
 else
     cost = opts.cost;
 end
@@ -182,9 +186,11 @@ fprintf('  iter       : %d\n', iter);
 fprintf('  optMode    : %s\n', modeType);
 fprintf('  result_name: %s\n', result_name);
 fprintf('  --- opts ---\n');
-fprintf('  QP_effort    : %.4g\n', QP_effort);
-fprintf('  QP_smooth    : %.4g\n', QP_smooth);
-fprintf('  cost         : %s\n',   cost);
+if isWoC
+    fprintf('  QP_effort    : %.4g\n', QP_effort);
+    fprintf('  QP_smooth    : %.4g\n', QP_smooth);
+    fprintf('  cost         : %s\n',   cost);
+end
 fprintf('  mocoEffort   : %.4g\n', mocoEffort);
 fprintf('  mocoFinalTime: %.4g\n', mocoFinalTime);
 fprintf('  gaitMode     : %s\n',   gaitMode);
@@ -275,7 +281,6 @@ else  % modeSym
 end
 
 [~, guessInitName, guessInitExt] = fileparts(guessInitSto);
-fprintf('  initial guess : %s%s\n', guessInitName, guessInitExt);
 AnalySetupPath = fullfile(inputPath, 'analysis_setup.xml');
 modelPath      = fullfile(baseFolder, '..','models');
 
@@ -336,7 +341,6 @@ if ~resume_mode
         if ~isempty(grfFiles)
             copyfile(fullfile(mocoResDir_off, grfFiles(1).name), ...
                      fullfile(baselineMocoDir, 'baseline_GRF.sto'));
-            fprintf('[baseline] GRF copied: %s → baseline_GRF.sto\n', grfFiles(1).name);
         else
             warning('[baseline] preceding modeOff moco_result 에서 *_GRF.sto 를 찾지 못했습니다.');
         end
@@ -345,7 +349,6 @@ if ~resume_mode
         kinFiles = dir(fullfile(mocoResDir_off, '*_kinematics*.sto'));
         for kf = kinFiles'
             copyfile(fullfile(mocoResDir_off, kf.name), fullfile(baselineMocoDir, kf.name));
-            fprintf('[baseline] kinematics copied: %s\n', kf.name);
         end
         if isempty(kinFiles)
             warning('[baseline] preceding modeOff moco_result 에서 *_kinematics*.sto 를 찾지 못했습니다.');
@@ -355,16 +358,15 @@ if ~resume_mode
         idStoSrc = fullfile(analyResDir_off, 'id_withAssist.sto');
         if isfile(idStoSrc)
             copyfile(idStoSrc, fullfile(baselineAnalyDir, 'id_withAssist.sto'));
-            fprintf('[baseline] id_withAssist.sto copied\n');
         else
             warning('[baseline] preceding modeOff analy_result 에서 id_withAssist.sto 를 찾지 못했습니다: %s', analyResDir_off);
         end
 
         baselineKinPath = opts.guessInitSto;
-        fprintf('=== Baseline analysis (preceding modeOff → baseline/analy_result) ===\n');
+        fprintf('[initial guess] preceding off trial 사용: %s\n', resultLabel(iterRootDir_off));
     else
         baselineKinPath = guessInitSto;
-        fprintf('=== Baseline analysis (guess_init → baseline/analy_result) ===\n');
+        fprintf('[initial guess] default 사용: %s%s\n', guessInitName, guessInitExt);
     end
 
     WoC_moco_analysis(AnalySetupPath, ...
@@ -460,7 +462,6 @@ for i = startIter:endIter
 
             [etaR_101, wR_101, v_101, dt] = WoC_moco_cal_QP_input( ...
                 CoMPath, CoP_RPath, stanceTimeR_101, optsCalQP);
-            fprintf('dt = %.6f\n', dt);
 
             % 3-5. QP 풀어서 tau_R(stance 구간 control) 계산
             qpOpts             = struct();
@@ -566,7 +567,7 @@ for i = startIter:endIter
             if ~isfile(idStoPath)
                 error('modeTorqAmp: id_withAssist.sto 를 찾을 수 없습니다: %s', idStoPath);
             end
-            fprintf('[modeTorqAmp] 발목 토크 참조 파일: %s\n', idStoPath);
+            fprintf('[modeTorqAmp] 발목 토크 참조: %s\n', resultLabel(fileparts(idStoPath)));
 
             cutoffHz_ta = getOpt(modeParams, 'cutoffHz', 6);
             [tau_R_raw, t_id] = WoC_moco_buildTorqAmpControl(idStoPath, modeParams.maxVal, cutoffHz_ta);
@@ -604,11 +605,8 @@ for i = startIter:endIter
         if i == 1
             if isfield(opts, 'guessInitSto') && ~isempty(opts.guessInitSto)
                 guessStoPath = opts.guessInitSto;
-                [~, gn, ge] = fileparts(opts.guessInitSto);
-                fprintf('  [PRECEDING OFF TRIAL -> Initial Guess] %s%s\n', gn, ge);
             else
                 guessStoPath = guessInitSto;
-                fprintf('  [Default Initial Guess] \n');
             end
         else
             prevMocoDir = fullfile(OutputFolder, sprintf('result_%d', i-1), 'moco_result');
@@ -742,5 +740,17 @@ function val = getOpt(s, field, defaultVal)
         val = s.(field);
     else
         val = defaultVal;
+    end
+end
+
+%% ---- 로그 표시용 헬퍼 ----
+function lbl = resultLabel(iterRootDir)
+% 절대경로 대신 'results/' 하위 상대경로(예: 'AF001-1/result_1')만 표시.
+    parts = strsplit(iterRootDir, {'\\', '/'});
+    idx = find(strcmpi(parts, 'results'), 1, 'last');
+    if ~isempty(idx) && idx + 2 <= numel(parts)
+        lbl = strjoin(parts(idx+1:idx+2), '/');
+    else
+        lbl = iterRootDir;
     end
 end

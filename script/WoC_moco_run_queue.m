@@ -189,8 +189,7 @@ for i = 1:size(data_q, 1)
         if ~strcmpi(modeType, 'modeOff')
             offGuessPath = findModeOffGuess(data_d, colNames, id_str, opts, RESULTS_BASE);
             if ~isempty(offGuessPath)
-                opts.guessInitSto = offGuessPath;
-                fprintf('[initial guess] modeOff 결과 사용: %s\n', offGuessPath);
+                opts.guessInitSto = offGuessPath;   % 실제 사용 여부/경로는 WoC_moco_main 에서 1회 출력
             elseif strcmpi(modeType, 'modeSpline')
                 error('modeSpline에 필요한 modeOff 결과를 찾을 수 없습니다 (model=%s).', model);
             elseif strcmpi(modeType, 'modeTorqAmp')
