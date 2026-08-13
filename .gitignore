@@ -9,3 +9,4 @@ __pycache__/
 script/delete_this_to_stop_optimization__*.txt
 .bak
 *.md
+.claude/

@@ -1,0 +1,7 @@
+controls
+nRows=2
+nColumns=3
+endheader
+time	AFO_r	AFO_l
+0	0	0
+100	0	0

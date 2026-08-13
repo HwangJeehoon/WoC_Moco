@@ -273,6 +273,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     % 4. Solver 설정
     %--------------------------------------------------------------
     solver = study.initCasADiSolver();
+    solver.set_parallel(4);
     solver.set_num_mesh_intervals(300); % mesh num = 300
     solver.set_verbosity(2);
     solver.set_optim_solver('ipopt');
