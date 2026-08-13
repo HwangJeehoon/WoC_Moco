@@ -35,12 +35,12 @@ clear; close all;
 thisScriptDir = fileparts(mfilename('fullpath'));
 addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
 
-QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'simulation_queue_JHDT_SPLINE.xlsx'); % 사용할 queue.xlsx 이름 넣기
+QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'separated_queue_11.xlsx'); % 사용할 queue.xlsx 이름 넣기
 SHEET_QUEUE = 'simulation_queue';
 SHEET_DONE  = 'completed_queue';
 
 % results 폴더 경로 (findModeOffGuess 에서 파일 경로 조립 시 사용)
-RESULTS_BASE  = fullfile(thisScriptDir, '..', 'results'); % legacy: result_init 안쓰니까 조심
+RESULTS_BASE  = fullfile(thisScriptDir, '..', 'results_assigned'); % legacy: result_init 안쓰니까 조심
 
 %% ── 읽기 ──────────────────────────────────────────────────────────────────
 if ~isfile(QUEUE_XLSX)
