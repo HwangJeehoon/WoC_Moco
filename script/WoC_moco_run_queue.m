@@ -28,14 +28,17 @@
 % 사용법:
 %   1) QUEUE_XLSX 변수에 xlsx 경로 설정
 %   2) 스크립트 실행
+function WoC_main_run_queue(queueNumber)
+close all;
 
-clear; close all;
+queueFileName = sprinf('separated_queue_prime_%02d.xlsx', queueNumber);
+
 
 %% ── 설정 ──────────────────────────────────────────────────────────────────
 thisScriptDir = fileparts(mfilename('fullpath'));
 addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
 
-QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', 'simulation_queue_JHDT_SPLINE.xlsx'); % 사용할 queue.xlsx 이름 넣기
+QUEUE_XLSX  = fullfile(thisScriptDir, '..', 'queue', queueFileName); % 사용할 queue.xlsx 이름 넣기
 SHEET_QUEUE = 'simulation_queue';
 SHEET_DONE  = 'completed_queue';
 
@@ -240,7 +243,7 @@ end
 
 fprintf('\n모든 대기열 처리 완료.\n');
 
-
+end
 %% ── 로컬 함수 ─────────────────────────────────────────────────────────────
 
 function [header_block, col_names, data] = readSheet(xlsx_path, sheet_name)
