@@ -28,7 +28,7 @@
 % 사용법:
 %   1) QUEUE_XLSX 변수에 xlsx 경로 설정
 %   2) 스크립트 실행
-function WoC_main_run_queue(queueNumber)
+function WoC_moco_run_queue(queueNumber)
 close all;
 
 queueFileName = sprinf('separated_queue_prime_%02d.xlsx', queueNumber);
