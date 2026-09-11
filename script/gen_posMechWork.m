@@ -204,7 +204,7 @@ function writePosMechWorkSto(outputPath, time, armR, armL, torqueR, torqueL, pow
     fprintf(fid, 'nRows=%d\n', numel(time));
     fprintf(fid, 'nColumns=7\n');
     fprintf(fid, 'inDegrees=no\n');
-    fprintf(fid, 'posMechWork=%.16g\n', workR + workL);
+    fprintf(fid, 'posMechWork_tot=%.16g\n', workR + workL);
     fprintf(fid, 'posMechWork_r=%.16g\n', workR);
     fprintf(fid, 'posMechWork_l=%.16g\n', workL);
     fprintf(fid, 'endheader\n');
