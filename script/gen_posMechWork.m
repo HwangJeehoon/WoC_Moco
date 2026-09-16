@@ -6,6 +6,11 @@
 %   3) positive input power = max(input torque * ankle speed, 0) [W]
 %   4) positive mechanical work = integral(positive input power) [J]
 %
+% 실행 제어 환경변수 (run_posMechWork_batches.ps1가 설정):
+%   POS_MECH_WORK_RESULTS_DIR : 처리할 results 폴더 절대경로
+%   POS_MECH_WORK_BATCH_INDEX : 1-based batch 번호 (기본 1)
+%   POS_MECH_WORK_BATCH_SIZE  : batch당 result 수 (기본 500)
+%
 % 출력:
 %   results/<case>/result_#/analy_result/AFO_input_posMechWork.sto
 
@@ -21,9 +26,7 @@ else
 end
 rootDir    = fileparts(fileparts(thisFile));
 
-%%%%%%%%%%%%%%%%%%%%%%%% 목표하는 result 폴더를 여기에 넣기 %%%%%%%%%%%%%%%%%%%%%%%%
-resultsDir = fullfile(rootDir, 'results_prime5');
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+[resultsDir, batchIndex, batchSize] = getBatchConfiguration(rootDir);
 
 assert(exist(resultsDir, 'dir') == 7, 'results folder not found: %s', resultsDir);
 
@@ -34,6 +37,13 @@ caseEntries = caseEntries(~ismember({caseEntries.name}, {'.', '..'}));
 
 processed = 0;
 skipped   = 0;
+seen      = 0;
+firstJob  = (batchIndex - 1) * batchSize + 1;
+lastJob   = batchIndex * batchSize;
+stopProcessing = false;
+
+fprintf('gen_posMechWork batch %d: result %d through %d (batch size %d)\n', ...
+    batchIndex, firstJob, lastJob, batchSize);
 
 for caseIdx = 1:numel(caseEntries)
     caseDir = fullfile(resultsDir, caseEntries(caseIdx).name);
@@ -42,6 +52,15 @@ for caseIdx = 1:numel(caseEntries)
 
     for resultIdx = 1:numel(resultEntries)
         resultDir = fullfile(caseDir, resultEntries(resultIdx).name);
+        seen = seen + 1;
+
+        if seen < firstJob
+            continue;
+        end
+        if seen > lastJob
+            stopProcessing = true;
+            break;
+        end
 
         try
             resultNum = getResultNumber(resultEntries(resultIdx).name);
@@ -71,9 +90,19 @@ for caseIdx = 1:numel(caseEntries)
             skipped = skipped + 1;
         end
     end
+
+    if stopProcessing
+        break;
+    end
 end
 
-fprintf('\ngen_posMechWork complete: %d processed, %d skipped.\n', processed, skipped);
+fprintf('\ngen_posMechWork batch %d complete: %d processed, %d skipped.\n', ...
+    batchIndex, processed, skipped);
+
+% A direct MATLAB run benefits from a GC request. The batch launcher gives
+% the stronger guarantee by terminating this MATLAB process after this script.
+java.lang.System.gc();
+java.lang.System.runFinalization();
 
 function [workR, workL] = extractPosMechWork(modelPath, kinPath, controlPath, speedPath, outputPath)
     import org.opensim.modeling.*
@@ -87,6 +116,11 @@ function [workR, workL] = extractPosMechWork(modelPath, kinPath, controlPath, sp
     statesTable = trajectory.exportToStatesTable();
     statesTraj  = StatesTrajectory.createFromStatesTable( ...
         model, statesTable, true, true);
+
+    % These wrappers own OpenSim C++ memory. Capture their handles directly
+    % in onCleanup so they are released on both success and error paths.
+    resourceCleanup = onCleanup(@() releaseOpenSimObjects( ...
+        statesTraj, statesTable, trajectory, model)); %#ok<NASGU>
 
     assert(model.hasComponent('/AFO_r') && model.hasComponent('/AFO_l'), ...
         'Model must contain /AFO_r and /AFO_l: %s', modelPath);
@@ -180,6 +214,8 @@ function [time, value1, value2] = readStoColumns(stoPath, label1, label2)
     timeArray = ArrayDouble();
     value1Array = ArrayDouble();
     value2Array = ArrayDouble();
+    resourceCleanup = onCleanup(@() releaseStorageObjects( ...
+        timeArray, value1Array, value2Array, storage)); %#ok<NASGU>
     storage.getTimeColumn(timeArray);
     storage.getDataColumn(label1, value1Array);
     storage.getDataColumn(label2, value2Array);
@@ -191,6 +227,34 @@ function [time, value1, value2] = readStoColumns(stoPath, label1, label2)
         time(row + 1)   = timeArray.get(row);
         value1(row + 1) = value1Array.get(row);
         value2(row + 1) = value2Array.get(row);
+    end
+end
+
+function releaseOpenSimObjects(statesTraj, statesTable, trajectory, model)
+    % Delete children before their parent model. Components such as afoR and
+    % pathR are borrowed from the model and must not be deleted separately.
+    deleteOpenSimObject(statesTraj);
+    deleteOpenSimObject(statesTable);
+    deleteOpenSimObject(trajectory);
+    deleteOpenSimObject(model);
+end
+
+function releaseStorageObjects(timeArray, value1Array, value2Array, storage)
+    deleteOpenSimObject(timeArray);
+    deleteOpenSimObject(value1Array);
+    deleteOpenSimObject(value2Array);
+    deleteOpenSimObject(storage);
+end
+
+function deleteOpenSimObject(object)
+    if isempty(object)
+        return;
+    end
+    try
+        object.delete();
+    catch cleanupError
+        warning('gen_posMechWork:OpenSimCleanupFailed', ...
+            'OpenSim cleanup failed: %s', cleanupError.message);
     end
 end
 
@@ -248,4 +312,29 @@ function resultNum = getResultNumber(folderName)
     tokens = regexp(folderName, '^result_(\d+)$', 'tokens', 'once');
     assert(~isempty(tokens), 'Unexpected result folder name: %s', folderName);
     resultNum = str2double(tokens{1});
+end
+
+function [resultsDir, batchIndex, batchSize] = getBatchConfiguration(rootDir)
+    % Keep the current project-specific default for an interactive run.
+    resultsDir = getenv('POS_MECH_WORK_RESULTS_DIR');
+    if isempty(resultsDir)
+        resultsDir = fullfile(rootDir, 'results_prime5');
+    end
+
+    batchIndex = getPositiveIntegerEnvironmentVariable( ...
+        'POS_MECH_WORK_BATCH_INDEX', 1);
+    batchSize = getPositiveIntegerEnvironmentVariable( ...
+        'POS_MECH_WORK_BATCH_SIZE', 500);
+end
+
+function value = getPositiveIntegerEnvironmentVariable(name, defaultValue)
+    rawValue = getenv(name);
+    if isempty(rawValue)
+        value = defaultValue;
+        return;
+    end
+
+    value = str2double(rawValue);
+    assert(isfinite(value) && value >= 1 && value == floor(value), ...
+        '%s must be a positive integer; received "%s".', name, rawValue);
 end
