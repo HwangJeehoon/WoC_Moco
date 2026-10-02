@@ -14,6 +14,11 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %     opts               : (선택) struct
 %       .mocoEffort      : effort goal weight (default = 1.0)
 %       .mocoFinalTime   : final time goal weight (default = 0.03)
+%       .mocoPropulsionWeight : 양의 apGRF impulse 최대화 weight
+%                               (default = 0; 0이면 비활성)
+%       .mocoPropulsionSmoothing : smooth positive-force 계수 [0.2, 1]
+%                                  (default = 1.0)
+%       .mocoPropulsionReferenceDuration : impulse 정규화 기준 시간(s)
 %       .gaitMode        : 'modeSym'  - 반 걸음 풀고 좌우 대칭 복사 (default)
 %                          'modeAsym' - 한 걸음 전체를 풀고 주기성만 강제
 
@@ -21,6 +26,10 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 
     weight_effort    = opts.mocoEffort;
     weight_finalTime = opts.mocoFinalTime;
+    weight_propulsion = getOpt(opts, 'mocoPropulsionWeight', 0);
+    propulsionSmoothing = getOpt(opts, 'mocoPropulsionSmoothing', 1.0);
+    propulsionReferenceDuration = getOpt(opts, ...
+        'mocoPropulsionReferenceDuration', []);
     gaitMode         = opts.gaitMode;
     mocoTimeBound    = opts.mocoTimeBound;
     mocoDistBound    = opts.mocoDistBound;
@@ -149,7 +158,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     modelProcessor = ModelProcessor(injectedOsimPath);
     problem.setModelProcessor(modelProcessor);
     model = modelProcessor.process();
-    model.initSystem();
+    modelState = model.initSystem();
 
     %--------------------------------------------------------------
     % 2. Goal 설정
@@ -235,6 +244,43 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     finalTimeGoal.setDivideByDisplacement(true);
     problem.addGoal(finalTimeGoal);
 
+    % Positive anteroposterior GRF impulse goal (optional).
+    %
+    % The generated GRF columns are the sum of each foot's heel/front
+    % sphere-force x-components. MocoOutputExtremumGoal with the 'maximum'
+    % mode provides a smooth approximation of max(F_AP, 0). The negative
+    % goal weight rewards propulsion because Moco minimizes the objective.
+    % Do not divide by the optimized phase duration: this goal must remain
+    % proportional to the physical positive impulse (N*s), not mean force.
+    if weight_propulsion > 0
+        bodyWeight = model.getTotalMass(modelState) * 9.80665;
+        if isempty(propulsionReferenceDuration)
+            propulsionReferenceDuration = mean(mocoTimeBound);
+            if strcmpi(gaitMode, 'modeAsym')
+                propulsionReferenceDuration = 2 * propulsionReferenceDuration;
+            end
+        end
+
+        if ~isscalar(propulsionReferenceDuration) || ...
+                ~isfinite(propulsionReferenceDuration) || ...
+                propulsionReferenceDuration <= 0
+            error(['moco_WoC_loop: propulsion reference duration must be ', ...
+                   'a positive finite scalar.']);
+        end
+
+        % Dividing by BW * fixed reference duration makes the user-facing
+        % weight dimensionless while preserving the impulse objective.
+        weightPerSide = -weight_propulsion / ...
+            (2 * bodyWeight * propulsionReferenceDuration);
+        addPropulsionGoal(problem, 'r', weightPerSide, propulsionSmoothing);
+        addPropulsionGoal(problem, 'l', weightPerSide, propulsionSmoothing);
+
+        fprintf(['Moco propulsion goal enabled: weight=%.4g, smoothing=%.4g, ', ...
+                 'body weight=%.4g N, reference duration=%.4g s\n'], ...
+                 weight_propulsion, propulsionSmoothing, bodyWeight, ...
+                 propulsionReferenceDuration);
+    end
+
     %--------------------------------------------------------------
     % 3. Bounds 설정
     %--------------------------------------------------------------
@@ -288,4 +334,32 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     %--------------------------------------------------------------
     moco_WoC_Solution = study.solve();
 
+end
+
+
+function addPropulsionGoal(problem, side, weight, smoothing)
+% Add one foot's positive AP-GRF impulse reward.
+% SpatialVec index 3 is the translational x component (force-x).
+    import org.opensim.modeling.*
+
+    goal = MocoOutputExtremumGoal(['propulsion_' side], weight);
+    goal.setOutputPath(['/contactHeel_' side '|sphere_force']);
+    goal.setSecondOutputPath(['/contactFront_' side '|sphere_force']);
+    goal.setOperation('addition');
+    goal.setOutputIndex(3);
+    goal.setExtremumType('maximum');
+    goal.setSmoothingFactor(smoothing);
+    goal.setExponent(1);
+    goal.setDivideByDisplacement(false);
+    goal.setDivideByDuration(false);
+    problem.addGoal(goal);
+end
+
+
+function val = getOpt(s, field, defaultVal)
+    if isfield(s, field) && ~isempty(s.(field))
+        val = s.(field);
+    else
+        val = defaultVal;
+    end
 end

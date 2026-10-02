@@ -29,6 +29,12 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .cost         : Main cost 종류 'et'|'etw'|'etv' (default = 'et')
 %     .mocoEffort   : Moco effort goal weight (default = 1)
 %     .mocoFinalTime: Moco final time goal weight (default = 0.03)
+%     .mocoPropulsionWeight : 양의 apGRF impulse 최대화 goal weight
+%                             (default = 0; 0이면 goal 비활성)
+%     .mocoPropulsionSmoothing : 양의 apGRF smooth-max 계수 [0.2, 1]
+%                                (default = 1.0)
+%     .mocoPropulsionReferenceDuration : impulse 정규화 기준 시간(s).
+%                                비우면 gaitMode/time bound에서 자동 설정
 %     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
 %     .mocoTimeBound : Moco 시간 상한 [lb, ub] 또는 scalar (default = [0.4, 0.8])
 %     .mocoDistBound : pelvis_tx 최종 위치 bound [lb, ub] 또는 scalar (default = [0.4, 1.0])
@@ -150,6 +156,41 @@ else
     mocoFinalTime = opts.mocoFinalTime;
 end
 
+% Propulsion goal: 기본값 0은 기존 objective를 보존한다.
+if ~isfield(opts, 'mocoPropulsionWeight') || isempty(opts.mocoPropulsionWeight)
+    mocoPropulsionWeight = 0;
+else
+    mocoPropulsionWeight = opts.mocoPropulsionWeight;
+end
+if ~isscalar(mocoPropulsionWeight) || ~isnumeric(mocoPropulsionWeight) || ...
+        ~isfinite(mocoPropulsionWeight) || mocoPropulsionWeight < 0
+    error('opts.mocoPropulsionWeight 는 0 이상의 유한 scalar여야 합니다.');
+end
+
+if ~isfield(opts, 'mocoPropulsionSmoothing') || isempty(opts.mocoPropulsionSmoothing)
+    mocoPropulsionSmoothing = 1.0;
+else
+    mocoPropulsionSmoothing = opts.mocoPropulsionSmoothing;
+end
+if ~isscalar(mocoPropulsionSmoothing) || ~isnumeric(mocoPropulsionSmoothing) || ...
+        ~isfinite(mocoPropulsionSmoothing) || ...
+        mocoPropulsionSmoothing < 0.2 || mocoPropulsionSmoothing > 1.0
+    error('opts.mocoPropulsionSmoothing 은 [0.2, 1.0] 범위의 유한 scalar여야 합니다.');
+end
+
+if ~isfield(opts, 'mocoPropulsionReferenceDuration') || ...
+        isempty(opts.mocoPropulsionReferenceDuration)
+    mocoPropulsionReferenceDuration = [];
+else
+    mocoPropulsionReferenceDuration = opts.mocoPropulsionReferenceDuration;
+    if ~isscalar(mocoPropulsionReferenceDuration) || ...
+            ~isnumeric(mocoPropulsionReferenceDuration) || ...
+            ~isfinite(mocoPropulsionReferenceDuration) || ...
+            mocoPropulsionReferenceDuration <= 0
+        error('opts.mocoPropulsionReferenceDuration 은 양의 유한 scalar여야 합니다.');
+    end
+end
+
 if ~isfield(opts, 'gaitMode') || isempty(opts.gaitMode)
     gaitMode = 'modeSym';
     warning('WoC_moco_main: opts.gaitMode 가 지정되지 않아 default(''modeSym'') 를 사용합니다.');
@@ -193,6 +234,16 @@ if isWoC
 end
 fprintf('  mocoEffort   : %.4g\n', mocoEffort);
 fprintf('  mocoFinalTime: %.4g\n', mocoFinalTime);
+fprintf('  mocoPropulsionWeight: %.4g\n', mocoPropulsionWeight);
+if mocoPropulsionWeight > 0
+    fprintf('  mocoPropulsionSmoothing: %.4g\n', mocoPropulsionSmoothing);
+    if isempty(mocoPropulsionReferenceDuration)
+        fprintf('  mocoPropulsionReferenceDuration: auto\n');
+    else
+        fprintf('  mocoPropulsionReferenceDuration: %.4g s\n', ...
+            mocoPropulsionReferenceDuration);
+    end
+end
 fprintf('  gaitMode     : %s\n',   gaitMode);
 fprintf('  mocoTimeBound: %s\n',   mat2str(mocoTimeBound));
 fprintf('  mocoDistBound: %s\n',   mat2str(mocoDistBound));
@@ -249,6 +300,9 @@ end
 % Moco Parameter
 MocoOpts.mocoEffort       = mocoEffort;
 MocoOpts.mocoFinalTime    = mocoFinalTime;
+MocoOpts.mocoPropulsionWeight = mocoPropulsionWeight;
+MocoOpts.mocoPropulsionSmoothing = mocoPropulsionSmoothing;
+MocoOpts.mocoPropulsionReferenceDuration = mocoPropulsionReferenceDuration;
 MocoOpts.gaitMode         = gaitMode;
 MocoOpts.mocoTimeBound    = mocoTimeBound;
 MocoOpts.mocoDistBound    = mocoDistBound;

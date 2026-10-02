@@ -7,7 +7,9 @@
 %     A열 주석 행: default 값, ID rule 등 / endheader 행
 %     열 이름 행 : ID, Date, model, iter, optMode_type, trigger, rise, flat,
 %                 fall, maxVal, result_name, QP_effort, QP_smooth, cost,
-%                 mocoEffort, mocoFinalTime, mocoTimeBound, mocoDistBound,
+%                 mocoEffort, mocoFinalTime, mocoPropulsionWeight,
+%                 mocoPropulsionSmoothing, mocoPropulsionReferenceDuration,
+%                 mocoTimeBound, mocoDistBound,
 %                 gaitMode, resume_name, Complete
 %     데이터 행
 %
@@ -164,6 +166,9 @@ for i = 1:size(data_q, 1)
         opts = setOptField(opts, data_q(i,:), colNames, 'cost',         'str');
         opts = setOptField(opts, data_q(i,:), colNames, 'mocoEffort',   'num');
         opts = setOptField(opts, data_q(i,:), colNames, 'mocoFinalTime','num');
+        opts = setOptField(opts, data_q(i,:), colNames, 'mocoPropulsionWeight', 'num');
+        opts = setOptField(opts, data_q(i,:), colNames, 'mocoPropulsionSmoothing', 'num');
+        opts = setOptField(opts, data_q(i,:), colNames, 'mocoPropulsionReferenceDuration', 'num');
         opts = setOptField(opts, data_q(i,:), colNames, 'gaitMode',     'str');
         opts = setOptField(opts, data_q(i,:), colNames, 'mocoTimeBound','vec');
         opts = setOptField(opts, data_q(i,:), colNames, 'mocoDistBound','vec');
@@ -569,4 +574,3 @@ function val = getOptLocal(opts, field, default_val)
         val = default_val;
     end
 end
-
