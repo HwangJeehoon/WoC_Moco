@@ -22,12 +22,15 @@
 %% Propulsion-weight sweep and speed-locked comparison -- Run Current Section only
 % `Run`으로 전체 파일을 실행하지 말고 이 section만 실행한다.
 %
-% Case 1--4: (mocoEffort, mocoPropulsionWeight) =
-%            (1, 5), (1, 1), (1, 0.3), (1, 0.03)
-% Case 5:    w=1 해의 half-gait time/distance를 exact bound로 고정한
+% Case 1:    (mocoEffort, mocoFinalTime, mocoPropulsionWeight) = (1, 0, 0)
+%            propulsion goal이 없는 baseline이다.
+% Case 2--6: (mocoEffort, mocoPropulsionWeight) =
+%            (1, 10), (1, 5), (1, 1), (1, 0.3), (1, 0.03)
+%            모두 free-speed case이다.
+% Case 7:    w=1 해의 half-gait time/distance를 exact bound로 고정한
 %            (1, 10) 해. 따라서 w=1 해와 같은 평균 속도를 강제한다.
 % Smoothing: w=1에서 mocoPropulsionSmoothing = 0.2, 0.6, 1.0을 비교한다.
-%            w=1, s=0.2는 Case 2를 재사용하며 나머지 case는 s=0.2이다.
+%            w=1, s=0.2는 weight sweep 결과를 재사용하며 나머지 case는 s=0.2이다.
 %
 % Solver mesh(300), convergence/constraint tolerance(1e-3)는
 % moco_WoC_loop.m의 기존 설정을 그대로 사용한다.
@@ -52,22 +55,41 @@ runOptimizations = true;
 
 modelName = '2D_gait_AFO_pc.osim';
 resultsDir = fullfile(thisScriptDir, '..', 'results');
-sweepWeights = [5, 1, 0.3, 0.03];
-sweepResultNames = ["propulsion_ft0_w5", "propulsion_ft0_w1", ...
-    "propulsion_ft0_w0p3", "propulsion_ft0_w0p03"];
+sweepWeights = [10, 5, 1, 0.3, 0.03];
+sweepResultNames = ["propulsion_ft0_w10", "propulsion_ft0_w5", ...
+    "propulsion_ft0_w1", "propulsion_ft0_w0p3", ...
+    "propulsion_ft0_w0p03"];
+w1SweepIndex = find(sweepWeights == 1, 1, 'first');
+freeW10ResultName = sweepResultNames(1);
+w1ResultName = sweepResultNames(w1SweepIndex);
+baselineResultName = "propulsion_ft0_w0_baseline";
 speedLockedResultName = "propulsion_ft0_w10_speedLockedToW1";
-primaryCaseLabels = ["w = 5", "w = 1", "w = 0.3", "w = 0.03", ...
+primaryCaseLabels = ["w = 0 (baseline)", "w = 10 (free speed)", ...
+    "w = 5", "w = 1", "w = 0.3", "w = 0.03", ...
     "w = 10 (w=1 speed locked)"];
 smoothingValues = [0.2, 0.6, 1.0];
-smoothingResultNames = [sweepResultNames(2), ...
+smoothingResultNames = [w1ResultName, ...
     "propulsion_ft0_w1_s0p6", "propulsion_ft0_w1_s1p0"];
 smoothingCaseLabels = ["s = 0.2", "s = 0.6", "s = 1.0"];
-primaryResultNames = [sweepResultNames, speedLockedResultName];
+primaryResultNames = [baselineResultName, sweepResultNames, ...
+    speedLockedResultName];
 % w=1, s=0.2는 weight sweep 결과를 재사용하므로 중복 실행하지 않는다.
 allResultNames = [primaryResultNames, smoothingResultNames(2:end)];
 allCaseLabels = [primaryCaseLabels, "w = 1, s = 0.6", "w = 1, s = 1.0"];
 primaryCaseIndices = 1:numel(primaryResultNames);
-smoothingCaseIndices = [2, numel(primaryResultNames) + 1, ...
+baselineCaseIndex = find(allResultNames == baselineResultName, 1, 'first');
+w1CaseIndex = find(allResultNames == w1ResultName, 1, 'first');
+freeW10CaseIndex = find(allResultNames == freeW10ResultName, 1, 'first');
+speedLockedCaseIndex = find(allResultNames == speedLockedResultName, ...
+    1, 'first');
+speedLockedComparisonIndices = [baselineCaseIndex, w1CaseIndex, ...
+    freeW10CaseIndex, speedLockedCaseIndex];
+speedLockedComparisonLabels = [ ...
+    "w=0 baseline: (effort, time, propulsion)=(1, 0, 0)", ...
+    "w=1: (effort, time, propulsion)=(1, 0, 1), s=0.2", ...
+    "w=10: (1, 0, 10), s=0.2, free speed", ...
+    "w=10: (1, 0, 10), s=0.2, speed locked to w=1"];
+smoothingCaseIndices = [w1CaseIndex, numel(primaryResultNames) + 1, ...
     numel(primaryResultNames) + 2];
 
 % 모든 sweep case에 modeSym 기본 guess와 기존 mesh/tolerance를 사용한다.
@@ -82,7 +104,22 @@ optsBase.mocoPropulsionReferenceDuration = 0.6;
 pelvisTxName = '/jointset/groundPelvis/pelvis_tx/value';
 
 if runOptimizations
-    % 1) 동일 조건에서 propulsion weight sweep. 이미 완료된 case는 재사용한다.
+    % 1) propulsion goal이 없는 baseline. 이미 완료된 case는 재사용한다.
+    optsBaseline = optsBase;
+    optsBaseline.mocoPropulsionWeight = 0;
+    baselineKinPath = fullfile(resultsDir, baselineResultName, 'result_1', ...
+        'moco_result', 'moco_WoC_Solution_iter01_kinematics.sto');
+    if isfile(baselineKinPath)
+        fprintf('완료된 case 재사용: %s\n', baselineResultName);
+    else
+        assert(~isfolder(fullfile(resultsDir, baselineResultName)), ...
+            '불완전한 결과 폴더가 있습니다: %s. 삭제하거나 새 결과 이름을 사용하세요.', ...
+            baselineResultName);
+        WoC_moco_main(modelName, 1, 'modeOff', char(baselineResultName), ...
+            optsBaseline);
+    end
+
+    % 2) 동일 조건에서 propulsion weight sweep. 이미 완료된 case는 재사용한다.
     for iWeight = 1:numel(sweepWeights)
         opts = optsBase;
         opts.mocoPropulsionWeight = sweepWeights(iWeight);
@@ -99,8 +136,8 @@ if runOptimizations
         end
     end
 
-    % 2) w=1 해에서 full gait의 time/distance를 읽어 half-gait bound로 변환.
-    w1ResultRoot = fullfile(resultsDir, sweepResultNames(2), 'result_1', ...
+    % 3) w=1 해에서 full gait의 time/distance를 읽어 half-gait bound로 변환.
+    w1ResultRoot = fullfile(resultsDir, w1ResultName, 'result_1', ...
         'moco_result');
     w1KinematicsFile = fullfile(w1ResultRoot, ...
         'moco_WoC_Solution_iter01_kinematics.sto');
@@ -120,7 +157,7 @@ if runOptimizations
              'speed = %.6f m/s\n'], w1FullTime, w1FullDistance, ...
              w1FullDistance / w1FullTime);
 
-    % 3) w=10: w=1 해와 동일한 half-gait time/distance를 exact bound로 강제.
+    % 4) w=10: w=1 해와 동일한 half-gait time/distance를 exact bound로 강제.
     optsSpeedLocked = optsBase;
     optsSpeedLocked.mocoPropulsionWeight = 10;
     optsSpeedLocked.mocoTimeBound = [w1HalfTime, w1HalfTime];
@@ -137,7 +174,7 @@ if runOptimizations
             char(speedLockedResultName), optsSpeedLocked);
     end
 
-    % 4) w=1에서 propulsion smoothing만 0.6, 1.0으로 변경해 비교.
+    % 5) w=1에서 propulsion smoothing만 0.6, 1.0으로 변경해 비교.
     % s=0.2 결과는 위 weight sweep의 w=1 결과를 그대로 사용한다.
     for iSmoothing = 2:numel(smoothingValues)
         optsSmoothing = optsBase;
@@ -168,12 +205,14 @@ distance = zeros(numCases, 1);
 speed = zeros(numCases, 1);
 effortObjective = zeros(numCases, 1);
 propulsionObjective = zeros(numCases, 1);
+totalObjective = zeros(numCases, 1);
 metabolicEnergy = zeros(numCases, 1);
 metabolicRate = zeros(numCases, 1);
 metabolicEnergyPerDistance = zeros(numCases, 1);
 grfTime = cell(numCases, 1);
 grfRightAP = cell(numCases, 1);
 grfLeftAP = cell(numCases, 1);
+kinematics = cell(numCases, 1);
 
 for iCase = 1:numCases
     resultRoot = fullfile(resultsDir, allResultNames(iCase), 'result_1', ...
@@ -202,6 +241,7 @@ for iCase = 1:numCases
     grfTime{iCase} = grf.time;
     grfRightAP{iCase} = grf.ground_force_r_vx;
     grfLeftAP{iCase} = grf.ground_force_l_vx;
+    kinematics{iCase} = kin;
     positiveImpulse(iCase, :) = [ ...
         trapz(grf.time, max(grf.ground_force_r_vx, 0)), ...
         trapz(grf.time, max(grf.ground_force_l_vx, 0))];
@@ -215,6 +255,8 @@ for iCase = 1:numCases
     speed(iCase) = distance(iCase) / duration(iCase);
     effortObjective(iCase) = str2double(regexp(halfKinText, ...
         'objective_effort=([^\r\n]+)', 'tokens', 'once'));
+    totalObjective(iCase) = str2double(regexp(halfKinText, ...
+        '(?m)^objective=([^\r\n]+)', 'tokens', 'once'));
     propulsionR = str2double(regexp(halfKinText, ...
         'objective_propulsion_r=([^\r\n]+)', 'tokens', 'once'));
     propulsionL = str2double(regexp(halfKinText, ...
@@ -230,12 +272,13 @@ end
 comparison = table(allCaseLabels(:), positiveImpulse(:, 1), ...
     positiveImpulse(:, 2), positiveImpulseTotal, peakPropulsion(:, 1), ...
     peakBraking(:, 1), duration, distance, speed, effortObjective, ...
-    propulsionObjective, metabolicEnergy, metabolicRate, ...
+    propulsionObjective, totalObjective, metabolicEnergy, metabolicRate, ...
     metabolicEnergyPerDistance, 'VariableNames', ...
     {'Case', 'PositiveImpulseRight_Ns', 'PositiveImpulseLeft_Ns', ...
     'PositiveImpulseTotal_Ns', 'PropulsivePeakRight_N', ...
     'BrakingPeakRight_N', 'Duration_s', 'Distance_m', 'Speed_mps', ...
-    'EffortObjective', 'PropulsionObjective', 'MetabolicEnergy_J', ...
+    'EffortObjective', 'PropulsionObjective', 'TotalObjective', ...
+    'MetabolicEnergy_J', ...
     'MetabolicRate_W', 'MetabolicEnergyPerDistance_Jpm'});
 disp(comparison);
 smoothingComparison = comparison(smoothingCaseIndices, :);
@@ -336,6 +379,82 @@ ylabel('Metabolic energy per distance (J m^{-1})'); grid on; xtickangle(25);
 nexttile;
 bar(categorical(smoothingCaseLabels), speed(smoothingCaseIndices));
 ylabel('Average speed (m s^{-1})'); grid on; xtickangle(25);
+
+% Plot 5: baseline, w=1, free-speed w=10, speed-locked w=10을 직접 비교한다.
+% 관절각은 modeSym의 full gait에서 right lower limb와 pelvis/lumbar를 표시한다.
+comparisonColors = [0.4660, 0.6740, 0.1880; ...
+    0.0000, 0.4470, 0.7410; 0.8500, 0.3250, 0.0980; ...
+    0.4940, 0.1840, 0.5560];
+figure('Name', 'Baseline vs w=1 vs free/locked w=10', 'Color', 'w');
+tiledlayout(3, 3, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+nexttile; hold on;
+for iCompare = 1:numel(speedLockedComparisonIndices)
+    iCase = speedLockedComparisonIndices(iCompare);
+    timePercent = 100 * (grfTime{iCase} - grfTime{iCase}(1)) / ...
+        (grfTime{iCase}(end) - grfTime{iCase}(1));
+    plot(timePercent, grfRightAP{iCase}, 'LineWidth', 1.5, ...
+        'Color', comparisonColors(iCompare, :));
+end
+yline(0, 'k:'); grid on; xlim([0, 100]);
+xlabel('Gait cycle (%)'); ylabel('Right AP-GRF (N)');
+title('Right AP-GRF');
+legend(speedLockedComparisonLabels, 'Location', 'southwest', 'FontSize', 8);
+
+nexttile; hold on;
+for iCompare = 1:numel(speedLockedComparisonIndices)
+    iCase = speedLockedComparisonIndices(iCompare);
+    timePercent = 100 * (grfTime{iCase} - grfTime{iCase}(1)) / ...
+        (grfTime{iCase}(end) - grfTime{iCase}(1));
+    plot(timePercent, grfLeftAP{iCase}, 'LineWidth', 1.5, ...
+        'Color', comparisonColors(iCompare, :));
+end
+yline(0, 'k:'); grid on; xlim([0, 100]);
+xlabel('Gait cycle (%)'); ylabel('Left AP-GRF (N)');
+title('Left AP-GRF');
+
+nexttile;
+objectiveData = [totalObjective(speedLockedComparisonIndices), ...
+    effortObjective(speedLockedComparisonIndices), ...
+    propulsionObjective(speedLockedComparisonIndices)]';
+objectiveBars = bar(categorical({'Total', 'Effort', 'Propulsion'}), objectiveData);
+for iCompare = 1:numel(objectiveBars)
+    objectiveBars(iCompare).FaceColor = comparisonColors(iCompare, :);
+end
+grid on; ylabel('Objective contribution'); title('Moco objectives');
+legend(speedLockedComparisonLabels, 'Location', 'best', 'FontSize', 8);
+
+nexttile;
+metabolicBars = bar(categorical(speedLockedComparisonLabels), ...
+    metabolicEnergyPerDistance(speedLockedComparisonIndices));
+metabolicBars.FaceColor = 'flat';
+metabolicBars.CData = comparisonColors;
+grid on; ylabel('Metabolic cost (J m^{-1})');
+title('Metabolic cost per distance');
+
+jointVariables = { ...
+    '/jointset/groundPelvis/pelvis_tilt/value', ...
+    '/jointset/hip_r/hip_flexion_r/value', ...
+    '/jointset/knee_r/knee_angle_r/value', ...
+    '/jointset/ankle_r/ankle_angle_r/value', ...
+    '/jointset/lumbar/lumbar/value'};
+jointLabels = {'Pelvis tilt', 'Right hip flexion', 'Right knee angle', ...
+    'Right ankle angle', 'Lumbar angle'};
+for iJoint = 1:numel(jointVariables)
+    nexttile; hold on;
+    for iCompare = 1:numel(speedLockedComparisonIndices)
+        iCase = speedLockedComparisonIndices(iCompare);
+        kin = kinematics{iCase};
+        timePercent = 100 * (kin.time - kin.time(1)) / ...
+            (kin.time(end) - kin.time(1));
+        plot(timePercent, rad2deg(kin{:, jointVariables{iJoint}}), ...
+            'LineWidth', 1.5, 'Color', comparisonColors(iCompare, :));
+    end
+    grid on; xlim([0, 100]);
+    xlabel('Gait cycle (%)'); ylabel('Angle (deg)');
+    title(jointLabels{iJoint});
+end
+sgtitle('w=0 baseline, w=1, free-speed w=10, and speed-locked w=10');
 
 %% test
 clc; clear; close all;
