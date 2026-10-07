@@ -1,26 +1,28 @@
 %% search_weight_frac.m
-% Moco cost weight 정규화 검증 스크립트.
+% Moco cost weight 정규화 탐색/검증 스크립트.
 %
-% gaitMode(modeSym, modeAsym)마다 독립적으로 아래 4 run을 수행한다.
-%   ref  (1,1,1) : (effort, time, propulsion) weight = (1, 1, 1)로 풀어
-%                  기준 objective term J = (J_e, J_t, J_p)를 얻는다.
-%   norm (1,1,1) : weight = (1/|J_e|, 1/|J_t|, 1/|J_p|)
-%   norm (1,1,0) : weight = (1/|J_e|, 1/|J_t|, 0)
-%   norm (1,0,1) : weight = (1/|J_e|, 0, 1/|J_p|)
-% 정규화된 run에서 각 term이 1 : 1 : 1 (mask가 0인 항목은 0)로 유지되는지 본다.
+% 각 gaitMode(modeSym, modeAsym)에서 아래 reference-normalization 조합을
+% 독립적으로 푼다. 모든 term은 해 .sto header에 저장된, weight가 곱해진
+% objective 기여분이다.
+%
+%   A. ref (1,1,1) -> norm (1,1,1), norm (1,1,0), norm (1,0,1)
+%      (기존 결과 이름을 유지해 완료된 case를 재사용한다.)
+%   B. ref (1,1,0) -> norm (1,1,0)
+%   C. ref (1,0,1) -> norm (1,0,1)
+%
+% 각 norm case의 활성 weight는 해당 reference의 활성 term 역수로 둔다.
+% 예: ref (1,1,0)의 norm (1,1,0)은
+%      (1/|J_effort|, 1/|J_time|, 0)이다.
 %
 % 참고:
-%   - .sto 헤더의 objective_* 는 weight가 곱해진 기여분이다.
-%   - propulsion goal은 reward라 term이 음수다. 따라서 |J_p|의 역수를 쓰고,
-%     정규화 후 기대값은 J_propulsion = -1 이다. 비율은 |J|로 비교한다.
-%   - modeSym은 _kinematics_half.sto, modeAsym은 _kinematics.sto 헤더에서 읽는다.
-%     (modeSym의 full 파일은 createPeriodicTrajectory 결과라 objective가 없다.)
-%   - 완료된 case는 재사용한다. ref 결과를 지우고 다시 돌릴 때는
-%     같은 mode의 norm 결과도 함께 지워야 새 weight가 반영된다.
-%   - propulsion reference duration(T_ref)은 gaitMode와 무관하게 모든 case에서
-%     1 s로 고정한다. norm run에서는 T_ref가 |J_p| 안에서 상쇄되지만,
-%     ref (1,1,1) run의 실질 propulsion weight 1/(2*BW*T_ref)를 정하므로
-%     기준 해에는 영향을 준다.
+%   - propulsion은 reward라 header term이 음수다. 따라서 |J_p|를 쓴다.
+%   - propulsion term은 objective_propulsion_r + objective_propulsion_l이다.
+%   - modeSym은 _kinematics_half.sto, modeAsym은 _kinematics.sto를 읽는다.
+%   - 한 case가 실패하거나 sealed/unseal 결과만 남아도, 이를 Failed/Skipped로
+%     기록한 뒤 나머지 case 및 다음 gaitMode를 계속 수행한다.
+%   - 이미 존재하는 불완전 결과 폴더는 덮어쓰지 않고 건너뛴다. 재시도하려면
+%     해당 result 폴더를 직접 삭제하거나 result 이름을 바꿔야 한다.
+%   - propulsion reference duration(T_ref)은 모든 case에서 1 s로 고정한다.
 clc; clear; close all;
 thisScriptDir = fileparts(mfilename('fullpath'));
 if isempty(thisScriptDir)
@@ -40,9 +42,10 @@ addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
 modelName = '2D_gait_AFO_pc.osim';
 resultsDir = fullfile(thisScriptDir, '..', 'results');
 gaitModes = {'modeSym', 'modeAsym'};
-% 정규화 weight에 곱할 (effort, time, propulsion) mask.
-masks = [1 1 1; 1 1 0; 1 0 1];
-caseLabels = ["ref (1,1,1)"; "norm (1,1,1)"; "norm (1,1,0)"; "norm (1,0,1)"];
+
+% ref (1,1,1)에서는 기존처럼 세 norm mask를 모두 실행한다. 추가한
+% reference는 자신과 같은 활성 mask의 norm case만 실행한다.
+referenceSpecs = makeReferenceSpecs();
 
 optsBase = struct();
 optsBase.mocoPropulsionSmoothing = 1.0;
@@ -54,50 +57,138 @@ for iMode = 1:numel(gaitModes)
     opts.gaitMode = gaitModes{iMode};
     modeTag = lower(erase(gaitModes{iMode}, 'mode'));   % 'sym' / 'asym'
 
-    weights = zeros(numel(caseLabels), 3);
-    terms = zeros(numel(caseLabels), 4);
+    nRows = sum(1 + arrayfun(@(spec) size(spec.normMasks, 1), referenceSpecs));
+    caseLabels = strings(nRows, 1);
+    referenceLabels = strings(nRows, 1);
+    statuses = strings(nRows, 1);
+    weights = nan(nRows, 3);
+    terms = nan(nRows, 4);
+    iRow = 0;
 
-    % 1) Reference: (1,1,1)
-    weights(1, :) = [1 1 1];
-    terms(1, :) = runCase(modelName, resultsDir, ...
-        sprintf('wfrac_%s_ref_e1t1p1', modeTag), opts, weights(1, :));
-    fprintf(['[%s] reference (1,1,1) objective: effort=%.6g, time=%.6g, ', ...
-             'propulsion=%.6g, total=%.6g\n'], gaitModes{iMode}, terms(1, :));
+    for iSpec = 1:numel(referenceSpecs)
+        spec = referenceSpecs(iSpec);
 
-    % 2-3) reference term의 역수로 정규화한 weight에 mask를 곱해 다시 푼다.
-    wNorm = 1 ./ abs(terms(1, 1:3));
-    for iMask = 1:size(masks, 1)
-        weights(iMask + 1, :) = masks(iMask, :) .* wNorm;
-        terms(iMask + 1, :) = runCase(modelName, resultsDir, ...
-            sprintf('wfrac_%s_norm_e%dt%dp%d', modeTag, masks(iMask, :)), ...
-            opts, weights(iMask + 1, :));
+        % Reference case.
+        iRow = iRow + 1;
+        referenceRow = iRow;
+        caseLabels(iRow) = "ref " + formatMask(spec.referenceWeights);
+        referenceLabels(iRow) = "self";
+        weights(iRow, :) = spec.referenceWeights;
+        refName = sprintf('wfrac_%s_ref_%s', modeTag, spec.tag);
+        [terms(iRow, :), refComplete, statuses(iRow)] = runCase( ...
+            modelName, resultsDir, refName, opts, spec.referenceWeights);
+
+        if refComplete
+            fprintf(['[%s] reference %s objective: effort=%.6g, time=%.6g, ', ...
+                     'propulsion=%.6g, total=%.6g\n'], ...
+                    gaitModes{iMode}, formatMask(spec.referenceWeights), terms(iRow, :));
+        end
+
+        % Matching/legacy norm cases that use the current reference term.
+        for iMask = 1:size(spec.normMasks, 1)
+            iRow = iRow + 1;
+            mask = spec.normMasks(iMask, :);
+            caseLabels(iRow) = "norm " + formatMask(mask);
+            referenceLabels(iRow) = "from ref " + formatMask(spec.referenceWeights);
+
+            if ~refComplete
+                statuses(iRow) = "Skipped: reference unavailable";
+                fprintf('건너뜀: %s (%s)\n', caseLabels(iRow), statuses(iRow));
+                continue;
+            end
+
+            [weights(iRow, :), weightsValid, weightStatus] = ...
+                makeNormalizedWeights(terms(referenceRow, 1:3), mask);
+            if ~weightsValid
+                statuses(iRow) = "Skipped: " + weightStatus;
+                fprintf('건너뜀: %s (%s)\n', caseLabels(iRow), statuses(iRow));
+                continue;
+            end
+
+            normName = makeNormResultName(modeTag, spec, mask);
+            [terms(iRow, :), ~, statuses(iRow)] = runCase( ...
+                modelName, resultsDir, normName, opts, weights(iRow, :));
+        end
     end
 
-    ratio = abs(terms(:, 1:3)) ./ abs(terms(:, 1));
-    summaryTables{iMode} = table(caseLabels, weights(:, 1), weights(:, 2), ...
-        weights(:, 3), terms(:, 1), terms(:, 2), terms(:, 3), terms(:, 4), ...
-        compose('%.3f : %.3f : %.3f', ratio), 'VariableNames', ...
-        {'Case', 'w_effort', 'w_time', 'w_propulsion', 'J_effort', ...
-        'J_time', 'J_propulsion', 'J_total', 'Ratio_abs'});
+    ratio = makeRatioStrings(terms(:, 1:3));
+    summaryTables{iMode} = table(caseLabels, referenceLabels, statuses, ...
+        weights(:, 1), weights(:, 2), weights(:, 3), ...
+        terms(:, 1), terms(:, 2), terms(:, 3), terms(:, 4), ratio, ...
+        'VariableNames', {'Case', 'NormalizationReference', 'Status', ...
+        'w_effort', 'w_time', 'w_propulsion', 'J_effort', 'J_time', ...
+        'J_propulsion', 'J_total', 'Ratio_abs'});
 end
 
 % Moco 로그에 묻히지 않도록 마지막에 mode별 결과를 모아서 출력한다.
 for iMode = 1:numel(gaitModes)
     fprintf('\n===== %s =====\n', gaitModes{iMode});
-    fprintf(['목표: norm run에서 (J_effort, J_time, J_propulsion) = ', ...
-             '(1, 1, -1) .* mask, Ratio_abs = |J| / |J_effort|\n']);
+    fprintf(['norm run의 target은 활성 term에 대해 (J_effort, J_time, ', ...
+             'J_propulsion) = (1, 1, -1) 이다. Ratio_abs = |J| / |J_effort|\n']);
     disp(summaryTables{iMode});
 end
 
 
-function terms = runCase(modelName, resultsDir, resultName, opts, weights)
+function specs = makeReferenceSpecs()
+% 각 reference와 그 reference에서 유도할 norm mask를 정의한다.
+    specs(1).tag = 'e1t1p1';
+    specs(1).referenceWeights = [1 1 1];
+    specs(1).normMasks = [1 1 1; 1 1 0; 1 0 1];
+    specs(1).useLegacyNormNames = true;
+
+    specs(2).tag = 'e1t1p0';
+    specs(2).referenceWeights = [1 1 0];
+    specs(2).normMasks = [1 1 0];
+    specs(2).useLegacyNormNames = false;
+
+    specs(3).tag = 'e1t0p1';
+    specs(3).referenceWeights = [1 0 1];
+    specs(3).normMasks = [1 0 1];
+    specs(3).useLegacyNormNames = false;
+end
+
+
+function resultName = makeNormResultName(modeTag, spec, mask)
+% 새 reference 기반 norm case는 기존 ref(1,1,1) 기반 case와 분리한다.
+    if spec.useLegacyNormNames
+        resultName = sprintf('wfrac_%s_norm_e%dt%dp%d', modeTag, mask);
+    else
+        resultName = sprintf('wfrac_%s_norm_from_ref_%s_e%dt%dp%d', ...
+            modeTag, spec.tag, mask);
+    end
+end
+
+
+function [weights, isValid, status] = makeNormalizedWeights(referenceTerms, mask)
+% 활성 objective term만 reference 절댓값의 역수로 정규화한다.
+    weights = zeros(1, 3);
+    isValid = false;
+    status = "";
+    active = logical(mask);
+    magnitudes = abs(referenceTerms);
+    invalid = active & (~isfinite(magnitudes) | magnitudes <= eps);
+    if any(invalid)
+        status = "reference has zero/non-finite active term";
+        return;
+    end
+    weights(active) = 1 ./ magnitudes(active);
+    isValid = true;
+end
+
+
+function [terms, isComplete, status] = runCase(modelName, resultsDir, resultName, opts, weights)
 % weights = (effort, time, propulsion)로 modeOff 1회 solve 후 objective term 반환.
-% 이미 완료된 case는 재사용한다.
+% 완료 결과는 재사용한다. 실패/unseal 결과 또는 solver error는 기록만 하고
+% false를 반환해 다음 case가 계속 실행되도록 한다.
+    terms = nan(1, 4);
+    isComplete = false;
+    status = "";
     opts.mocoEffort = weights(1);
     opts.mocoFinalTime = weights(2);
     opts.mocoPropulsionWeight = weights(3);
 
-    mocoResultDir = fullfile(resultsDir, resultName, 'result_1', 'moco_result');
+    resultDir = fullfile(resultsDir, resultName);
+    mocoResultDir = fullfile(resultDir, 'result_1', 'moco_result');
     if strcmpi(opts.gaitMode, 'modeSym')
         solFile = fullfile(mocoResultDir, ...
             'moco_WoC_Solution_iter01_kinematics_half.sto');
@@ -108,20 +199,71 @@ function terms = runCase(modelName, resultsDir, resultName, opts, weights)
 
     if isfile(solFile)
         fprintf('완료된 case 재사용: %s\n', resultName);
+        status = "Reused";
+    elseif isfolder(resultDir)
+        status = "Skipped: incomplete result folder exists";
+        fprintf('불완전 case 건너뜀: %s\n', resultName);
+        return;
     else
-        assert(~isfolder(fullfile(resultsDir, resultName)), ...
-            '불완전한 결과 폴더가 있습니다: %s. 삭제하거나 새 결과 이름을 사용하세요.', ...
-            resultName);
-        WoC_moco_main(modelName, 1, 'modeOff', resultName, opts);
+        try
+            WoC_moco_main(modelName, 1, 'modeOff', resultName, opts);
+        catch ME
+            status = "Failed: " + string(ME.identifier);
+            if strlength(ME.identifier) == 0
+                status = "Failed: solver or output error";
+            end
+            warning('search_weight_frac:CaseFailed', ...
+                'Case %s failed. Continuing.\n%s', resultName, ME.message);
+            return;
+        end
+
+        if ~isfile(solFile)
+            status = "Failed: completed file was not written";
+            warning('search_weight_frac:MissingSolution', ...
+                'Case %s did not write the expected solution. Continuing.', resultName);
+            return;
+        end
+        status = "Completed";
     end
-    terms = readObjectiveTerms(solFile);
+
+    try
+        terms = readObjectiveTerms(solFile);
+        isComplete = true;
+    catch ME
+        terms = nan(1, 4);
+        status = "Failed: objective header unreadable";
+        warning('search_weight_frac:UnreadableHeader', ...
+            'Case %s header could not be read. Continuing.\n%s', resultName, ME.message);
+    end
+end
+
+
+function ratio = makeRatioStrings(termTriples)
+% effort 기준 절댓값 비율을 summary table용 문자열로 만든다.
+    nRows = size(termTriples, 1);
+    ratio = strings(nRows, 1);
+    for iRow = 1:nRows
+        row = termTriples(iRow, :);
+        if ~all(isfinite(row)) || abs(row(1)) <= eps
+            ratio(iRow) = "n/a";
+        else
+            values = abs(row) ./ abs(row(1));
+            ratio(iRow) = sprintf('%.3f : %.3f : %.3f', values);
+        end
+    end
+end
+
+
+function label = formatMask(mask)
+% (effort, time, propulsion) mask/weight vector을 표기한다.
+    label = sprintf('(%d,%d,%d)', mask);
 end
 
 
 function terms = readObjectiveTerms(stoPath)
 % Moco 해 .sto 헤더에서 weight가 곱해진 objective term을 읽는다.
 %   terms = [effort, final_time, propulsion(r+l), total]
-% weight 0인 propulsion goal은 추가되지 않으므로 헤더에 없으면 0으로 둔다.
+% weight 0인 propulsion goal은 추가되지 않으므로 header에 없으면 0으로 둔다.
     txt = fileread(stoPath);
     keys = {'objective_effort', 'objective_final_time', ...
             'objective_propulsion_r', 'objective_propulsion_l', 'objective'};
