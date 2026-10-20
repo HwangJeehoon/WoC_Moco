@@ -17,7 +17,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %       .mocoPropulsionWeight : 양의 apGRF impulse 최대화 weight
 %                               (default = 0; 0이면 비활성)
 %       .mocoPropulsionSmoothing : smooth positive-force 계수 [0.2, 1]
-%                                  (default = 1.0)
+%                                  (default = 0.2)
 %       .mocoPropulsionReferenceDuration : impulse 정규화 기준 시간(s)
 %       .gaitMode        : 'modeSym'  - 반 걸음 풀고 좌우 대칭 복사 (default)
 %                          'modeAsym' - 한 걸음 전체를 풀고 주기성만 강제
@@ -27,7 +27,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     weight_effort    = opts.mocoEffort;
     weight_finalTime = opts.mocoFinalTime;
     weight_propulsion = getOpt(opts, 'mocoPropulsionWeight', 0);
-    propulsionSmoothing = getOpt(opts, 'mocoPropulsionSmoothing', 1.0);
+    propulsionSmoothing = getOpt(opts, 'mocoPropulsionSmoothing', 0.2);
     propulsionReferenceDuration = getOpt(opts, ...
         'mocoPropulsionReferenceDuration', []);
     gaitMode         = opts.gaitMode;

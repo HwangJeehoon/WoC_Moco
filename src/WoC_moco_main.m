@@ -32,7 +32,7 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .mocoPropulsionWeight : 양의 apGRF impulse 최대화 goal weight
 %                             (default = 0; 0이면 goal 비활성)
 %     .mocoPropulsionSmoothing : 양의 apGRF smooth-max 계수 [0.2, 1]
-%                                (default = 1.0)
+%                                (default = 0.2)
 %     .mocoPropulsionReferenceDuration : impulse 정규화 기준 시간(s).
 %                                비우면 gaitMode/time bound에서 자동 설정
 %     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
@@ -168,7 +168,7 @@ if ~isscalar(mocoPropulsionWeight) || ~isnumeric(mocoPropulsionWeight) || ...
 end
 
 if ~isfield(opts, 'mocoPropulsionSmoothing') || isempty(opts.mocoPropulsionSmoothing)
-    mocoPropulsionSmoothing = 1.0;
+    mocoPropulsionSmoothing = 0.2;
 else
     mocoPropulsionSmoothing = opts.mocoPropulsionSmoothing;
 end
