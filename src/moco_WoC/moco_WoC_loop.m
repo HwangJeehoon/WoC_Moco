@@ -274,11 +274,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
             (2 * bodyWeight * propulsionReferenceDuration);
         addPropulsionGoal(problem, 'r', weightPerSide, propulsionSmoothing);
         addPropulsionGoal(problem, 'l', weightPerSide, propulsionSmoothing);
-
-        fprintf(['Moco propulsion goal enabled: weight=%.4g, smoothing=%.4g, ', ...
-                 'body weight=%.4g N, reference duration=%.4g s\n'], ...
-                 weight_propulsion, propulsionSmoothing, bodyWeight, ...
-                 propulsionReferenceDuration);
+        % 설정값 로그는 WoC_moco_main 파라미터 블록에서 출력한다.
     end
 
     %--------------------------------------------------------------

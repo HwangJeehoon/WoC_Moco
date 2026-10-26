@@ -217,6 +217,27 @@ else
 end
 
 %% --------------------------------------------------
+%  0. baseFolder = 이 파일이 있는 폴더
+% ---------------------------------------------------
+if isempty(mfilename)  % 스크립트처럼 실행하는 경우
+    thisFile = matlab.desktop.editor.getActiveFilename;
+else
+    thisFile = mfilename("fullpath");
+end
+baseFolder = fileparts(thisFile);
+
+% moco_WoC_loop과 같은 규칙: modeAsym은 한 걸음 bound(x2)를 쓰고, 비어 있는
+% propulsion reference duration은 mean(time bound)(modeAsym x2)로 정한다.
+boundScale = 1 + strcmpi(gaitMode, 'modeAsym');
+effPropulsionReferenceDuration = mocoPropulsionReferenceDuration;
+if isempty(effPropulsionReferenceDuration)
+    effPropulsionReferenceDuration = mean(mocoTimeBound) * boundScale;
+end
+if mocoPropulsionWeight > 0
+    propulsionBodyWeight = modelBodyWeight(fullfile(baseFolder, '..', 'models', model));
+end
+
+%% --------------------------------------------------
 %  파라미터 출력
 % ---------------------------------------------------
 fprintf('=== WoC_moco_main Parameters ===\n');
@@ -238,11 +259,13 @@ fprintf('  mocoPropulsionWeight: %.4g\n', mocoPropulsionWeight);
 if mocoPropulsionWeight > 0
     fprintf('  mocoPropulsionSmoothing: %.4g\n', mocoPropulsionSmoothing);
     if isempty(mocoPropulsionReferenceDuration)
-        fprintf('  mocoPropulsionReferenceDuration: auto\n');
+        fprintf('  mocoPropulsionReferenceDuration: %.4g s (auto)\n', ...
+            effPropulsionReferenceDuration);
     else
         fprintf('  mocoPropulsionReferenceDuration: %.4g s\n', ...
-            mocoPropulsionReferenceDuration);
+            effPropulsionReferenceDuration);
     end
+    fprintf('  propulsion body weight: %.4g N\n', propulsionBodyWeight);
 end
 fprintf('  gaitMode     : %s\n',   gaitMode);
 fprintf('  mocoTimeBound: %s\n',   mat2str(mocoTimeBound));
@@ -256,16 +279,6 @@ if resume_mode
 else
     resume_name = '';
 end
-
-%% --------------------------------------------------
-%  0. baseFolder = 이 파일이 있는 폴더
-% ---------------------------------------------------
-if isempty(mfilename)  % 스크립트처럼 실행하는 경우
-    thisFile = matlab.desktop.editor.getActiveFilename;
-else
-    thisFile = mfilename("fullpath");
-end
-baseFolder = fileparts(thisFile);
 
 %% --------------------------------------------------
 %  1. 파라미터 설정 + Output 폴더명 지정
@@ -798,6 +811,24 @@ function val = getOpt(s, field, defaultVal)
 end
 
 %% ---- 로그 표시용 헬퍼 ----
+function bw = modelBodyWeight(osimPath)
+% osim의 Body 질량 합 x g [N] (moco_WoC_loop의 getTotalMass와 같은 값).
+% OpenSim Model을 만들면 geometry 경고가 출력되므로 XML에서 직접 읽는다.
+    doc = xmlread(osimPath);
+    bodies = doc.getElementsByTagName('Body');
+    mass = 0;
+    for k = 0:bodies.getLength-1
+        kids = bodies.item(k).getChildNodes();
+        for c = 0:kids.getLength-1
+            n = kids.item(c);
+            if n.getNodeType() == n.ELEMENT_NODE && strcmp(char(n.getNodeName()), 'mass')
+                mass = mass + str2double(char(n.getTextContent()));
+            end
+        end
+    end
+    bw = mass * 9.80665;
+end
+
 function lbl = resultLabel(iterRootDir)
 % 절대경로 대신 'results/' 하위 상대경로(예: 'AF001-1/result_1')만 표시.
     parts = strsplit(iterRootDir, {'\\', '/'});
