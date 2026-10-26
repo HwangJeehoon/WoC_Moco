@@ -7,10 +7,12 @@
 %     A열 주석 행: default 값, ID rule 등 / endheader 행
 %     열 이름 행 : ID, Date, model, iter, optMode_type, trigger, rise, flat,
 %                 fall, maxVal, result_name, QP_effort, QP_smooth, cost,
-%                 mocoEffort, mocoFinalTime, mocoPropulsionWeight,
-%                 mocoPropulsionSmoothing, mocoPropulsionReferenceDuration,
+%                 mocoEffort, mocoFinalTime, mocoPropulsion,
 %                 mocoTimeBound, mocoDistBound,
 %                 gaitMode, resume_name, Complete
+%                 (mocoPropulsion 열 → opts.mocoPropulsionWeight.
+%                  mocoPropulsionSmoothing / mocoPropulsionReferenceDuration
+%                  열은 선택이며, 없으면 WoC_moco_main default 사용)
 %     데이터 행
 %
 %   Completed_queue 시트:
@@ -166,7 +168,7 @@ for i = 1:size(data_q, 1)
         opts = setOptField(opts, data_q(i,:), colNames, 'cost',         'str');
         opts = setOptField(opts, data_q(i,:), colNames, 'mocoEffort',   'num');
         opts = setOptField(opts, data_q(i,:), colNames, 'mocoFinalTime','num');
-        opts = setOptField(opts, data_q(i,:), colNames, 'mocoPropulsionWeight', 'num');
+        opts = setOptField(opts, data_q(i,:), colNames, 'mocoPropulsion', 'num', 'mocoPropulsionWeight');
         opts = setOptField(opts, data_q(i,:), colNames, 'mocoPropulsionSmoothing', 'num');
         opts = setOptField(opts, data_q(i,:), colNames, 'mocoPropulsionReferenceDuration', 'num');
         opts = setOptField(opts, data_q(i,:), colNames, 'gaitMode',     'str');
@@ -485,9 +487,11 @@ end
 
 % ─────────────────────────────────────────────────────────────────────────
 
-function opts = setOptField(opts, row, col_names, col_name, data_type)
+function opts = setOptField(opts, row, col_names, col_name, data_type, opt_field)
 % 열이 존재하고 값이 있으면 opts 구조체에 필드 추가.
 % data_type: 'num' (스칼라 숫자) | 'str' (문자열) | 'vec' (벡터, 예: [0.4 0.8])
+% opt_field: (선택) opts 필드명이 열 이름과 다를 때 지정 (default = col_name)
+    if nargin < 6, opt_field = col_name; end
     idx = colIdx(col_names, col_name);
     if idx == 0, return; end
     raw = row{idx};
@@ -496,16 +500,16 @@ function opts = setOptField(opts, row, col_names, col_name, data_type)
     switch data_type
         case 'num'
             v = getCellNum(raw);
-            if ~isnan(v), opts.(col_name) = v; end
+            if ~isnan(v), opts.(opt_field) = v; end
         case 'str'
             s = getCellStr(raw);
-            if ~isempty(s), opts.(col_name) = s; end
+            if ~isempty(s), opts.(opt_field) = s; end
         case 'vec'
             if isnumeric(raw) && ~isnan(raw)
-                opts.(col_name) = raw;
+                opts.(opt_field) = raw;
             else
                 v = str2num(getCellStr(raw)); %#ok<ST2NM>
-                if ~isempty(v), opts.(col_name) = v; end
+                if ~isempty(v), opts.(opt_field) = v; end
             end
     end
 end
