@@ -46,9 +46,10 @@ cfg.gateThreshold = 5.0;        % propulsion gate 중심 F0 [N] (meanPropPerVel 
 cfg.model = '2D_gait_AFO_pc.osim';
 % Initial guess (J별): stateFixed_20261030_221717의 같은 J 해
 % (bound [0.4 0.8] s / [0.4 1.0] m, v_avg = 0.5 m/s, E = 0.1, P_gate = J; 모든 세트의 bound 안)
-prevRun = fullfile(thisScriptDir, '..', 'results', 'stateFixed_20261030_221717_sym_J%d', ...
-    'result_1', 'moco_result', 'moco_WoC_Solution_iter01_kinematics_half.sto');
-cfg.guessSto = arrayfun(@(k) sprintf(prevRun, k), 1:numel(J_targets), 'UniformOutput', false);
+% (sprintf에는 폴더 이름만 넘긴다: Windows 경로의 '\'를 escape 문자로 읽기 때문)
+cfg.guessSto = arrayfun(@(k) fullfile(thisScriptDir, '..', 'results', ...
+    sprintf('stateFixed_20261030_221717_sym_J%d', k), 'result_1', 'moco_result', ...
+    'moco_WoC_Solution_iter01_kinematics_half.sto'), 1:numel(J_targets), 'UniformOutput', false);
 cfg.optMode = 'modeOff';        % 보조력 모드 (modeOff | modeWoC | modeSpline 등 string)
 cfg.gaitMode = 'modeSym';       % 'modeSym' | 'modeAsym'
 cfg.meshIntervals = 300;

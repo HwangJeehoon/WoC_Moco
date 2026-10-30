@@ -56,6 +56,12 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
         if ~isempty(existing)
             error('결과 폴더가 이미 있습니다 (runTag를 바꾸세요):\n%s', strjoin(existing, '\n'));
         end
+        % 잘못된 guess 경로로 case 폴더만 만들고 실패하지 않게 시작 전에 확인한다.
+        guessFiles = cellstr(cfg.guessSto);
+        missingGuess = guessFiles(~cellfun(@isempty, guessFiles) & ~isfile(guessFiles));
+        if ~isempty(missingGuess)
+            error('guess 파일이 없습니다:\n%s', strjoin(missingGuess, '\n'));
+        end
         guess = cfg.guessSto;
         for k = 1:nCase
             opts = struct();
