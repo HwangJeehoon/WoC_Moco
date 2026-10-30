@@ -35,6 +35,23 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %                                (default = 0.2)
 %     .mocoPropulsionReferenceDuration : impulse 정규화 기준 시간(s).
 %                                비우면 gaitMode/time bound에서 자동 설정
+%     .mocoObjectiveMode : Moco 목적함수 (QP의 .cost와 별개)
+%         'weighted'        : effort + final time (+ propulsion) 가중합 (default)
+%         'minSpeedFixedEP' : 평균속도 v_avg = (pelvis_tx(tf)-pelvis_tx(t0))/(tf-t0)
+%                             만 최소화하고 E = mocoEffortTarget,
+%                             P = mocoPropulsionTarget 을 endpoint equality
+%                             constraint로 강제한다. mocoEffort / mocoFinalTime /
+%                             mocoPropulsionWeight 는 쓰지 않는다(0이 아니면 error).
+%                             C++ 플러그인 필요: plugins/osimFixedEffortPropulsion/
+%                             build_osimFixedEffortPropulsion.m 으로 1회 빌드.
+%     .mocoEffortTarget : E0 ('minSpeedFixedEP' 필수). weighted 모드 effort goal과
+%                         같은 정의의 weight 곱하기 전 값
+%                         E = (1/d_COM) * int sum_c u_c^2 dt (모든 control, weight 1)
+%     .mocoPropulsionTarget : J [N*s] ('minSpeedFixedEP' 필수). 한 보행주기 동안
+%                         양발 smooth positive AP-GRF impulse의 합
+%                         sum_foot int log(1+exp(s*F_foot))/s dt,
+%                         s = mocoPropulsionSmoothing, F_foot = heel + front x-force.
+%                         modeSym은 반주기 적분의 2배를 J와 맞춘다.
 %     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
 %     .mocoTimeBound : Moco 시간 상한 [lb, ub] 또는 scalar (default = [0.4, 0.8])
 %     .mocoDistBound : pelvis_tx 최종 위치 bound [lb, ub] 또는 scalar (default = [0.4, 1.0])
@@ -148,6 +165,37 @@ else
     cost = opts.cost;
 end
 
+mocoObjectiveMode = getOpt(opts, 'mocoObjectiveMode', 'weighted');
+if ~ismember(mocoObjectiveMode, {'weighted', 'minSpeedFixedEP'})
+    error('opts.mocoObjectiveMode 는 ''weighted'' 또는 ''minSpeedFixedEP'' 이어야 합니다.');
+end
+isMinSpeed = strcmp(mocoObjectiveMode, 'minSpeedFixedEP');
+if isMinSpeed
+    % 목적함수는 평균속도 하나뿐이다. 기존 비용항 weight를 조용히 무시하지 않는다.
+    for f = {'mocoEffort', 'mocoFinalTime', 'mocoPropulsionWeight'}
+        if getOpt(opts, f{1}, 0) ~= 0
+            error(['opts.mocoObjectiveMode = ''minSpeedFixedEP'' 에서는 opts.%s 를 ', ...
+                   '지정하지 마세요 (목적함수는 평균속도뿐입니다).'], f{1});
+        end
+    end
+    opts.mocoEffort = 0;
+    opts.mocoFinalTime = 0;
+end
+
+% minSpeedFixedEP의 equality target. 실제 값은 사용자가 지정해야 하며 기본값은 없다.
+mocoEffortTarget = getOpt(opts, 'mocoEffortTarget', []);
+mocoPropulsionTarget = getOpt(opts, 'mocoPropulsionTarget', []);
+if isMinSpeed
+    if ~isscalar(mocoEffortTarget) || ~isnumeric(mocoEffortTarget) || ...
+            ~isfinite(mocoEffortTarget) || mocoEffortTarget <= 0
+        error('opts.mocoEffortTarget (E0) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.');
+    end
+    if ~isscalar(mocoPropulsionTarget) || ~isnumeric(mocoPropulsionTarget) || ...
+            ~isfinite(mocoPropulsionTarget) || mocoPropulsionTarget <= 0
+        error('opts.mocoPropulsionTarget (J, N*s) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.');
+    end
+end
+
 if ~isfield(opts, 'mocoEffort') || isempty(opts.mocoEffort)
     mocoEffort = 1;
     warning('WoC_moco_main: opts.mocoEffort 가 지정되지 않아 default(1) 를 사용합니다.');
@@ -220,6 +268,11 @@ if ~isfield(opts, 'mocoDistBound') || isempty(opts.mocoDistBound)
     warning('WoC_moco_main: opts.mocoDistBound 가 지정되지 않아 default([0.4 1.0]) 를 사용합니다.');
 else
     mocoDistBound = opts.mocoDistBound;
+end
+
+% E는 질량중심 변위로 나누므로 전진 변위가 양수여야 한다.
+if isMinSpeed && min(mocoDistBound) <= 0
+    error('opts.mocoObjectiveMode = ''minSpeedFixedEP'' 이면 mocoDistBound 하한이 양수여야 합니다.');
 end
 
 % Solver 설정: 기본값은 기존 고정값(mesh 300, tolerance 1e-3, 최대 반복 1000)과 같다.
@@ -295,6 +348,13 @@ if mocoPropulsionWeight > 0
     end
     fprintf('  propulsion body weight: %.4g N\n', propulsionBodyWeight);
 end
+fprintf('  mocoObjectiveMode: %s\n', mocoObjectiveMode);
+if isMinSpeed
+    fprintf('  objective: minimize v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)\n');
+    fprintf('  mocoEffortTarget E0: %.6g (effort metric before weight)\n', mocoEffortTarget);
+    fprintf('  mocoPropulsionTarget J: %.6g N*s (full stride, both feet, smoothing %.4g)\n', ...
+        mocoPropulsionTarget, mocoPropulsionSmoothing);
+end
 fprintf('  gaitMode     : %s\n',   gaitMode);
 fprintf('  mocoTimeBound: %s\n',   mat2str(mocoTimeBound));
 fprintf('  mocoDistBound: %s\n',   mat2str(mocoDistBound));
@@ -346,6 +406,9 @@ MocoOpts.mocoFinalTime    = mocoFinalTime;
 MocoOpts.mocoPropulsionWeight = mocoPropulsionWeight;
 MocoOpts.mocoPropulsionSmoothing = mocoPropulsionSmoothing;
 MocoOpts.mocoPropulsionReferenceDuration = mocoPropulsionReferenceDuration;
+MocoOpts.mocoObjectiveMode = mocoObjectiveMode;
+MocoOpts.mocoEffortTarget = mocoEffortTarget;
+MocoOpts.mocoPropulsionTarget = mocoPropulsionTarget;
 MocoOpts.gaitMode         = gaitMode;
 MocoOpts.mocoTimeBound    = mocoTimeBound;
 MocoOpts.mocoDistBound    = mocoDistBound;
