@@ -24,7 +24,10 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %                            propulsion을 endpoint equality로 고정한다
 %                            (플러그인 osimFixedEffortPropulsion 필요)
 %       .mocoEffortTarget : 'minSpeedFixedEP'의 E0
-%       .mocoPropulsionTarget : 'minSpeedFixedEP'의 J [N*s, 한 보행주기]
+%       .mocoPropulsionTarget : 'minSpeedFixedEP'의 J [N*s, 한 보행주기 gated Iplus]
+%       .mocoPropulsionGateSigma / .mocoPropulsionGateThreshold :
+%                            'minSpeedFixedEP' gate g(F) = 1/(1+exp(-(F-F0)/sigma))의
+%                            sigma, F0 [N] (default = 1, 5)
 %       .mocoMeshIntervals : CasADi mesh interval 수 (default = 300)
 %       .mocoConvergenceTolerance : IPOPT convergence tolerance (default = 1e-3)
 %       .mocoConstraintTolerance  : IPOPT constraint tolerance (default = 1e-3)
@@ -41,6 +44,8 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     propulsionReferenceDuration = getOpt(opts, ...
         'mocoPropulsionReferenceDuration', []);
     useMinSpeed = strcmp(getOpt(opts, 'mocoObjectiveMode', 'weighted'), 'minSpeedFixedEP');
+    gateSigma = getOpt(opts, 'mocoPropulsionGateSigma', 1.0);
+    gateThreshold = getOpt(opts, 'mocoPropulsionGateThreshold', 5.0);
     integratorPath = '/effortPropulsion';
     gaitMode         = opts.gaitMode;
     % modeSym은 반 걸음을 풀므로 한 보행주기 propulsion은 반주기 적분의 2배다.
@@ -177,7 +182,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         % 저장되는 injected osim은 플러그인 없이도 읽을 수 있게 유지된다.
         moco_WoC_loadFixedEffortPropulsionPlugin();
         addEffortPropulsionIntegrator(model, integratorPath, ...
-            propulsionSmoothing, impulseScale);
+            gateSigma, gateThreshold, impulseScale);
         problem.setModelProcessor(ModelProcessor(model));
     end
     modelState = model.initSystem();
@@ -265,11 +270,14 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         %   minimize   v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
         %   subject to E = mocoEffortTarget, P = mocoPropulsionTarget
         %
-        % E is the effort goal of the weighted mode before its weight and P
-        % the sum of the two propulsion goals before their weight. Both
-        % integrals are states of the EffortPropulsionIntegrator component
-        % (plugin osimFixedEffortPropulsion), zero at t0:
-        %   z_E' = sum_c u_c^2,   z_P' = sum_foot softplus_s(F_foot),
+        % E is the effort goal of the weighted mode before its weight. P is
+        % the gated propulsive impulse Iplus of MeanPropulsiveForce
+        % (meanPropPerVel_goal): each foot's heel + front AP force F is
+        % gated by g(F) = 1/(1+exp(-(F-F0)/sigma)) and F*g(F) is summed over
+        % the feet. Both integrals are states of the
+        % EffortPropulsionIntegrator component (plugin
+        % osimFixedEffortPropulsion), zero at t0:
+        %   z_E' = sum_c u_c^2,   z_P' = F_r g(F_r) + F_l g(F_l),
         % and the equalities are MocoFinalOutputGoal endpoint constraints
         %   z_E(tf) / d_COM = E0,   impulseScale * z_P(tf) = J.
         % (MocoControlGoal does not support endpoint constraint mode, and an
@@ -283,8 +291,9 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         addMinSpeedFixedEPGoals(problem, integratorPath, ...
             opts.mocoEffortTarget, opts.mocoPropulsionTarget);
         fprintf(['Moco minSpeedFixedEP: E0=%.6g, J=%.6g N*s ', ...
-                 '(impulse scale %d, smoothing %.4g)\n'], opts.mocoEffortTarget, ...
-                 opts.mocoPropulsionTarget, impulseScale, propulsionSmoothing);
+                 '(impulse scale %d, gate sigma %.4g N, F0 %.4g N)\n'], ...
+                 opts.mocoEffortTarget, opts.mocoPropulsionTarget, impulseScale, ...
+                 gateSigma, gateThreshold);
     else
         % Effort goal (공통)
         effortGoal = MocoControlGoal('effort', weight_effort);
@@ -412,17 +421,19 @@ function addPropulsionGoal(problem, side, weight, smoothing)
 end
 
 
-function addEffortPropulsionIntegrator(model, componentPath, smoothing, impulseScale)
-% Add the plugin component that integrates the effort rate and the smooth
-% positive AP-GRF of each foot (sum of its heel/front sphere_force
-% x-components, as in addPropulsionGoal).
+function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
+        gateThreshold, impulseScale)
+% Add the plugin component that integrates the effort rate and the gated
+% propulsive impulse rate of each foot (sum of its heel/front sphere_force
+% x-components, as in addPropulsionGoal and MeanPropulsiveForce).
     import org.opensim.modeling.*
 
     component = Component.safeDownCast( ...
         OpenSimObject.newInstanceOfType('EffortPropulsionIntegrator'));
     component.setName(componentPath(2:end));
-    PropertyHelper.setValueDouble(smoothing, ...
-        component.updPropertyByName('smoothing_factor'));
+    PropertyHelper.setValueDouble(gateSigma, component.updPropertyByName('gate_sigma'));
+    PropertyHelper.setValueDouble(gateThreshold, ...
+        component.updPropertyByName('gate_threshold'));
     PropertyHelper.setValueDouble(impulseScale, ...
         component.updPropertyByName('impulse_scale'));
     sides = {'r', 'right_contact_forces'; 'l', 'left_contact_forces'};
@@ -456,16 +467,16 @@ function addMinSpeedFixedEPGoals(problem, componentPath, effortTarget, propulsio
     effortGoal.setEndpointConstraintBounds(equalityBounds(effortTarget));
     problem.addGoal(effortGoal);
 
-    % P = impulse_scale * z_P(tf) [N*s, one stride].
+    % P_gate = impulse_scale * z_P(tf) [N*s, one stride].
     propulsionGoal = MocoFinalOutputGoal('propulsion_constraint');
-    propulsionGoal.setOutputPath([componentPath '|scaled_positive_impulse']);
+    propulsionGoal.setOutputPath([componentPath '|scaled_propulsive_impulse']);
     propulsionGoal.setMode('endpoint_constraint');
     propulsionGoal.setEndpointConstraintBounds(equalityBounds(propulsionTarget));
     problem.addGoal(propulsionGoal);
 
     % Both integrals start at 0. Moco omits states without a state info.
     problem.setStateInfo([componentPath '/effort_integral'], [-Inf, Inf], 0);
-    problem.setStateInfo([componentPath '/positive_impulse'], [-Inf, Inf], 0);
+    problem.setStateInfo([componentPath '/propulsive_impulse'], [-Inf, Inf], 0);
 end
 
 
@@ -478,60 +489,63 @@ end
 
 function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
         componentPath, useIntegrator, modelPath, guessPath)
-% Solutions of the minSpeedFixedEP mode contain the integral states. Add them
-% (running integrals along the guess) when the mode is used and drop them
-% otherwise, so the guess matches the problem.
+% Make the guess match the integral states of the problem. Integral states
+% already in the guess (from a minSpeedFixedEP solution, including the
+% earlier softplus version) are dropped; when the mode is used, the states
+% are rebuilt as running integrals along the guess itself.
     import org.opensim.modeling.*
 
-    statePaths = {[componentPath '/effort_integral'], [componentPath '/positive_impulse']};
-    guessStates = guessTraj.getStateNames();
-    hasStates = false;
-    for k = 0:guessStates.size()-1
-        hasStates = hasStates || any(strcmp(char(guessStates.get(k)), statePaths));
+    statesTable = guessTraj.exportToStatesTable();
+    labels = statesTable.getColumnLabels();
+    oldStates = {};
+    for k = 0:labels.size()-1
+        if startsWith(char(labels.get(k)), [componentPath '/'])
+            oldStates{end+1} = char(labels.get(k)); %#ok<AGROW>
+        end
+    end
+    if ~useIntegrator && isempty(oldStates)
+        return;
+    end
+    for k = 1:numel(oldStates)
+        statesTable.removeColumn(oldStates{k});
     end
 
-    if useIntegrator && ~hasStates
-        smoothing = PropertyHelper.getValueDouble(model.getComponent( ...
-            componentPath).getPropertyByName('smoothing_factor'));
-        m = moco_WoC_evalGaitMetrics(modelPath, guessPath, 1, smoothing);
+    if useIntegrator
+        component = model.getComponent(componentPath);
+        m = moco_WoC_evalGaitMetrics(modelPath, guessPath, 1, ...
+            PropertyHelper.getValueDouble(component.getPropertyByName('gate_sigma')), ...
+            PropertyHelper.getValueDouble(component.getPropertyByName('gate_threshold')));
+        statePaths = {[componentPath '/effort_integral'], [componentPath '/propulsive_impulse']};
         values = [cumtrapz(m.time, m.effort_rate), ...
-                  cumtrapz(m.time, m.positive_impulse_rate)];
+                  cumtrapz(m.time, m.gate_impulse_rate)];
 
-        % Moco 4.5 maps guess states to the problem by position, so append
-        % the new columns in the model's system order.
+        % Moco 4.5 maps guess states to the problem by position. The guess
+        % columns are in system order and the component's states come last,
+        % so append them in their system order.
         systemOrder = opensimSimulation.createStateVariableNamesInSystemOrder(model);
         systemNames = cell(systemOrder.size(), 1);
         for k = 0:systemOrder.size()-1
             systemNames{k+1} = char(systemOrder.get(k));
         end
-        [~, order] = sort(cellfun(@(p) find(strcmp(systemNames, p)), statePaths));
-        statePaths = statePaths(order);
-        values = values(:, order);
-
-        labels = StdVectorString();
-        labels.add(statePaths{1});
-        labels.add(statePaths{2});
-        table = TimeSeriesTable();
-        table.setColumnLabels(labels);
-        for k = 1:numel(m.time)
-            table.appendRow(m.time(k), RowVector.createFromMat(values(k, :)));
+        [position, order] = sort(cellfun(@(p) find(strcmp(systemNames, p)), statePaths));
+        if ~isequal(position, numel(systemNames) - [1, 0])
+            error('moco_WoC_loop: 적분 상태가 system order의 마지막 두 상태가 아닙니다.');
         end
-        guessTraj.insertStatesTrajectory(table);
-
-    elseif ~useIntegrator && hasStates
-        statesTable = guessTraj.exportToStatesTable();
-        statesTable.removeColumn(statePaths{1});
-        statesTable.removeColumn(statePaths{2});
-        guessTraj = MocoTrajectory.createFromStatesControlsTables( ...
-            problem.createRep(), statesTable, guessTraj.exportToControlsTable());
+        for k = order
+            statesTable.appendColumn(statePaths{k}, Vector.createFromMat(values(:, k)));
+        end
     end
+    guessTraj = MocoTrajectory.createFromStatesControlsTables( ...
+        problem.createRep(), statesTable, guessTraj.exportToControlsTable());
 end
 
 
 function checkMinSpeedGoals(problem)
-% Check on the problem Moco solves that v_avg is the only cost and that E
-% and P are endpoint constraints (createRep initializes the goals, so an
-% unsupported endpoint constraint mode would also throw here).
+% Check on the problem Moco solves that v_avg is the only cost, that E and
+% P are endpoint constraints (createRep initializes the goals, so an
+% unsupported endpoint constraint mode would also throw here) and that both
+% read the optimizer's states: MocoCasADiSolver copies them into the
+% SimTK::State only for goals that depend on Stage::Time or later.
     names = @(v) arrayfun(@(k) char(v.get(k)), 0:v.size()-1, 'UniformOutput', false);
     rep = problem.createRep();
     costs = names(rep.createCostNames());
@@ -541,6 +555,28 @@ function checkMinSpeedGoals(problem)
     if ~isequal(costs, {'average_speed'}) || ...
             ~all(ismember({'effort_constraint', 'propulsion_constraint'}, constraints))
         error('moco_WoC_loop: minSpeedFixedEP 문제의 cost/endpoint constraint 구성이 예상과 다릅니다.');
+    end
+    stageNames = {'Topology', 'Model (or lower)', 'Instance', 'Time', 'Position', 'Velocity', ...
+                  'Dynamics', 'Acceleration', 'Report'};
+    for name = {'effort_constraint', 'propulsion_constraint'}
+        level = stageLevel(rep.getEndpointConstraint(name{1}).getStageDependency());
+        fprintf('  %s stage dependency: %s\n', name{1}, stageNames{level});
+        if level < 4
+            error('moco_WoC_loop: %s 의 stage dependency(%s)가 Stage::Time보다 낮습니다.', ...
+                name{1}, stageNames{level});
+        end
+    end
+end
+
+
+function level = stageLevel(stage)
+% SimTK::Stage level (Topology = 1, Model = 2, Instance = 3, Time = 4, ...).
+% The MATLAB binding has no level accessor, so count the steps down through
+% the runtime stages (Instance ... Report); Model or lower returns 2.
+    level = 2;
+    while stage.isInRuntimeRange()
+        level = level + 1;
+        stage = stage.prev();
     end
 end
 

@@ -48,10 +48,14 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %                         같은 정의의 weight 곱하기 전 값
 %                         E = (1/d_COM) * int sum_c u_c^2 dt (모든 control, weight 1)
 %     .mocoPropulsionTarget : J [N*s] ('minSpeedFixedEP' 필수). 한 보행주기 동안
-%                         양발 smooth positive AP-GRF impulse의 합
-%                         sum_foot int log(1+exp(s*F_foot))/s dt,
-%                         s = mocoPropulsionSmoothing, F_foot = heel + front x-force.
+%                         양발 gated propulsive impulse의 합 (meanPropPerVel의 Iplus)
+%                         P_gate = int [F_r g(F_r) + F_l g(F_l)] dt,
+%                         g(F) = 1/(1+exp(-(F-F0)/sigma)), F_foot = heel + front x-force.
 %                         modeSym은 반주기 적분의 2배를 J와 맞춘다.
+%     .mocoPropulsionGateSigma     : 'minSpeedFixedEP' gate 폭 sigma [N] (default = 1)
+%     .mocoPropulsionGateThreshold : 'minSpeedFixedEP' gate 중심 F0 [N] (default = 5)
+%                         (mocoPropulsionSmoothing은 weighted 모드 propulsion 비용항의
+%                          softplus 계수 [1/N]로, minSpeedFixedEP에서는 쓰지 않는다)
 %     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
 %     .mocoTimeBound : Moco 시간 상한 [lb, ub] 또는 scalar (default = [0.4, 0.8])
 %     .mocoDistBound : pelvis_tx 최종 위치 bound [lb, ub] 또는 scalar (default = [0.4, 1.0])
@@ -60,8 +64,10 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .mocoConstraintTolerance  : IPOPT constraint tolerance (default = 1e-3)
 %     .mocoMaxIterations        : IPOPT 최대 반복 수 (default = 1000)
 %     .guessInitSto  : Initial guess로 사용할 sto 위치
+%     .resultsDir    : 결과 루트 폴더 (default = <repo>/results)
 %
 %   저장 구조:
+%   (results = opts.resultsDir; resume_name도 이 폴더 기준)
 %     results/<result_name>/baseline/analy_result/   ← 초기 guess kinematics 해석 결과
 %     results/<result_name>/result_i/analy_result/   ← iter i moco 결과 해석
 %     results/<result_name>/result_i/moco_result/    ← iter i 궤적/GRF/metabolic,
@@ -196,6 +202,18 @@ if isMinSpeed
     end
 end
 
+% minSpeedFixedEP propulsion gate (meanPropPerVel MeanPropulsiveForce와 같은 기본값).
+mocoPropulsionGateSigma = getOpt(opts, 'mocoPropulsionGateSigma', 1.0);
+if ~isscalar(mocoPropulsionGateSigma) || ~isnumeric(mocoPropulsionGateSigma) || ...
+        ~isfinite(mocoPropulsionGateSigma) || mocoPropulsionGateSigma <= 0
+    error('opts.mocoPropulsionGateSigma 는 양의 유한 scalar여야 합니다 (N).');
+end
+mocoPropulsionGateThreshold = getOpt(opts, 'mocoPropulsionGateThreshold', 5.0);
+if ~isscalar(mocoPropulsionGateThreshold) || ~isnumeric(mocoPropulsionGateThreshold) || ...
+        ~isfinite(mocoPropulsionGateThreshold)
+    error('opts.mocoPropulsionGateThreshold 는 유한 scalar여야 합니다 (N).');
+end
+
 if ~isfield(opts, 'mocoEffort') || isempty(opts.mocoEffort)
     mocoEffort = 1;
     warning('WoC_moco_main: opts.mocoEffort 가 지정되지 않아 default(1) 를 사용합니다.');
@@ -306,6 +324,7 @@ else
     thisFile = mfilename("fullpath");
 end
 baseFolder = fileparts(thisFile);
+resultsRoot = getOpt(opts, 'resultsDir', fullfile(baseFolder, '..', 'results'));
 
 % moco_WoC_loop과 같은 규칙: modeAsym은 한 걸음 bound(x2)를 쓰고, 비어 있는
 % propulsion reference duration은 mean(time bound)(modeAsym x2)로 정한다.
@@ -352,8 +371,10 @@ fprintf('  mocoObjectiveMode: %s\n', mocoObjectiveMode);
 if isMinSpeed
     fprintf('  objective: minimize v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)\n');
     fprintf('  mocoEffortTarget E0: %.6g (effort metric before weight)\n', mocoEffortTarget);
-    fprintf('  mocoPropulsionTarget J: %.6g N*s (full stride, both feet, smoothing %.4g)\n', ...
-        mocoPropulsionTarget, mocoPropulsionSmoothing);
+    fprintf('  mocoPropulsionTarget J: %.6g N*s (full stride, both feet, gated Iplus)\n', ...
+        mocoPropulsionTarget);
+    fprintf('  propulsion gate: sigma %.4g N, F0 %.4g N\n', ...
+        mocoPropulsionGateSigma, mocoPropulsionGateThreshold);
 end
 fprintf('  gaitMode     : %s\n',   gaitMode);
 fprintf('  mocoTimeBound: %s\n',   mat2str(mocoTimeBound));
@@ -409,6 +430,8 @@ MocoOpts.mocoPropulsionReferenceDuration = mocoPropulsionReferenceDuration;
 MocoOpts.mocoObjectiveMode = mocoObjectiveMode;
 MocoOpts.mocoEffortTarget = mocoEffortTarget;
 MocoOpts.mocoPropulsionTarget = mocoPropulsionTarget;
+MocoOpts.mocoPropulsionGateSigma = mocoPropulsionGateSigma;
+MocoOpts.mocoPropulsionGateThreshold = mocoPropulsionGateThreshold;
 MocoOpts.gaitMode         = gaitMode;
 MocoOpts.mocoTimeBound    = mocoTimeBound;
 MocoOpts.mocoDistBound    = mocoDistBound;
@@ -436,14 +459,20 @@ end
 % boundScale / effPropulsionReferenceDuration 은 파라미터 출력 전에 계산함.
 runParams = [runParams; ...
     {'effective_final_time_bound_s', mocoTimeBound * boundScale; ...
-     'effective_final_pelvis_tx_bound_m', mocoDistBound * boundScale}];
+     'effective_final_pelvis_tx_bound_m', mocoDistBound * boundScale; ...
+     'results_root', resultsRoot}];
+if isMinSpeed
+    % 결과를 다시 요약할 때 실행 당시 propulsion 정의를 구분하기 위한 메타데이터.
+    runParams(end+1, :) = {'propulsion_definition', ...
+        'gate_Iplus: P = impulse_scale * int [F_r g(F_r) + F_l g(F_l)] dt, g = 1/(1+exp(-(F-F0)/sigma))'};
+end
 if mocoPropulsionWeight > 0 && isempty(mocoPropulsionReferenceDuration)
     runParams(end+1, :) = {'effective_mocoPropulsionReferenceDuration_s', ...
                            effPropulsionReferenceDuration};
 end
 
 % Output 폴더
-OutputFolder = fullfile(baseFolder,'..','results', result_name);
+OutputFolder = fullfile(resultsRoot, result_name);
 if ~exist(OutputFolder, 'dir')
     mkdir(OutputFolder);
 end
@@ -485,7 +514,7 @@ else
     % resume_name 가 baseFolder 기준 상대경로 (예: 'my_result/result_300')
     % '\' 와 '/' 구분자를 모두 허용 (Windows/Ubuntu 호환)
     resumeParts = strsplit(resume_name, {'\', '/'});
-    resumeAbsDir = fullfile(baseFolder,'..','results', resumeParts{:});
+    resumeAbsDir = fullfile(resultsRoot, resumeParts{:});
 
     % result_XXX에서 XXX 파싱
     [~, resumeFolderName] = fileparts(resumeAbsDir);

@@ -1,26 +1,28 @@
 function summary = WoC_moco_runMinSpeedCases(cfg)
 % WoC_moco_runMinSpeedCases
 %
-%   같은 E0에 대해 propulsion target J_k마다 하나씩 다음 문제를 푼다
+%   같은 E0에 대해 propulsion target J_k마다 하나씩 다음 문제를 독립적으로 푼다
 %   (opts.mocoObjectiveMode = 'minSpeedFixedEP'):
 %
 %     minimize    v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
-%     subject to  E = E0, P = J_k, 기존 동역학/주기성/대칭성/bounds
+%     subject to  E = E0, P_gate = J_k, 기존 동역학/주기성/대칭성/bounds
 %
-%   각 case 결과를 저장된 궤적에서 다시 계산해 표/CSV와 그림으로 저장한다.
-%   solver 수렴 여부와 equality 충족 여부를 따로 판정하며, 실패 case에서
-%   target·bound·제약을 바꿔 다시 풀지 않는다.
+%   각 case 결과를 저장된 궤적에서 control과 접촉력으로 다시 적분해 표/CSV와
+%   그림으로 저장한다. solver 수렴 여부와 equality 충족 여부를 따로 판정하며,
+%   실패 case에서 target·bound·제약을 바꿔 다시 풀지 않는다. 한 case의 실행이나
+%   요약이 실패해도 나머지 case는 계속 처리한다.
 %
 %   cfg 필드:
-%     E0, J_targets      : effort target, propulsion target 벡터 [N*s]
+%     E0, J_targets      : effort target, P_gate target 벡터 [N*s, 한 보행주기]
 %     targetSource       : target 출처 설명 (CSV에 기록)
+%     gateSigma, gateThreshold : propulsion gate sigma, F0 [N]
 %     model, optMode, gaitMode, guessSto ('' 이면 WoC_moco_main 기본 guess)
 %     timeBound, distBound : 반 걸음 기준 bound (modeAsym은 WoC_moco_main이 x2)
 %     meshIntervals, convergenceTolerance, constraintTolerance, maxIterations
-%     propulsionSmoothing : softplus 계수 s
-%     effortTol, propulsionTol : equality 검증 허용오차 (|E-E0|, |P-J| [N*s])
-%     resultsDir, runTag : 결과는 resultsDir/<runTag>_<mode>_J<k>, 요약은
-%                          resultsDir/<runTag>_<mode>_summary 에 저장한다
+%     effortTol, propulsionTol : equality 검증 허용오차 (|E-E0|, |P_gate-J| [N*s])
+%     resultsDir, runTag : 결과 루트와 이름. case는 <resultsDir>/<runTag>_<mode>_J<k>,
+%                          요약은 <resultsDir>/<runTag>_<mode>_summary/<시각>/ 에
+%                          저장한다(이전 요약을 덮어쓰지 않는다)
 %     continuation       : true면 case k가 직전 수렴 case의 해에서 시작
 %     runOptimizations   : false면 이미 있는 결과만 요약한다
 %
@@ -28,6 +30,8 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
 
     validateTargets(cfg.E0, cfg.J_targets);
 
+    % WoC_moco_main과 같은 절대경로 결과 루트를 저장, 검사, guess, 요약에 쓴다.
+    resultsRoot = char(java.io.File(cfg.resultsDir).getCanonicalPath());
     modeTag = lower(erase(cfg.gaitMode, 'mode'));
     isSym = strcmpi(cfg.gaitMode, 'modeSym');
     impulseScale = 1 + isSym;     % modeSym 반주기 적분 -> 한 보행주기
@@ -36,15 +40,14 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
     nCase = numel(cfg.J_targets);
     caseNames = arrayfun(@(k) sprintf('%s_%s_J%d', cfg.runTag, modeTag, k), ...
         1:nCase, 'UniformOutput', false);
-    summaryDir = fullfile(cfg.resultsDir, sprintf('%s_%s_summary', cfg.runTag, modeTag));
+    caseDirs = fullfile(resultsRoot, caseNames);
 
     runMessages = strings(nCase, 1);
     if cfg.runOptimizations
-        % 기존 결과를 덮어쓰지 않는다.
-        for k = 1:nCase
-            if isfolder(fullfile(cfg.resultsDir, caseNames{k}))
-                error('결과 폴더가 이미 있습니다: %s (runTag를 바꾸세요)', caseNames{k});
-            end
+        % 기존 결과를 덮어쓰지 않는다 (WoC_moco_main이 실제로 쓸 절대경로 기준).
+        existing = caseDirs(isfolder(caseDirs));
+        if ~isempty(existing)
+            error('결과 폴더가 이미 있습니다 (runTag를 바꾸세요):\n%s', strjoin(existing, '\n'));
         end
         guess = cfg.guessSto;
         for k = 1:nCase
@@ -53,7 +56,8 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
             opts.mocoObjectiveMode = 'minSpeedFixedEP';
             opts.mocoEffortTarget = cfg.E0;
             opts.mocoPropulsionTarget = cfg.J_targets(k);
-            opts.mocoPropulsionSmoothing = cfg.propulsionSmoothing;
+            opts.mocoPropulsionGateSigma = cfg.gateSigma;
+            opts.mocoPropulsionGateThreshold = cfg.gateThreshold;
             opts.mocoTimeBound = cfg.timeBound;
             opts.mocoDistBound = cfg.distBound;
             opts.mocoMeshIntervals = cfg.meshIntervals;
@@ -61,6 +65,7 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
             opts.mocoConstraintTolerance = cfg.constraintTolerance;
             opts.mocoMaxIterations = cfg.maxIterations;
             opts.guessInitSto = guess;
+            opts.resultsDir = resultsRoot;
             fprintf('\n===== minSpeedFixedEP case %d/%d: E0=%.6g, J=%.6g N*s =====\n', ...
                 k, nCase, cfg.E0, cfg.J_targets(k));
             try
@@ -72,7 +77,7 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
                     'Case %s did not finish: %s', caseNames{k}, ME.message);
             end
             if cfg.continuation
-                solFile = solutionFile(fullfile(cfg.resultsDir, caseNames{k}), isSym, false);
+                solFile = solutionFile(caseDirs{k}, isSym, false);
                 if isfile(solFile)
                     guess = solFile;
                 end
@@ -82,22 +87,35 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
 
     rows = cell(nCase, 1);
     for k = 1:nCase
-        rows{k} = summarizeCase(cfg, fullfile(cfg.resultsDir, caseNames{k}), ...
-            caseNames{k}, k, isSym, impulseScale, boundScale, modelName);
+        try
+            rows{k} = summarizeCase(cfg, caseDirs{k}, caseNames{k}, k, isSym, ...
+                impulseScale, boundScale, modelName);
+        catch ME
+            % 손상된 파일 하나 때문에 다른 case의 요약이 사라지지 않게 한다.
+            rows{k} = emptyRow(cfg, caseDirs{k}, caseNames{k}, k, impulseScale, boundScale);
+            rows{k}.Verdict = "Summary error";
+            rows{k}.SummaryError = string(ME.message);
+        end
         rows{k}.RunMessage = runMessages(k);
     end
-    summary = struct2table([rows{:}]);
+    summary = struct2table([rows{:}], 'AsArray', true);
 
-    if ~isfolder(summaryDir), mkdir(summaryDir); end
+    summaryDir = fullfile(resultsRoot, sprintf('%s_%s_summary', cfg.runTag, modeTag), ...
+        char(datetime('now', 'Format', 'yyyyMMdd_HHmmss')));
+    mkdir(summaryDir);
     writetable(summary, fullfile(summaryDir, 'summary.csv'));
     writeDefinitions(fullfile(summaryDir, 'definitions.txt'), cfg, impulseScale, boundScale);
 
     fprintf('\n===== minSpeedFixedEP summary (%s) =====\n', summaryDir);
-    disp(summary(:, {'Case', 'Verdict', 'SolverStatus', 'E_target', 'E_actual', ...
-        'E_residual', 'J_target', 'P_smooth_actual', 'P_residual', 'P_physical', ...
-        'v_avg_mps', 'BoundHits'}));
+    disp(summary(:, {'Case', 'PropulsionDefinition', 'Verdict', 'SolverStatus', ...
+        'E_target', 'E_actual', 'E_residual', 'P_gate_target', 'P_gate_actual', ...
+        'P_gate_residual', 'P_physical', 'v_avg_mps', 'BoundHits'}));
 
-    plotCases(summary, cfg, summaryDir);
+    try
+        plotCases(summary, summaryDir);
+    catch ME
+        warning('WoC_moco_runMinSpeedCases:PlotFailed', '그림 저장 실패: %s', ME.message);
+    end
 end
 
 
@@ -128,32 +146,40 @@ function f = solutionFile(resultDir, isSym, unseal)
 end
 
 
-function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, ...
-        boundScale, modelName)
+function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
     row = struct('Case', string(caseName), 'CaseIndex', k, ...
-        'TargetSource', string(cfg.targetSource), 'Verdict', "", ...
-        'SolverStatus', "missing", 'Converged', false, 'Iterations', NaN, ...
-        'SolverTime_s', NaN, 'Objective', NaN, 'ObjectiveTerms', "", ...
-        'OnlySpeedCost', false, ...
+        'TargetSource', string(cfg.targetSource), 'PropulsionDefinition', "", ...
+        'Verdict', "", 'SolverStatus', "missing", 'Converged', false, ...
+        'Iterations', NaN, 'SolverTime_s', NaN, 'Objective', NaN, ...
+        'ObjectiveTerms', "", 'OnlySpeedCost', false, ...
         'E_target', cfg.E0, 'E_actual', NaN, 'E_residual', NaN, 'E_pass', false, ...
-        'J_target', cfg.J_targets(k), 'P_smooth_actual', NaN, 'P_residual', NaN, ...
-        'P_pass', false, 'P_physical', NaN, 'P_smooth_minus_physical', NaN, ...
-        'E_constraint_value', NaN, 'P_constraint_value', NaN, ...
+        'E_constraint_value', NaN, ...
+        'P_gate_target', cfg.J_targets(k), 'P_gate_actual', NaN, ...
+        'P_gate_residual', NaN, 'P_gate_pass', false, 'P_gate_constraint_value', NaN, ...
+        'P_physical', NaN, 'P_gate_minus_physical', NaN, 'Tplus_s', NaN, ...
+        'MeanPropulsiveForce_N', NaN, 'RunPropulsionTarget', NaN, ...
         'v_avg_mps', NaN, 'PhaseDistance_m', NaN, 'PhaseDuration_s', NaN, ...
         'StrideLength_m', NaN, 'StrideTime_s', NaN, 'BoundHits', "", ...
         'E_trapz', NaN, 'E_muscle', NaN, 'E_lumbar', NaN, 'E_afo', NaN, ...
-        'P_smooth_trapz', NaN, 'P_physical_simpson', NaN, ...
-        'Indep_v_avg_mps', NaN, 'Indep_P_smooth', NaN, 'Indep_P_physical', NaN, ...
-        'Indep_E_noAFO', NaN, ...
+        'P_gate_trapz', NaN, 'Tplus_trapz_s', NaN, ...
+        'Indep_v_avg_mps', NaN, 'Indep_P_gate', NaN, 'Indep_Tplus_s', NaN, ...
+        'Indep_P_physical', NaN, 'Indep_E_noAFO', NaN, ...
+        'GateSigma_N', cfg.gateSigma, 'GateThreshold_N', cfg.gateThreshold, ...
+        'ImpulseScale', impulseScale, ...
         'Model', string(cfg.model), 'OptMode', string(cfg.optMode), ...
         'GaitMode', string(cfg.gaitMode), 'Guess', "", ...
         'MeshIntervals', cfg.meshIntervals, 'ConvergenceTol', cfg.convergenceTolerance, ...
         'ConstraintTol', cfg.constraintTolerance, 'MaxIterations', cfg.maxIterations, ...
         'TimeBound_s', string(mat2str(cfg.timeBound * boundScale)), ...
         'DistBound_m', string(mat2str(cfg.distBound * boundScale)), ...
-        'Smoothing', cfg.propulsionSmoothing, 'ImpulseScale', impulseScale, ...
         'EffortTol', cfg.effortTol, 'PropulsionTol', cfg.propulsionTol, ...
-        'ResultDir', string(resultDir), 'RunMessage', "");
+        'ResultDir', string(resultDir), 'RunMessage', "", 'SummaryError', "");
+end
+
+
+function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, ...
+        boundScale, modelName)
+    row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale);
 
     unseal = false;
     solFile = solutionFile(resultDir, isSym, false);
@@ -161,12 +187,32 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
         solFile = solutionFile(resultDir, isSym, true);
         unseal = true;
     end
-    paramsFile = fullfile(resultDir, 'result_1', 'moco_result', ...
-        'moco_WoC_Solution_iter01_parameters.csv');
-    if isfile(paramsFile)
-        params = readtable(paramsFile, 'Format', '%s%s', 'TextType', 'string', ...
-            'Delimiter', ',');
-        row.Guess = strjoin(params.Value(params.Parameter == "guess_sto"), ";");
+
+    % 실행 당시 설정: target, gate 파라미터, propulsion 정의를 그대로 쓴다.
+    params = readParams(fullfile(resultDir, 'result_1', 'moco_result', ...
+        'moco_WoC_Solution_iter01_parameters.csv'));
+    if isfield(params, 'guess_sto'), row.Guess = string(params.guess_sto); end
+    if isfield(params, 'mocoEffortTarget')
+        row.E_target = str2double(params.mocoEffortTarget);
+    end
+    if isfield(params, 'mocoPropulsionTarget')
+        row.RunPropulsionTarget = str2double(params.mocoPropulsionTarget);
+    end
+    isGateRun = isfield(params, 'propulsion_definition') && ...
+        startsWith(params.propulsion_definition, 'gate_Iplus');
+    if isGateRun
+        row.PropulsionDefinition = "gate_Iplus";
+        row.GateSigma_N = str2double(params.mocoPropulsionGateSigma);
+        row.GateThreshold_N = str2double(params.mocoPropulsionGateThreshold);
+        row.P_gate_target = row.RunPropulsionTarget;
+    elseif isfield(params, 'mocoObjectiveMode') && ...
+            strcmp(params.mocoObjectiveMode, 'minSpeedFixedEP')
+        % 이전 버전: smooth max(softplus) impulse를 제약했던 실행이다.
+        row.PropulsionDefinition = "softplus_legacy";
+        row.P_gate_target = NaN;
+    else
+        row.PropulsionDefinition = "unknown";
+        row.P_gate_target = NaN;
     end
     if ~isfile(solFile)
         row.Verdict = "No solution file";
@@ -184,17 +230,20 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     row.ObjectiveTerms = strjoin(erase(termNames, 'objective_'), ';');
 
     modelPath = fullfile(resultDir, 'result_1', 'analy_result', [modelName '_1.osim']);
-    m = moco_WoC_evalGaitMetrics(modelPath, solFile, impulseScale, cfg.propulsionSmoothing);
+    m = moco_WoC_evalGaitMetrics(modelPath, solFile, impulseScale, ...
+        row.GateSigma_N, row.GateThreshold_N);
     row.OnlySpeedCost = isequal(termNames, {'objective_average_speed'}) && ...
-        abs(row.Objective - m.v_avg) < 1e-6 * max(1, abs(m.v_avg));
+        abs(row.Objective - m.v_avg) <= 1e-6 * max(1, abs(m.v_avg));
     row.E_actual = m.E_simpson;
-    row.E_residual = m.E_simpson - cfg.E0;
+    row.E_residual = m.E_simpson - row.E_target;
     row.E_pass = abs(row.E_residual) <= cfg.effortTol;
-    row.P_smooth_actual = m.P_smooth_simpson;
-    row.P_residual = m.P_smooth_simpson - cfg.J_targets(k);
-    row.P_pass = abs(row.P_residual) <= cfg.propulsionTol;
+    row.P_gate_actual = m.P_gate_simpson;
+    row.P_gate_residual = m.P_gate_simpson - row.P_gate_target;
+    row.P_gate_pass = abs(row.P_gate_residual) <= cfg.propulsionTol;
     row.P_physical = m.P_physical_trapz;
-    row.P_smooth_minus_physical = m.P_smooth_trapz - m.P_physical_trapz;
+    row.P_gate_minus_physical = m.P_gate_trapz - m.P_physical_trapz;
+    row.Tplus_s = m.Tplus_simpson;
+    row.MeanPropulsiveForce_N = m.mean_propulsive_force;
     row.v_avg_mps = m.v_avg;
     row.PhaseDistance_m = m.distance;
     row.PhaseDuration_s = m.duration;
@@ -204,17 +253,15 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     row.E_muscle = m.E_muscle_simpson;
     row.E_lumbar = m.E_lumbar_simpson;
     row.E_afo = m.E_afo_simpson;
-    row.P_smooth_trapz = m.P_smooth_trapz;
-    row.P_physical_simpson = m.P_physical_simpson;
+    row.P_gate_trapz = m.P_gate_trapz;
+    row.Tplus_trapz_s = m.Tplus_trapz;
 
     % Moco가 제약한 값: 적분 상태의 최종값 (상태는 t0에서 0).
     [sol, solLabels] = readSto(solFile);
     zE = sol(:, strcmp(solLabels, '/effortPropulsion/effort_integral'));
-    zP = sol(:, strcmp(solLabels, '/effortPropulsion/positive_impulse'));
-    if ~isempty(zE) && ~isempty(zP)
-        row.E_constraint_value = zE(end) / m.com_displacement;
-        row.P_constraint_value = impulseScale * zP(end);
-    end
+    zP = sol(:, strcmp(solLabels, '/effortPropulsion/propulsive_impulse'));
+    if ~isempty(zE), row.E_constraint_value = zE(end) / m.com_displacement; end
+    if ~isempty(zP), row.P_gate_constraint_value = impulseScale * zP(end); end
 
     % 결과가 bound에 붙어 있는지 (반 걸음/한 걸음 phase 기준).
     tb = cfg.timeBound * boundScale;
@@ -236,10 +283,11 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     t = kin(:, 1);
     tx = kin(:, strcmp(kinLabels, '/jointset/groundPelvis/pelvis_tx/value'));
     row.Indep_v_avg_mps = (tx(end) - tx(1)) / (t(end) - t(1));
-    s = cfg.propulsionSmoothing;
     fap = [grf(:, strcmp(grfLabels, 'ground_force_r_vx')), ...
            grf(:, strcmp(grfLabels, 'ground_force_l_vx'))];
-    row.Indep_P_smooth = sum(trapz(grf(:, 1), log1p(exp(s * fap)) / s));
+    g = 1 ./ (1 + exp(-(fap - row.GateThreshold_N) / row.GateSigma_N));
+    row.Indep_P_gate = sum(trapz(grf(:, 1), fap .* g));
+    row.Indep_Tplus_s = sum(trapz(grf(:, 1), g));
     row.Indep_P_physical = sum(trapz(grf(:, 1), max(fap, 0)));
     comFile = fullfile(resultDir, 'result_1', 'analy_result', ...
         '2D_gait_AFO_pc_PointKinematics_CoM_pos.sto');
@@ -252,16 +300,34 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
             norm(com(end, 2:4) - com(1, 2:4));
     end
 
-    if ~row.Converged
-        if row.E_pass && row.P_pass
+    if ~isGateRun
+        row.Verdict = "Not a gate run (" + row.PropulsionDefinition + ")";
+    elseif ~row.Converged
+        if row.E_pass && row.P_gate_pass
             row.Verdict = "Not converged (equalities within tol)";
         else
             row.Verdict = "Not converged";
         end
-    elseif row.E_pass && row.P_pass
+    elseif row.E_pass && row.P_gate_pass
         row.Verdict = "OK";
     else
         row.Verdict = "Converged, equality out of tol";
+    end
+end
+
+
+function params = readParams(path)
+% *_parameters.csv (Parameter, Value)를 struct로 읽는다. 없으면 빈 struct.
+% 값은 큰따옴표로 감싸여 있고 쉼표를 포함할 수 있으므로 첫 쉼표에서 나눈다.
+    params = struct();
+    if ~isfile(path), return; end
+    lines = readlines(path);
+    for i = 2:numel(lines)
+        parts = split(lines(i), ',');
+        if numel(parts) < 2, continue; end
+        value = strjoin(parts(2:end), ',');
+        params.(matlab.lang.makeValidName(parts(1))) = ...
+            char(regexprep(value, '^"(.*)"$', '$1'));
     end
 end
 
@@ -283,14 +349,19 @@ end
 
 function [data, labels] = readSto(path)
     fid = fopen(path);
+    if fid < 0, error('파일을 열 수 없습니다: %s', path); end
     cleaner = onCleanup(@() fclose(fid));
     line = '';
     while ~strcmp(strtrim(line), 'endheader')
         line = fgetl(fid);
+        if ~ischar(line), error('endheader가 없습니다: %s', path); end
     end
     labels = strsplit(strtrim(fgetl(fid)), '\t');
     data = textscan(fid, repmat('%f', 1, numel(labels)), 'CollectOutput', true);
     data = data{1};
+    if isempty(data) || any(~isfinite(data(:)))
+        error('데이터가 비었거나 유한하지 않습니다: %s', path);
+    end
 end
 
 
@@ -298,8 +369,9 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
     fid = fopen(path, 'w');
     cleaner = onCleanup(@() fclose(fid));
     lines = {
-        'minSpeedFixedEP: minimize v_avg s.t. E = E0, P = J_k (endpoint equality constraints)'
+        'minSpeedFixedEP: minimize v_avg s.t. E = E0, P_gate = J_k (endpoint equality constraints)'
         sprintf('target source: %s', cfg.targetSource)
+        'propulsion_definition: gate_Iplus (meanPropPerVel MeanPropulsiveForce numerator)'
         ''
         'v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)  [m/s] (only Moco cost, weight 1)'
         'E = (1/d_COM) * int sum_c u_c^2 dt'
@@ -307,23 +379,26 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
         '        optimal force 1, control = N*m), AFO_r/AFO_l (PrescribedController values;'
         '        MocoControlGoal ignore_controlled_actuators = false). No reserve actuators.'
         '    d_COM = |r_COM(tf) - r_COM(t0)|; identical to the weighted-mode effort goal before weight.'
-        sprintf('P = %d * int_phase sum_foot softplus_s(F_foot) dt  [N*s] (one stride, both feet)', impulseScale)
-        '    F_foot = contactHeel x-force + contactFront x-force on the foot (summed before the positive part)'
-        sprintf('    softplus_s(F) = log(1 + exp(s*F))/s, s = %.4g (MocoOutputExtremumGoal maximum)', cfg.propulsionSmoothing)
-        '    modeSym solves a half stride: the full stride P is 2x the half-stride integral; modeAsym: 1x.'
-        '    No BW / reference-duration normalization and no reward sign (unlike the propulsion cost).'
-        'P_physical = int sum_foot max(F_foot, 0) dt over the saved full stride (trapezoid)'
+        sprintf('P_gate = %d * int_phase [F_r g(F_r) + F_l g(F_l)] dt  [N*s] (one stride, both feet)', impulseScale)
+        '    F_foot = contactHeel x-force + contactFront x-force on the foot (summed per foot, then gated)'
+        sprintf('    g(F) = 1 / (1 + exp(-(F - F0)/sigma)), sigma = %.4g N, F0 = %.4g N', cfg.gateSigma, cfg.gateThreshold)
+        '    modeSym solves a half stride: the full stride P_gate is 2x the half-stride integral; modeAsym: 1x.'
+        '    Not divided by Tplus, stride time, speed, distance, BW or a reference duration.'
+        'Tplus = int sum_foot g(F_foot) dt [s]; mean_propulsive_force = P_gate / Tplus [N] (comparison only)'
+        'P_physical = int sum_foot max(F_foot, 0) dt over the saved full stride (trapezoid, comparison only)'
         ''
-        'Constraint implementation: states z_E'' = sum_c u_c^2, z_P'' = sum_foot softplus_s(F_foot),'
-        '    z(t0) = 0; MocoFinalOutputGoal endpoint constraints z_E(tf)/d_COM = E0 and'
-        sprintf('    %d * z_P(tf) = J (E_constraint_value, P_constraint_value in summary.csv)', impulseScale)
-        'E_actual, P_smooth_actual: recomputed from controls/contact forces with Simpson quadrature'
-        '    on the saved mesh+midpoint grid (= Hermite-Simpson quadrature); used for E_pass/P_pass'
+        'Constraint implementation: states z_E'' = sum_c u_c^2, z_P'' = F_r g(F_r) + F_l g(F_l),'
+        '    z(t0) = 0; MocoFinalOutputGoal endpoint constraints (Stage::Time outputs)'
+        sprintf('    z_E(tf)/d_COM = E0 and %d * z_P(tf) = J (E_constraint_value, P_gate_constraint_value)', impulseScale)
+        'E_actual, P_gate_actual, Tplus_s: recomputed from controls/contact forces with Simpson quadrature'
+        '    on the saved mesh+midpoint grid (= Hermite-Simpson quadrature); used for E_pass/P_gate_pass'
         '*_trapz: trapezoid on the same grid; Indep_*: saved full-stride .sto files only (no OpenSim)'
         'Indep_E_noAFO: trajectory controls only (AFO controls are not in the trajectory file)'
+        'Targets and gate parameters of each case are read from its *_parameters.csv; runs without'
+        '    propulsion_definition (earlier softplus version) are marked softplus_legacy, not gate.'
         sprintf('bounds (phase): time %s s, pelvis_tx %s m; BoundHits tolerance 1e-4', ...
             mat2str(cfg.timeBound * boundScale), mat2str(cfg.distBound * boundScale))
-        sprintf('verification tolerances: |E - E0| <= %g, |P - J| <= %g N*s', cfg.effortTol, cfg.propulsionTol)
+        sprintf('verification tolerances: |E - E0| <= %g, |P_gate - J| <= %g N*s', cfg.effortTol, cfg.propulsionTol)
         'Verdict: solver convergence and equality satisfaction are judged separately;'
         '         a case that did not converge is not reported as infeasible.'
         };
@@ -331,7 +406,7 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
 end
 
 
-function plotCases(summary, cfg, outDir)
+function plotCases(summary, outDir)
 % Case 색은 J 순서(entity)로 고정한다. 성공/실패는 마커 채움과 라벨로 표시한다.
     colors = hex2rgb({'#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', ...
                       '#008300', '#6250d6', '#e34948'});
@@ -341,6 +416,8 @@ function plotCases(summary, cfg, outDir)
     ok = summary.Verdict == "OK";
     shortVerdict = replace(summary.Verdict, ["Converged, equality out of tol", ...
         "Not converged (equalities within tol)"], ["eq. out of tol", "not converged, eq. ok"]);
+    target = summary.P_gate_target;
+    target(~isfinite(target)) = summary.RunPropulsionTarget(~isfinite(target));
 
     % 1. propulsion target에 따른 평균속도
     fig = newFigure([640 420]);
@@ -348,22 +425,23 @@ function plotCases(summary, cfg, outDir)
     for k = 1:n
         face = caseColor(k);
         if ~ok(k), face = 'w'; end
-        plot(ax, summary.J_target(k), summary.v_avg_mps(k), 'o', 'MarkerSize', 9, ...
+        plot(ax, target(k), summary.v_avg_mps(k), 'o', 'MarkerSize', 9, ...
             'LineWidth', 2, 'MarkerEdgeColor', caseColor(k), 'MarkerFaceColor', face);
-        text(ax, summary.J_target(k), summary.v_avg_mps(k), ...
+        text(ax, target(k), summary.v_avg_mps(k), ...
             sprintf('  J%d: %s', k, shortVerdict(k)), 'Color', ink(2, :), 'FontSize', 9);
     end
-    xlabel(ax, 'Propulsion target J (N\cdots, one stride, smooth)');
+    xlabel(ax, 'Propulsion target J (P_{gate}, N\cdots, one stride)');
     ylabel(ax, 'Average speed v_{avg} (m/s)');
-    title(ax, sprintf('Minimum average speed at E_0 = %.4g', cfg.E0), 'Color', ink(1, :));
-    padLimits(ax, summary.J_target, summary.v_avg_mps);
+    title(ax, sprintf('Minimum average speed at E_0 = %.4g', summary.E_target(1)), ...
+        'Color', ink(1, :));
+    padLimits(ax, target, summary.v_avg_mps);
     saveFigure(fig, fullfile(outDir, 'speed_vs_propulsion_target.png'));
 
     % 2. effort / propulsion target vs actual (small multiples, 각자 축)
     fig = newFigure([900 380]);
     tl = tiledlayout(fig, 1, 2, 'TileSpacing', 'compact');
     specs = {'E_target', 'E_actual', [], 'Effort E (-)'; ...
-             'J_target', 'P_smooth_actual', 'P_physical', 'Propulsion P (N\cdots, one stride)'};
+             'P_gate_target', 'P_gate_actual', 'P_physical', 'Propulsion (N\cdots, one stride)'};
     for p = 1:2
         ax = nexttile(tl); hold(ax, 'on'); styleAxes(ax, ink);
         for k = 1:n
@@ -392,7 +470,7 @@ function plotCases(summary, cfg, outDir)
         if p == 1
             title(ax, 'Effort: target (bar) vs actual (circle)', 'Color', ink(1, :));
         else
-            title(ax, 'Propulsion: target (bar), smooth (circle), max(F,0) (diamond)', ...
+            title(ax, 'P_{gate}: target (bar), actual (circle); max(F,0) (diamond)', ...
                 'Color', ink(1, :));
         end
     end
@@ -409,7 +487,7 @@ function plotCases(summary, cfg, outDir)
             if isempty(grf), continue; end
             plot(ax, cyclePct(grf(:, 1)), grf(:, strcmp(labels, ['ground_force_' sides{p, 1} '_vx'])), ...
                 'Color', caseColor(k), 'LineWidth', 2, 'LineStyle', lineStyle(ok(k)), ...
-                'DisplayName', sprintf('J%d = %.3g N\\cdots (%s)', k, summary.J_target(k), shortVerdict(k)));
+                'DisplayName', sprintf('J%d = %.3g N\\cdots (%s)', k, target(k), shortVerdict(k)));
         end
         yline(ax, 0, 'Color', ink(2, :), 'HandleVisibility', 'off');
         xlabel(ax, 'Stride (%) from t_0 of the solved trajectory');
@@ -437,13 +515,17 @@ end
 
 
 function [data, labels] = caseFile(row, kind)
-% 한 보행주기 파일 (미수렴 case는 _unseal 파일).
+% 한 보행주기 파일 (미수렴 case는 _unseal 파일). 읽을 수 없으면 빈 값.
     data = []; labels = {};
     dirPath = fullfile(row.ResultDir, 'result_1', 'moco_result');
     for prefix = {'moco_WoC_Solution_iter01', 'moco_WoC_Solution_iter01_unseal'}
         f = fullfile(dirPath, sprintf('%s_%s.sto', prefix{1}, kind));
         if isfile(f)
-            [data, labels] = readSto(f);
+            try
+                [data, labels] = readSto(f);
+            catch
+                data = []; labels = {};
+            end
             return;
         end
     end
@@ -473,9 +555,10 @@ end
 
 
 function padLimits(ax, x, y)
+    x = x(isfinite(x)); y = y(isfinite(y));
     pad = @(v) [min(v) max(v)] + [-1 1] * max(0.1 * (max(v) - min(v)), 0.05 * max(abs(v)) + eps);
-    if all(isfinite(x)), xlim(ax, pad(x)); end
-    if all(isfinite(y)), ylim(ax, pad(y)); end
+    if ~isempty(x), xlim(ax, pad(x)); end
+    if ~isempty(y), ylim(ax, pad(y)); end
 end
 
 
