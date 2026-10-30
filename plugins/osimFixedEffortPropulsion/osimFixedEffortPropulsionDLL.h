@@ -1,0 +1,14 @@
+#ifndef OSIM_FIXED_EFFORT_PROPULSION_DLL_H
+#define OSIM_FIXED_EFFORT_PROPULSION_DLL_H
+
+#ifdef _WIN32
+#   ifdef OSIMFIXEDEFFORTPROPULSION_EXPORTS
+#       define OSIMFIXEDEFFORTPROPULSION_API __declspec(dllexport)
+#   else
+#       define OSIMFIXEDEFFORTPROPULSION_API __declspec(dllimport)
+#   endif
+#else
+#   define OSIMFIXEDEFFORTPROPULSION_API
+#endif
+
+#endif // OSIM_FIXED_EFFORT_PROPULSION_DLL_H

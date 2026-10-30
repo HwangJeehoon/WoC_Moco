@@ -10,3 +10,4 @@ script/delete_this_to_stop_optimization__*.txt
 .bak
 *.md
 plugins/osimMeanPropPerVel/build/
+plugins/osimFixedEffortPropulsion/build/
