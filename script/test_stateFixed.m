@@ -23,8 +23,6 @@
 %       기존 결과 폴더는 덮어쓰지 않는다.
 % 플러그인이 없으면 먼저 빌드:
 %   run(fullfile('..', 'plugins', 'osimFixedEffortPropulsion', 'build_osimFixedEffortPropulsion.m'))
-% 검증: test_minSpeedFixedEP_endpointStage.m, test_minSpeedFixedEP_metrics.m,
-%       test_minSpeedFixedEP.m (검증용 target은 실험 target이 아니다)
 clc; clear; close all;
 thisScriptDir = fileparts(mfilename('fullpath'));
 addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
