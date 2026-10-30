@@ -19,6 +19,10 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %       .mocoPropulsionSmoothing : smooth positive-force 계수 [0.2, 1]
 %                                  (default = 0.2)
 %       .mocoPropulsionReferenceDuration : impulse 정규화 기준 시간(s)
+%       .mocoMeshIntervals : CasADi mesh interval 수 (default = 300)
+%       .mocoConvergenceTolerance : IPOPT convergence tolerance (default = 1e-3)
+%       .mocoConstraintTolerance  : IPOPT constraint tolerance (default = 1e-3)
+%       .mocoMaxIterations        : IPOPT 최대 반복 수 (default = 1000)
 %       .gaitMode        : 'modeSym'  - 반 걸음 풀고 좌우 대칭 복사 (default)
 %                          'modeAsym' - 한 걸음 전체를 풀고 주기성만 강제
 
@@ -315,12 +319,12 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     % 4. Solver 설정
     %--------------------------------------------------------------
     solver = study.initCasADiSolver();
-    solver.set_num_mesh_intervals(300); % mesh num = 300
+    solver.set_num_mesh_intervals(getOpt(opts, 'mocoMeshIntervals', 300));
     solver.set_verbosity(2);
     solver.set_optim_solver('ipopt');
-    solver.set_optim_convergence_tolerance(1e-3);
-    solver.set_optim_constraint_tolerance(1e-3);
-    solver.set_optim_max_iterations(1000);
+    solver.set_optim_convergence_tolerance(getOpt(opts, 'mocoConvergenceTolerance', 1e-3));
+    solver.set_optim_constraint_tolerance(getOpt(opts, 'mocoConstraintTolerance', 1e-3));
+    solver.set_optim_max_iterations(getOpt(opts, 'mocoMaxIterations', 1000));
 
     guessTraj = MocoTrajectory(guessStoPath);
     solver.setGuess(guessTraj);

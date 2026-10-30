@@ -38,13 +38,19 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
 %     .mocoTimeBound : Moco 시간 상한 [lb, ub] 또는 scalar (default = [0.4, 0.8])
 %     .mocoDistBound : pelvis_tx 최종 위치 bound [lb, ub] 또는 scalar (default = [0.4, 1.0])
+%     .mocoMeshIntervals : CasADi mesh interval 수 (default = 300)
+%     .mocoConvergenceTolerance : IPOPT convergence tolerance (default = 1e-3)
+%     .mocoConstraintTolerance  : IPOPT constraint tolerance (default = 1e-3)
+%     .mocoMaxIterations        : IPOPT 최대 반복 수 (default = 1000)
 %     .guessInitSto  : Initial guess로 사용할 sto 위치
 %
 %   저장 구조:
 %     results/<result_name>/baseline/analy_result/   ← 초기 guess kinematics 해석 결과
 %     results/<result_name>/result_i/analy_result/   ← iter i moco 결과 해석
-%     results/<result_name>/result_i/moco_result/    ← iter i 궤적/GRF/metabolic
+%     results/<result_name>/result_i/moco_result/    ← iter i 궤적/GRF/metabolic,
+%                                                      사용한 parameter(*_parameters.csv)
 %     results/<result_name>/result_i/control_result/ ← iter i 보조 제어력
+%   같은 result_name으로 다시 실행하면 기존 폴더의 파일을 덮어쓴다.
 
 close all;
 import org.opensim.modeling.*
@@ -216,6 +222,28 @@ else
     mocoDistBound = opts.mocoDistBound;
 end
 
+% Solver 설정: 기본값은 기존 고정값(mesh 300, tolerance 1e-3, 최대 반복 1000)과 같다.
+mocoMeshIntervals = getOpt(opts, 'mocoMeshIntervals', 300);
+if ~isscalar(mocoMeshIntervals) || ~isnumeric(mocoMeshIntervals) || ...
+        ~isfinite(mocoMeshIntervals) || mocoMeshIntervals < 1 || ...
+        mocoMeshIntervals ~= round(mocoMeshIntervals)
+    error('opts.mocoMeshIntervals 는 1 이상의 정수 scalar여야 합니다.');
+end
+mocoConvergenceTolerance = getOpt(opts, 'mocoConvergenceTolerance', 1e-3);
+mocoConstraintTolerance  = getOpt(opts, 'mocoConstraintTolerance', 1e-3);
+if ~isscalar(mocoConvergenceTolerance) || ~isnumeric(mocoConvergenceTolerance) || ...
+        ~isfinite(mocoConvergenceTolerance) || mocoConvergenceTolerance <= 0 || ...
+        ~isscalar(mocoConstraintTolerance) || ~isnumeric(mocoConstraintTolerance) || ...
+        ~isfinite(mocoConstraintTolerance) || mocoConstraintTolerance <= 0
+    error('opts.mocoConvergenceTolerance / mocoConstraintTolerance 는 양의 유한 scalar여야 합니다.');
+end
+mocoMaxIterations = getOpt(opts, 'mocoMaxIterations', 1000);
+if ~isscalar(mocoMaxIterations) || ~isnumeric(mocoMaxIterations) || ...
+        ~isfinite(mocoMaxIterations) || mocoMaxIterations < 1 || ...
+        mocoMaxIterations ~= round(mocoMaxIterations)
+    error('opts.mocoMaxIterations 는 1 이상의 정수 scalar여야 합니다.');
+end
+
 %% --------------------------------------------------
 %  0. baseFolder = 이 파일이 있는 폴더
 % ---------------------------------------------------
@@ -270,6 +298,8 @@ end
 fprintf('  gaitMode     : %s\n',   gaitMode);
 fprintf('  mocoTimeBound: %s\n',   mat2str(mocoTimeBound));
 fprintf('  mocoDistBound: %s\n',   mat2str(mocoDistBound));
+fprintf('  mocoMeshIntervals: %d, convergence tol: %.3g, constraint tol: %.3g, max iterations: %d\n', ...
+    mocoMeshIntervals, mocoConvergenceTolerance, mocoConstraintTolerance, mocoMaxIterations);
 fprintf('================================\n');
 
 % resume_name 이 있으면 resume mode
@@ -319,6 +349,35 @@ MocoOpts.mocoPropulsionReferenceDuration = mocoPropulsionReferenceDuration;
 MocoOpts.gaitMode         = gaitMode;
 MocoOpts.mocoTimeBound    = mocoTimeBound;
 MocoOpts.mocoDistBound    = mocoDistBound;
+MocoOpts.mocoMeshIntervals = mocoMeshIntervals;
+MocoOpts.mocoConvergenceTolerance = mocoConvergenceTolerance;
+MocoOpts.mocoConstraintTolerance  = mocoConstraintTolerance;
+MocoOpts.mocoMaxIterations = mocoMaxIterations;
+
+% result_i/moco_result/*_parameters.csv 로 기록할 parameter
+% (iteration별 항목은 메인 루프에서 추가한다).
+runParams = {'result_name', result_name; 'run_ID', runID; 'run_Date', runDate; ...
+             'model', ModelNameOsim; 'optMode', modeType; ...
+             'resume_name', resume_name; ...
+             'opensim_version', char(opensimCommon.GetVersion())};
+for f = setdiff(fieldnames(modeParams)', {'type'}, 'stable')
+    runParams(end+1, :) = {['optMode_' f{1}], modeParams.(f{1})}; %#ok<AGROW>
+end
+if isWoC
+    runParams = [runParams; {'QP_effort', QP_effort; 'QP_smooth', QP_smooth; ...
+                             'cost', cost}];
+end
+for f = fieldnames(MocoOpts)'
+    runParams(end+1, :) = {f{1}, MocoOpts.(f{1})}; %#ok<AGROW>
+end
+% boundScale / effPropulsionReferenceDuration 은 파라미터 출력 전에 계산함.
+runParams = [runParams; ...
+    {'effective_final_time_bound_s', mocoTimeBound * boundScale; ...
+     'effective_final_pelvis_tx_bound_m', mocoDistBound * boundScale}];
+if mocoPropulsionWeight > 0 && isempty(mocoPropulsionReferenceDuration)
+    runParams(end+1, :) = {'effective_mocoPropulsionReferenceDuration_s', ...
+                           effPropulsionReferenceDuration};
+end
 
 % Output 폴더
 OutputFolder = fullfile(baseFolder,'..','results', result_name);
@@ -709,6 +768,14 @@ for i = startIter:endIter
     %       주입된 osim은 AnalyResultDir에 저장됨
     %------------------------------------------------
     baseOsimPath = fullfile(modelPath, ModelNameOsim);
+
+    % 사용한 parameter 기록 (solve가 실패해도 남도록 solve 전에 저장)
+    WoC_moco_saveParameters(fullfile(mocoResultDir, ...
+        sprintf('moco_WoC_Solution_iter%02d_parameters.csv', i)), ...
+        [runParams; {'iteration', i; 'guess_sto', guessStoPath; ...
+                     'control_sto', controlRefStoPath; ...
+                     'saved_at', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'))}]);
+
     sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, baseOsimPath, MocoOpts);
 
     %------------------------------------------------
