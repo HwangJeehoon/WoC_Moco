@@ -11,15 +11,18 @@ EffortPropulsionIntegrator::EffortPropulsionIntegrator() {
 }
 
 void EffortPropulsionIntegrator::constructProperties() {
-    constructProperty_smoothing_factor(0.2);
+    constructProperty_gate_sigma(1.0);
+    constructProperty_gate_threshold(5.0);
     constructProperty_impulse_scale(1.0);
 }
 
 void EffortPropulsionIntegrator::extendFinalizeFromProperties() {
     Super::extendFinalizeFromProperties();
-    OPENSIM_THROW_IF_FRMOBJ(!std::isfinite(get_smoothing_factor()) ||
-                                    get_smoothing_factor() <= 0,
-            Exception, "smoothing_factor must be a positive finite value.");
+    OPENSIM_THROW_IF_FRMOBJ(
+            !std::isfinite(get_gate_sigma()) || get_gate_sigma() <= 0,
+            Exception, "gate_sigma must be a positive finite value.");
+    OPENSIM_THROW_IF_FRMOBJ(!std::isfinite(get_gate_threshold()), Exception,
+            "gate_threshold must be finite.");
     OPENSIM_THROW_IF_FRMOBJ(!std::isfinite(get_impulse_scale()) ||
                                     get_impulse_scale() <= 0,
             Exception, "impulse_scale must be a positive finite value.");
@@ -33,7 +36,7 @@ void EffortPropulsionIntegrator::extendAddToSystem(
         SimTK::MultibodySystem& system) const {
     Super::extendAddToSystem(system);
     addStateVariable("effort_integral");
-    addStateVariable("positive_impulse");
+    addStateVariable("propulsive_impulse");
 }
 
 void EffortPropulsionIntegrator::computeStateVariableDerivatives(
@@ -41,7 +44,7 @@ void EffortPropulsionIntegrator::computeStateVariableDerivatives(
     // The base class has no states of its own (calling Super would throw).
     setStateVariableDerivativeValue(s, "effort_integral", calcEffortRate(s));
     setStateVariableDerivativeValue(
-            s, "positive_impulse", calcPositiveImpulseRate(s));
+            s, "propulsive_impulse", calcPropulsiveImpulseRate(s));
 }
 
 double EffortPropulsionIntegrator::calcEffortRate(const SimTK::State& s) const {
@@ -67,16 +70,26 @@ double EffortPropulsionIntegrator::calcFootForce(
     return force;
 }
 
-double EffortPropulsionIntegrator::calcPositiveImpulseRate(
+double EffortPropulsionIntegrator::calcGate(double force) const {
+    // Logistic function evaluated so that exp() never overflows: exp() only
+    // receives a non-positive argument (same as MeanPropulsiveForce).
+    const double x = (force - get_gate_threshold()) / get_gate_sigma();
+    if (x >= 0) { return 1.0 / (1.0 + std::exp(-x)); }
+    const double e = std::exp(x);
+    return e / (1.0 + e);
+}
+
+double EffortPropulsionIntegrator::calcPropulsiveImpulseRate(
         const SimTK::State& s) const {
-    // log(1 + exp(x)) written so that exp() cannot overflow.
-    const double sf = get_smoothing_factor();
-    double rate = 0;
-    for (const auto* input : {"right_contact_forces", "left_contact_forces"}) {
-        const double x = sf * calcFootForce(s, input);
-        rate += (std::max(x, 0.0) + std::log1p(std::exp(-std::abs(x)))) / sf;
-    }
-    return rate;
+    const double right = calcFootForce(s, "right_contact_forces");
+    const double left = calcFootForce(s, "left_contact_forces");
+    return right * calcGate(right) + left * calcGate(left);
+}
+
+double EffortPropulsionIntegrator::calcPropulsiveTimeRate(
+        const SimTK::State& s) const {
+    return calcGate(calcFootForce(s, "right_contact_forces")) +
+           calcGate(calcFootForce(s, "left_contact_forces"));
 }
 
 double EffortPropulsionIntegrator::getEffortIntegral(
@@ -84,7 +97,7 @@ double EffortPropulsionIntegrator::getEffortIntegral(
     return getStateVariableValue(s, "effort_integral");
 }
 
-double EffortPropulsionIntegrator::getScaledPositiveImpulse(
+double EffortPropulsionIntegrator::getScaledPropulsiveImpulse(
         const SimTK::State& s) const {
-    return get_impulse_scale() * getStateVariableValue(s, "positive_impulse");
+    return get_impulse_scale() * getStateVariableValue(s, "propulsive_impulse");
 }
