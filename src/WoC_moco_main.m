@@ -56,6 +56,7 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .mocoPropulsionGateThreshold : 'minSpeedFixedEP' gate 중심 F0 [N] (default = 5)
 %                         (mocoPropulsionSmoothing은 weighted 모드 propulsion 비용항의
 %                          softplus 계수 [1/N]로, minSpeedFixedEP에서는 쓰지 않는다)
+%     .mocoSpeedWeight : 'minSpeedFixedEP' 평균속도 cost의 weight (양수, default = 1)
 %     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
 %     .mocoTimeBound : Moco 시간 상한 [lb, ub] 또는 scalar (default = [0.4, 0.8])
 %     .mocoDistBound : pelvis_tx 최종 위치 bound [lb, ub] 또는 scalar (default = [0.4, 1.0])
@@ -213,6 +214,12 @@ if ~isscalar(mocoPropulsionGateThreshold) || ~isnumeric(mocoPropulsionGateThresh
         ~isfinite(mocoPropulsionGateThreshold)
     error('opts.mocoPropulsionGateThreshold 는 유한 scalar여야 합니다 (N).');
 end
+% 평균속도 cost weight. 음수나 0이면 최소화가 아니게 되므로 양수만 허용한다.
+mocoSpeedWeight = getOpt(opts, 'mocoSpeedWeight', 1.0);
+if ~isscalar(mocoSpeedWeight) || ~isnumeric(mocoSpeedWeight) || ...
+        ~isfinite(mocoSpeedWeight) || mocoSpeedWeight <= 0
+    error('opts.mocoSpeedWeight 는 양의 유한 scalar여야 합니다.');
+end
 
 if ~isfield(opts, 'mocoEffort') || isempty(opts.mocoEffort)
     mocoEffort = 1;
@@ -369,7 +376,8 @@ if mocoPropulsionWeight > 0
 end
 fprintf('  mocoObjectiveMode: %s\n', mocoObjectiveMode);
 if isMinSpeed
-    fprintf('  objective: minimize v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)\n');
+    fprintf('  objective: minimize %.4g * v_avg, v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)\n', ...
+        mocoSpeedWeight);
     fprintf('  mocoEffortTarget E0: %.6g (effort metric before weight)\n', mocoEffortTarget);
     fprintf('  mocoPropulsionTarget J: %.6g N*s (full stride, both feet, gated Iplus)\n', ...
         mocoPropulsionTarget);
@@ -432,6 +440,7 @@ MocoOpts.mocoEffortTarget = mocoEffortTarget;
 MocoOpts.mocoPropulsionTarget = mocoPropulsionTarget;
 MocoOpts.mocoPropulsionGateSigma = mocoPropulsionGateSigma;
 MocoOpts.mocoPropulsionGateThreshold = mocoPropulsionGateThreshold;
+MocoOpts.mocoSpeedWeight = mocoSpeedWeight;
 MocoOpts.gaitMode         = gaitMode;
 MocoOpts.mocoTimeBound    = mocoTimeBound;
 MocoOpts.mocoDistBound    = mocoDistBound;

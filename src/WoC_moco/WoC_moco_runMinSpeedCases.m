@@ -4,16 +4,17 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
 %   같은 E0에 대해 propulsion target J_k마다 하나씩 다음 문제를 독립적으로 푼다
 %   (opts.mocoObjectiveMode = 'minSpeedFixedEP'):
 %
-%     minimize    v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
+%     minimize    w_v * v_avg,  v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
 %     subject to  E = E0, P_gate = J_k, 기존 동역학/주기성/대칭성/bounds
 %
 %   각 case 결과를 저장된 궤적에서 control과 접촉력으로 다시 적분해 표/CSV와
 %   그림으로 저장한다. solver 수렴 여부와 equality 충족 여부를 따로 판정하며,
-%   실패 case에서 target·bound·제약을 바꿔 다시 풀지 않는다. 한 case의 실행이나
-%   요약이 실패해도 나머지 case는 계속 처리한다.
+%   실패 case에서 target·bound·제약을 바꿔 다시 풀지 않는다. 한 case의 실행이
+%   수렴하지 않거나 실패해도 기록만 하고 다음 case를 계속 푼다.
 %
 %   cfg 필드:
 %     E0, J_targets      : effort target, P_gate target 벡터 [N*s, 한 보행주기]
+%     speedWeight        : 평균속도 cost weight w_v (없으면 1)
 %     targetSource       : target 출처 설명 (CSV에 기록)
 %     gateSigma, gateThreshold : propulsion gate sigma, F0 [N]
 %     model, optMode, gaitMode, guessSto ('' 이면 WoC_moco_main 기본 guess)
@@ -29,6 +30,7 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
 %   반환: summary table (summary.csv와 같은 내용)
 
     validateTargets(cfg.E0, cfg.J_targets);
+    if ~isfield(cfg, 'speedWeight'), cfg.speedWeight = 1; end
 
     % WoC_moco_main과 같은 절대경로 결과 루트를 저장, 검사, guess, 요약에 쓴다.
     resultsRoot = char(java.io.File(cfg.resultsDir).getCanonicalPath());
@@ -58,6 +60,7 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
             opts.mocoPropulsionTarget = cfg.J_targets(k);
             opts.mocoPropulsionGateSigma = cfg.gateSigma;
             opts.mocoPropulsionGateThreshold = cfg.gateThreshold;
+            opts.mocoSpeedWeight = cfg.speedWeight;
             opts.mocoTimeBound = cfg.timeBound;
             opts.mocoDistBound = cfg.distBound;
             opts.mocoMeshIntervals = cfg.meshIntervals;
@@ -165,7 +168,7 @@ function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
         'Indep_v_avg_mps', NaN, 'Indep_P_gate', NaN, 'Indep_Tplus_s', NaN, ...
         'Indep_P_physical', NaN, 'Indep_E_noAFO', NaN, ...
         'GateSigma_N', cfg.gateSigma, 'GateThreshold_N', cfg.gateThreshold, ...
-        'ImpulseScale', impulseScale, ...
+        'ImpulseScale', impulseScale, 'SpeedWeight', cfg.speedWeight, ...
         'Model', string(cfg.model), 'OptMode', string(cfg.optMode), ...
         'GaitMode', string(cfg.gaitMode), 'Guess', "", ...
         'MeshIntervals', cfg.meshIntervals, 'ConvergenceTol', cfg.convergenceTolerance, ...
@@ -197,6 +200,11 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     end
     if isfield(params, 'mocoPropulsionTarget')
         row.RunPropulsionTarget = str2double(params.mocoPropulsionTarget);
+    end
+    % mocoSpeedWeight가 생기기 전 실행은 weight 1로 풀었다.
+    row.SpeedWeight = 1;
+    if isfield(params, 'mocoSpeedWeight')
+        row.SpeedWeight = str2double(params.mocoSpeedWeight);
     end
     isGateRun = isfield(params, 'propulsion_definition') && ...
         startsWith(params.propulsion_definition, 'gate_Iplus');
@@ -233,7 +241,8 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     m = moco_WoC_evalGaitMetrics(modelPath, solFile, impulseScale, ...
         row.GateSigma_N, row.GateThreshold_N);
     row.OnlySpeedCost = isequal(termNames, {'objective_average_speed'}) && ...
-        abs(row.Objective - m.v_avg) <= 1e-6 * max(1, abs(m.v_avg));
+        abs(row.Objective - row.SpeedWeight * m.v_avg) <= ...
+        1e-6 * max(1, abs(row.SpeedWeight * m.v_avg));
     row.E_actual = m.E_simpson;
     row.E_residual = m.E_simpson - row.E_target;
     row.E_pass = abs(row.E_residual) <= cfg.effortTol;
@@ -373,7 +382,8 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
         sprintf('target source: %s', cfg.targetSource)
         'propulsion_definition: gate_Iplus (meanPropPerVel MeanPropulsiveForce numerator)'
         ''
-        'v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)  [m/s] (only Moco cost, weight 1)'
+        sprintf(['v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)  [m/s] ', ...
+                 '(only Moco cost, weight %g)'], cfg.speedWeight)
         'E = (1/d_COM) * int sum_c u_c^2 dt'
         '    c = all model controls, weight 1: 18 muscle excitations, lumbarAct (CoordinateActuator,'
         '        optimal force 1, control = N*m), AFO_r/AFO_l (PrescribedController values;'

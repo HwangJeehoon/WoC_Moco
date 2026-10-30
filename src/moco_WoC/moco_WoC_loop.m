@@ -28,6 +28,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %       .mocoPropulsionGateSigma / .mocoPropulsionGateThreshold :
 %                            'minSpeedFixedEP' gate g(F) = 1/(1+exp(-(F-F0)/sigma))의
 %                            sigma, F0 [N] (default = 1, 5)
+%       .mocoSpeedWeight : 'minSpeedFixedEP' 평균속도 cost weight (default = 1)
 %       .mocoMeshIntervals : CasADi mesh interval 수 (default = 300)
 %       .mocoConvergenceTolerance : IPOPT convergence tolerance (default = 1e-3)
 %       .mocoConstraintTolerance  : IPOPT constraint tolerance (default = 1e-3)
@@ -288,10 +289,11 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         % form one foot's full cycle, so the full stride P is twice the
         % half-stride integral. E (per COM displacement) and v_avg are equal
         % for the half and full stride.
+        speedWeight = getOpt(opts, 'mocoSpeedWeight', 1.0);
         addMinSpeedFixedEPGoals(problem, integratorPath, ...
-            opts.mocoEffortTarget, opts.mocoPropulsionTarget);
-        fprintf(['Moco minSpeedFixedEP: E0=%.6g, J=%.6g N*s ', ...
-                 '(impulse scale %d, gate sigma %.4g N, F0 %.4g N)\n'], ...
+            opts.mocoEffortTarget, opts.mocoPropulsionTarget, speedWeight);
+        fprintf(['Moco minSpeedFixedEP: speed weight=%.4g, E0=%.6g, J=%.6g N*s ', ...
+                 '(impulse scale %d, gate sigma %.4g N, F0 %.4g N)\n'], speedWeight, ...
                  opts.mocoEffortTarget, opts.mocoPropulsionTarget, impulseScale, ...
                  gateSigma, gateThreshold);
     else
@@ -447,14 +449,16 @@ function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
 end
 
 
-function addMinSpeedFixedEPGoals(problem, componentPath, effortTarget, propulsionTarget)
-% Add the v_avg cost and the E and P endpoint equality constraints.
+function addMinSpeedFixedEPGoals(problem, componentPath, effortTarget, ...
+        propulsionTarget, speedWeight)
+% Add the v_avg cost (weight speedWeight) and the E and P endpoint equality
+% constraints.
     import org.opensim.modeling.*
 
     speedGoal = MocoGoal.safeDownCast( ...
         OpenSimObject.newInstanceOfType('MocoCoordinateAverageSpeedGoal'));
     speedGoal.setName('average_speed');
-    speedGoal.setWeight(1);
+    speedGoal.setWeight(speedWeight);
     PropertyHelper.setValueString('/jointset/groundPelvis/pelvis_tx', ...
         speedGoal.updPropertyByName('coordinate_path'));
     problem.addGoal(speedGoal);
