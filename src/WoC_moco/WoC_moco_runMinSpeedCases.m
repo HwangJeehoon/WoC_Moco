@@ -17,7 +17,8 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
 %     speedWeight        : 평균속도 cost weight w_v (없으면 1)
 %     targetSource       : target 출처 설명 (CSV에 기록)
 %     gateSigma, gateThreshold : propulsion gate sigma, F0 [N]
-%     model, optMode, gaitMode, guessSto ('' 이면 WoC_moco_main 기본 guess)
+%     model, optMode, gaitMode, guessSto ('' 이면 WoC_moco_main 기본 guess,
+%                          J_targets와 길이가 같은 cell이면 case k가 guessSto{k}에서 시작)
 %     timeBound, distBound : 반 걸음 기준 bound (modeAsym은 WoC_moco_main이 x2)
 %     meshIntervals, convergenceTolerance, constraintTolerance, maxIterations
 %     effortTol, propulsionTol : equality 검증 허용오차 (|E-E0|, |P_gate-J| [N*s])
@@ -31,6 +32,10 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
 
     validateTargets(cfg.E0, cfg.J_targets);
     if ~isfield(cfg, 'speedWeight'), cfg.speedWeight = 1; end
+    if iscell(cfg.guessSto) && numel(cfg.guessSto) ~= numel(cfg.J_targets)
+        error('guessSto가 cell이면 J_targets와 길이가 같아야 합니다 (%d vs %d).', ...
+            numel(cfg.guessSto), numel(cfg.J_targets));
+    end
 
     % WoC_moco_main과 같은 절대경로 결과 루트를 저장, 검사, guess, 요약에 쓴다.
     resultsRoot = char(java.io.File(cfg.resultsDir).getCanonicalPath());
@@ -67,7 +72,7 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
             opts.mocoConvergenceTolerance = cfg.convergenceTolerance;
             opts.mocoConstraintTolerance = cfg.constraintTolerance;
             opts.mocoMaxIterations = cfg.maxIterations;
-            opts.guessInitSto = guess;
+            if iscell(guess), opts.guessInitSto = guess{k}; else, opts.guessInitSto = guess; end
             opts.resultsDir = resultsRoot;
             fprintf('\n===== minSpeedFixedEP case %d/%d: E0=%.6g, J=%.6g N*s =====\n', ...
                 k, nCase, cfg.E0, cfg.J_targets(k));

@@ -15,11 +15,13 @@
 %             비교용으로 함께 보고)
 %   w_v    : 평균속도 cost weight (목적함수의 유일한 항)
 %
-% 각 J는 같은 initial guess에서 시작하며, 한 J가 수렴하지 않아도 기록만 하고
-% 다음 J를 계속 푼다(target, bound, equality는 바꾸지 않는다).
+% bound 세트(boundSets)마다 J1..Jn을 차례로 푼다. 각 J는 J별 guess에서 시작하며,
+% 한 J나 한 세트가 수렴하지 않아도 기록만 하고 다음을 계속 푼다
+% (target, bound, equality는 바꾸지 않는다).
 %
-% 결과: <resultsDir>/<runTag>_<sym|asym>_J<k>/ (case별),
-%       <resultsDir>/<runTag>_<mode>_summary/<시각>/ (summary.csv, definitions.txt, 그림).
+% 결과: <resultsDir>/<baseTag>_<B#>_<sym|asym>_J<k>/ (case별),
+%       <resultsDir>/<baseTag>_<B#>_<mode>_summary/<시각>/ (세트별 summary.csv, 그림),
+%       <resultsDir>/<baseTag>_bounds_summary.csv (전체 세트 비교).
 %       기존 결과 폴더는 덮어쓰지 않는다.
 % 플러그인이 없으면 먼저 빌드:
 %   run(fullfile('..', 'plugins', 'osimFixedEffortPropulsion', 'build_osimFixedEffortPropulsion.m'))
@@ -31,18 +33,24 @@ addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
 E0 = 0.1;                       % effort target (weight 곱하기 전 effort metric, 무차원)
 J_targets = [30, 40, 50];       % [J1, J2, J3] [N*s], 한 보행주기 양발 P_gate
 
+% bound 세트 (반 걸음 기준, modeAsym은 x2). 최저 가능 속도 = distBound(1) / timeBound(2)
+%   이전 실행 [0.4 0.8] s / [0.4 1.0] m은 세 J 모두 0.5 m/s 모서리(time_ub;dist_lb)에 걸렸다.
+boundSets = struct( ...
+    'name',      {'B1',        'B2',        'B3'}, ...
+    'timeBound', {[0.4, 1.0],  [0.4, 1.2],  [0.4, 1.5]}, ...    % 반 걸음 최종 시간 [s]
+    'distBound', {[0.30, 1.0], [0.25, 1.0], [0.20, 1.0]});      % 반 걸음 pelvis_tx 최종 위치 [m]
+
 cfg.speedWeight = 1;            % 평균속도 cost weight w_v
 cfg.gateSigma = 1.0;            % propulsion gate 폭 sigma [N] (meanPropPerVel 기본값)
 cfg.gateThreshold = 5.0;        % propulsion gate 중심 F0 [N] (meanPropPerVel 기본값)
 cfg.model = '2D_gait_AFO_pc.osim';
-% Initial guess: propulsion_compare_no_goal (effort 1 + final time 0.03, modeOff,
-% modeSym, mesh 300, tol 1e-3; E = 0.0986, P_gate = 31.7 N*s, v_avg = 1.33 m/s)
-cfg.guessSto = fullfile(thisScriptDir, '..', 'results', 'propulsion_compare_no_goal', ...
+% Initial guess (J별): stateFixed_20261030_221717의 같은 J 해
+% (bound [0.4 0.8] s / [0.4 1.0] m, v_avg = 0.5 m/s, E = 0.1, P_gate = J; 모든 세트의 bound 안)
+prevRun = fullfile(thisScriptDir, '..', 'results', 'stateFixed_20261030_221717_sym_J%d', ...
     'result_1', 'moco_result', 'moco_WoC_Solution_iter01_kinematics_half.sto');
+cfg.guessSto = arrayfun(@(k) sprintf(prevRun, k), 1:numel(J_targets), 'UniformOutput', false);
 cfg.optMode = 'modeOff';        % 보조력 모드 (modeOff | modeWoC | modeSpline 등 string)
 cfg.gaitMode = 'modeSym';       % 'modeSym' | 'modeAsym'
-cfg.timeBound = [0.4, 0.8];     % 반 걸음 최종 시간 bound [s] (modeAsym은 x2)
-cfg.distBound = [0.4, 1.0];     % 반 걸음 pelvis_tx 최종 위치 bound [m] (modeAsym은 x2)
 cfg.meshIntervals = 300;
 cfg.convergenceTolerance = 5e-5;
 cfg.constraintTolerance = 5e-5;
@@ -50,7 +58,6 @@ cfg.maxIterations = 5000;
 cfg.effortTol = 1e-3;           % |E - E0| 검증 허용오차
 cfg.propulsionTol = 1e-2;       % |P_gate - J| 검증 허용오차 [N*s]
 cfg.resultsDir = fullfile(thisScriptDir, '..', 'results');   % 실제 저장 루트
-cfg.runTag = ['stateFixed_' char(datetime('now', 'Format', 'yyyyMMdd_HHmmss'))];
 cfg.continuation = false;       % true: case k가 직전 수렴 case의 해에서 시작 (CSV Guess 열에 기록)
 cfg.runOptimizations = true;    % false: 같은 runTag의 기존 결과만 요약
 
@@ -58,4 +65,34 @@ cfg.E0 = E0;
 cfg.J_targets = J_targets;
 cfg.targetSource = 'experiment (user input)';
 
-summary = WoC_moco_runMinSpeedCases(cfg);
+%% ===== bound 세트별 실행 =====
+baseTag = ['stateFixed_' char(datetime('now', 'Format', 'yyyyMMdd_HHmmss'))];
+summaries = cell(numel(boundSets), 1);
+for b = 1:numel(boundSets)
+    cfg.timeBound = boundSets(b).timeBound;
+    cfg.distBound = boundSets(b).distBound;
+    cfg.runTag = [baseTag '_' boundSets(b).name];
+    vFloor = cfg.distBound(1) / cfg.timeBound(2);
+    fprintf('\n##### bound set %s: time %s s, dist %s m (v floor %.3f m/s) #####\n', ...
+        boundSets(b).name, mat2str(cfg.timeBound), mat2str(cfg.distBound), vFloor);
+    try
+        s = WoC_moco_runMinSpeedCases(cfg);
+        s.BoundSet = repmat(string(boundSets(b).name), height(s), 1);
+        s.VFloor_mps = repmat(vFloor, height(s), 1);
+        summaries{b} = s;
+    catch ME
+        % 한 세트가 실패해도 다음 세트를 계속 돌린다.
+        warning('test_stateFixed:BoundSetFailed', 'Bound set %s failed: %s', ...
+            boundSets(b).name, ME.message);
+    end
+end
+
+summaries = summaries(~cellfun(@isempty, summaries));
+if isempty(summaries)
+    warning('test_stateFixed:NoSummary', '요약할 bound 세트 결과가 없습니다.');
+else
+    allSummary = vertcat(summaries{:});
+    writetable(allSummary, fullfile(cfg.resultsDir, [baseTag '_bounds_summary.csv']));
+    disp(allSummary(:, {'BoundSet', 'Case', 'Verdict', 'v_avg_mps', 'VFloor_mps', ...
+        'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}));
+end
