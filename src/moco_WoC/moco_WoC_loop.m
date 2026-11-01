@@ -19,16 +19,18 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %       .mocoPropulsionSmoothing : smooth positive-force 계수 [0.2, 1]
 %                                  (default = 0.2)
 %       .mocoPropulsionReferenceDuration : impulse 정규화 기준 시간(s)
-%       .mocoObjectiveMode : 'weighted' (default) | 'minSpeedFixedEP'
+%       .mocoObjectiveMode : 'weighted' (default) | 'minSpeedFixedEP' | 'maxSpeedFixedEP'
 %                            'minSpeedFixedEP'은 평균속도만 최소화하고 effort와
 %                            propulsion을 endpoint equality로 고정한다
-%                            (플러그인 osimFixedEffortPropulsion 필요)
+%                            (플러그인 osimFixedEffortPropulsion 필요).
+%                            'maxSpeedFixedEP'은 같은 제약에서 평균속도를 최대화한다.
 %       .mocoEffortTarget : 'minSpeedFixedEP'의 E0
 %       .mocoPropulsionTarget : 'minSpeedFixedEP'의 J [N*s, 한 보행주기 gated Iplus]
 %       .mocoPropulsionGateSigma / .mocoPropulsionGateThreshold :
 %                            'minSpeedFixedEP' gate g(F) = 1/(1+exp(-(F-F0)/sigma))의
 %                            sigma, F0 [N] (default = 1, 5)
-%       .mocoSpeedWeight : 'minSpeedFixedEP' 평균속도 cost weight (default = 1)
+%       .mocoSpeedWeight : 'minSpeedFixedEP' 평균속도 cost weight 크기 (default = 1;
+%                          'maxSpeedFixedEP'에서는 -mocoSpeedWeight로 쓴다)
 %       .mocoMeshIntervals : CasADi mesh interval 수 (default = 300)
 %       .mocoConvergenceTolerance : IPOPT convergence tolerance (default = 1e-3)
 %       .mocoConstraintTolerance  : IPOPT constraint tolerance (default = 1e-3)
@@ -44,7 +46,8 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     propulsionSmoothing = getOpt(opts, 'mocoPropulsionSmoothing', 0.2);
     propulsionReferenceDuration = getOpt(opts, ...
         'mocoPropulsionReferenceDuration', []);
-    useMinSpeed = strcmp(getOpt(opts, 'mocoObjectiveMode', 'weighted'), 'minSpeedFixedEP');
+    objectiveMode = getOpt(opts, 'mocoObjectiveMode', 'weighted');
+    useFixedEP = ismember(objectiveMode, {'minSpeedFixedEP', 'maxSpeedFixedEP'});
     gateSigma = getOpt(opts, 'mocoPropulsionGateSigma', 1.0);
     gateThreshold = getOpt(opts, 'mocoPropulsionGateThreshold', 5.0);
     integratorPath = '/effortPropulsion';
@@ -178,7 +181,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     modelProcessor = ModelProcessor(injectedOsimPath);
     problem.setModelProcessor(modelProcessor);
     model = modelProcessor.process();
-    if useMinSpeed
+    if useFixedEP
         % 적분 상태 component는 Moco 문제의 모델에만 추가한다.
         % 저장되는 injected osim은 플러그인 없이도 읽을 수 있게 유지된다.
         moco_WoC_loadFixedEffortPropulsionPlugin();
@@ -265,11 +268,15 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         error('moco_WoC_loop: 알 수 없는 gaitMode = ''%s''. modeSym 또는 modeAsym 이어야 합니다.', gaitMode);
     end
 
-    if useMinSpeed
-        % Minimum average speed at fixed effort and propulsion.
+    if useFixedEP
+        % Minimum (minSpeedFixedEP) or maximum (maxSpeedFixedEP) average
+        % speed at fixed effort and propulsion.
         %
-        %   minimize   v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
+        %   minimize   +/- v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
         %   subject to E = mocoEffortTarget, P = mocoPropulsionTarget
+        %
+        % Moco minimizes the objective, so maxSpeedFixedEP gives the speed
+        % goal the weight -mocoSpeedWeight.
         %
         % E is the effort goal of the weighted mode before its weight. P is
         % the gated propulsive impulse Iplus of MeanPropulsiveForce
@@ -290,12 +297,15 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         % half-stride integral. E (per COM displacement) and v_avg are equal
         % for the half and full stride.
         speedWeight = getOpt(opts, 'mocoSpeedWeight', 1.0);
-        addMinSpeedFixedEPGoals(problem, integratorPath, ...
+        if strcmp(objectiveMode, 'maxSpeedFixedEP')
+            speedWeight = -speedWeight;
+        end
+        addFixedEPGoals(problem, integratorPath, ...
             opts.mocoEffortTarget, opts.mocoPropulsionTarget, speedWeight);
-        fprintf(['Moco minSpeedFixedEP: speed weight=%.4g, E0=%.6g, J=%.6g N*s ', ...
-                 '(impulse scale %d, gate sigma %.4g N, F0 %.4g N)\n'], speedWeight, ...
-                 opts.mocoEffortTarget, opts.mocoPropulsionTarget, impulseScale, ...
-                 gateSigma, gateThreshold);
+        fprintf(['Moco %s: speed goal weight=%.4g, E0=%.6g, J=%.6g N*s ', ...
+                 '(impulse scale %d, gate sigma %.4g N, F0 %.4g N)\n'], objectiveMode, ...
+                 speedWeight, opts.mocoEffortTarget, opts.mocoPropulsionTarget, ...
+                 impulseScale, gateSigma, gateThreshold);
     else
         % Effort goal (공통)
         effortGoal = MocoControlGoal('effort', weight_effort);
@@ -317,7 +327,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     % goal weight rewards propulsion because Moco minimizes the objective.
     % Do not divide by the optimized phase duration: this goal must remain
     % proportional to the physical positive impulse (N*s), not mean force.
-    % (WoC_moco_main keeps the weight 0 in the minSpeedFixedEP mode.)
+    % (WoC_moco_main keeps the weight 0 in the min/maxSpeedFixedEP modes.)
     if weight_propulsion > 0
         bodyWeight = model.getTotalMass(modelState) * 9.80665;
         if isempty(propulsionReferenceDuration)
@@ -390,14 +400,14 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 
     guessTraj = MocoTrajectory(guessStoPath);
     guessTraj = matchIntegratorGuess(guessTraj, model, problem, integratorPath, ...
-        useMinSpeed, injectedOsimPath, guessStoPath);
+        useFixedEP, injectedOsimPath, guessStoPath);
     solver.setGuess(guessTraj);
 
     %--------------------------------------------------------------
     % 5. 문제 풀기
     %--------------------------------------------------------------
-    if useMinSpeed
-        checkMinSpeedGoals(problem);
+    if useFixedEP
+        checkFixedEPGoals(problem);
     end
     moco_WoC_Solution = study.solve();
 
@@ -449,10 +459,10 @@ function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
 end
 
 
-function addMinSpeedFixedEPGoals(problem, componentPath, effortTarget, ...
+function addFixedEPGoals(problem, componentPath, effortTarget, ...
         propulsionTarget, speedWeight)
-% Add the v_avg cost (weight speedWeight) and the E and P endpoint equality
-% constraints.
+% Add the v_avg cost (weight speedWeight, negative to maximize) and the E
+% and P endpoint equality constraints.
     import org.opensim.modeling.*
 
     speedGoal = MocoGoal.safeDownCast( ...
@@ -494,7 +504,7 @@ end
 function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
         componentPath, useIntegrator, modelPath, guessPath)
 % Make the guess match the integral states of the problem. Integral states
-% already in the guess (from a minSpeedFixedEP solution, including the
+% already in the guess (from a min/maxSpeedFixedEP solution, including the
 % earlier softplus version) are dropped; when the mode is used, the states
 % are rebuilt as running integrals along the guess itself.
     import org.opensim.modeling.*
@@ -544,7 +554,7 @@ function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
 end
 
 
-function checkMinSpeedGoals(problem)
+function checkFixedEPGoals(problem)
 % Check on the problem Moco solves that v_avg is the only cost, that E and
 % P are endpoint constraints (createRep initializes the goals, so an
 % unsupported endpoint constraint mode would also throw here) and that both
@@ -558,7 +568,7 @@ function checkMinSpeedGoals(problem)
         strjoin(costs, ', '), strjoin(constraints, ', '));
     if ~isequal(costs, {'average_speed'}) || ...
             ~all(ismember({'effort_constraint', 'propulsion_constraint'}, constraints))
-        error('moco_WoC_loop: minSpeedFixedEP 문제의 cost/endpoint constraint 구성이 예상과 다릅니다.');
+        error('moco_WoC_loop: min/maxSpeedFixedEP 문제의 cost/endpoint constraint 구성이 예상과 다릅니다.');
     end
     stageNames = {'Topology', 'Model (or lower)', 'Instance', 'Time', 'Position', 'Velocity', ...
                   'Dynamics', 'Acceleration', 'Report'};

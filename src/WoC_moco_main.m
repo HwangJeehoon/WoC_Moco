@@ -44,6 +44,9 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %                             mocoPropulsionWeight 는 쓰지 않는다(0이 아니면 error).
 %                             C++ 플러그인 필요: plugins/osimFixedEffortPropulsion/
 %                             build_osimFixedEffortPropulsion.m 으로 1회 빌드.
+%         'maxSpeedFixedEP' : minSpeedFixedEP와 같은 제약에서 v_avg를 최대화한다
+%                             (Moco cost = -mocoSpeedWeight * v_avg).
+%                             아래의 'minSpeedFixedEP' 옵션은 이 모드에도 같이 쓰인다.
 %     .mocoEffortTarget : E0 ('minSpeedFixedEP' 필수). weighted 모드 effort goal과
 %                         같은 정의의 weight 곱하기 전 값
 %                         E = (1/d_COM) * int sum_c u_c^2 dt (모든 control, weight 1)
@@ -56,7 +59,8 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .mocoPropulsionGateThreshold : 'minSpeedFixedEP' gate 중심 F0 [N] (default = 5)
 %                         (mocoPropulsionSmoothing은 weighted 모드 propulsion 비용항의
 %                          softplus 계수 [1/N]로, minSpeedFixedEP에서는 쓰지 않는다)
-%     .mocoSpeedWeight : 'minSpeedFixedEP' 평균속도 cost의 weight (양수, default = 1)
+%     .mocoSpeedWeight : 'minSpeedFixedEP' 평균속도 cost의 weight 크기 (양수, default = 1;
+%                        최소화/최대화 방향은 mocoObjectiveMode가 정한다)
 %     .gaitMode      : 'modeSym' | 'modeAsym' (default = 'modeSym')
 %     .mocoTimeBound : Moco 시간 상한 [lb, ub] 또는 scalar (default = [0.4, 0.8])
 %     .mocoDistBound : pelvis_tx 최종 위치 bound [lb, ub] 또는 scalar (default = [0.4, 1.0])
@@ -173,26 +177,28 @@ else
 end
 
 mocoObjectiveMode = getOpt(opts, 'mocoObjectiveMode', 'weighted');
-if ~ismember(mocoObjectiveMode, {'weighted', 'minSpeedFixedEP'})
-    error('opts.mocoObjectiveMode 는 ''weighted'' 또는 ''minSpeedFixedEP'' 이어야 합니다.');
+if ~ismember(mocoObjectiveMode, {'weighted', 'minSpeedFixedEP', 'maxSpeedFixedEP'})
+    error(['opts.mocoObjectiveMode 는 ''weighted'', ''minSpeedFixedEP'', ', ...
+           '''maxSpeedFixedEP'' 중 하나여야 합니다.']);
 end
-isMinSpeed = strcmp(mocoObjectiveMode, 'minSpeedFixedEP');
-if isMinSpeed
+% minSpeedFixedEP와 maxSpeedFixedEP는 평균속도 cost의 부호만 다르다.
+isFixedEP = ismember(mocoObjectiveMode, {'minSpeedFixedEP', 'maxSpeedFixedEP'});
+if isFixedEP
     % 목적함수는 평균속도 하나뿐이다. 기존 비용항 weight를 조용히 무시하지 않는다.
     for f = {'mocoEffort', 'mocoFinalTime', 'mocoPropulsionWeight'}
         if getOpt(opts, f{1}, 0) ~= 0
-            error(['opts.mocoObjectiveMode = ''minSpeedFixedEP'' 에서는 opts.%s 를 ', ...
-                   '지정하지 마세요 (목적함수는 평균속도뿐입니다).'], f{1});
+            error(['opts.mocoObjectiveMode = ''%s'' 에서는 opts.%s 를 ', ...
+                   '지정하지 마세요 (목적함수는 평균속도뿐입니다).'], mocoObjectiveMode, f{1});
         end
     end
     opts.mocoEffort = 0;
     opts.mocoFinalTime = 0;
 end
 
-% minSpeedFixedEP의 equality target. 실제 값은 사용자가 지정해야 하며 기본값은 없다.
+% minSpeedFixedEP/maxSpeedFixedEP의 equality target. 실제 값은 사용자가 지정해야 하며 기본값은 없다.
 mocoEffortTarget = getOpt(opts, 'mocoEffortTarget', []);
 mocoPropulsionTarget = getOpt(opts, 'mocoPropulsionTarget', []);
-if isMinSpeed
+if isFixedEP
     if ~isscalar(mocoEffortTarget) || ~isnumeric(mocoEffortTarget) || ...
             ~isfinite(mocoEffortTarget) || mocoEffortTarget <= 0
         error('opts.mocoEffortTarget (E0) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.');
@@ -214,7 +220,7 @@ if ~isscalar(mocoPropulsionGateThreshold) || ~isnumeric(mocoPropulsionGateThresh
         ~isfinite(mocoPropulsionGateThreshold)
     error('opts.mocoPropulsionGateThreshold 는 유한 scalar여야 합니다 (N).');
 end
-% 평균속도 cost weight. 음수나 0이면 최소화가 아니게 되므로 양수만 허용한다.
+% 평균속도 cost weight 크기. 방향(최소화/최대화)은 mocoObjectiveMode가 정하므로 양수만 허용한다.
 mocoSpeedWeight = getOpt(opts, 'mocoSpeedWeight', 1.0);
 if ~isscalar(mocoSpeedWeight) || ~isnumeric(mocoSpeedWeight) || ...
         ~isfinite(mocoSpeedWeight) || mocoSpeedWeight <= 0
@@ -296,8 +302,9 @@ else
 end
 
 % E는 질량중심 변위로 나누므로 전진 변위가 양수여야 한다.
-if isMinSpeed && min(mocoDistBound) <= 0
-    error('opts.mocoObjectiveMode = ''minSpeedFixedEP'' 이면 mocoDistBound 하한이 양수여야 합니다.');
+if isFixedEP && min(mocoDistBound) <= 0
+    error('opts.mocoObjectiveMode = ''%s'' 이면 mocoDistBound 하한이 양수여야 합니다.', ...
+        mocoObjectiveMode);
 end
 
 % Solver 설정: 기본값은 기존 고정값(mesh 300, tolerance 1e-3, 최대 반복 1000)과 같다.
@@ -375,9 +382,11 @@ if mocoPropulsionWeight > 0
     fprintf('  propulsion body weight: %.4g N\n', propulsionBodyWeight);
 end
 fprintf('  mocoObjectiveMode: %s\n', mocoObjectiveMode);
-if isMinSpeed
-    fprintf('  objective: minimize %.4g * v_avg, v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)\n', ...
-        mocoSpeedWeight);
+if isFixedEP
+    speedVerb = 'minimize';
+    if strcmp(mocoObjectiveMode, 'maxSpeedFixedEP'), speedVerb = 'maximize'; end
+    fprintf('  objective: %s %.4g * v_avg, v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)\n', ...
+        speedVerb, mocoSpeedWeight);
     fprintf('  mocoEffortTarget E0: %.6g (effort metric before weight)\n', mocoEffortTarget);
     fprintf('  mocoPropulsionTarget J: %.6g N*s (full stride, both feet, gated Iplus)\n', ...
         mocoPropulsionTarget);
@@ -470,7 +479,7 @@ runParams = [runParams; ...
     {'effective_final_time_bound_s', mocoTimeBound * boundScale; ...
      'effective_final_pelvis_tx_bound_m', mocoDistBound * boundScale; ...
      'results_root', resultsRoot}];
-if isMinSpeed
+if isFixedEP
     % 결과를 다시 요약할 때 실행 당시 propulsion 정의를 구분하기 위한 메타데이터.
     runParams(end+1, :) = {'propulsion_definition', ...
         'gate_Iplus: P = impulse_scale * int [F_r g(F_r) + F_l g(F_l)] dt, g = 1/(1+exp(-(F-F0)/sigma))'};

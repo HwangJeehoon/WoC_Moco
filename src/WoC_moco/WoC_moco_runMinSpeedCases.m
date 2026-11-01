@@ -2,9 +2,10 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
 % WoC_moco_runMinSpeedCases
 %
 %   같은 E0에 대해 propulsion target J_k마다 하나씩 다음 문제를 독립적으로 푼다
-%   (opts.mocoObjectiveMode = 'minSpeedFixedEP'):
+%   (opts.mocoObjectiveMode = cfg.objectiveMode):
 %
-%     minimize    w_v * v_avg,  v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
+%     minimize (minSpeedFixedEP) 또는 maximize (maxSpeedFixedEP)
+%                 w_v * v_avg,  v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
 %     subject to  E = E0, P_gate = J_k, 기존 동역학/주기성/대칭성/bounds
 %
 %   각 case 결과를 저장된 궤적에서 control과 접촉력으로 다시 적분해 표/CSV와
@@ -14,7 +15,8 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
 %
 %   cfg 필드:
 %     E0, J_targets      : effort target, P_gate target 벡터 [N*s, 한 보행주기]
-%     speedWeight        : 평균속도 cost weight w_v (없으면 1)
+%     objectiveMode      : 'minSpeedFixedEP' (없으면 이 값) | 'maxSpeedFixedEP'
+%     speedWeight        : 평균속도 cost weight 크기 w_v (없으면 1)
 %     targetSource       : target 출처 설명 (CSV에 기록)
 %     gateSigma, gateThreshold : propulsion gate sigma, F0 [N]
 %     model, optMode, gaitMode, guessSto ('' 이면 WoC_moco_main 기본 guess,
@@ -32,6 +34,10 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
 
     validateTargets(cfg.E0, cfg.J_targets);
     if ~isfield(cfg, 'speedWeight'), cfg.speedWeight = 1; end
+    if ~isfield(cfg, 'objectiveMode'), cfg.objectiveMode = 'minSpeedFixedEP'; end
+    if ~ismember(cfg.objectiveMode, {'minSpeedFixedEP', 'maxSpeedFixedEP'})
+        error('cfg.objectiveMode 는 ''minSpeedFixedEP'' 또는 ''maxSpeedFixedEP'' 이어야 합니다.');
+    end
     if iscell(cfg.guessSto) && numel(cfg.guessSto) ~= numel(cfg.J_targets)
         error('guessSto가 cell이면 J_targets와 길이가 같아야 합니다 (%d vs %d).', ...
             numel(cfg.guessSto), numel(cfg.J_targets));
@@ -66,7 +72,7 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
         for k = 1:nCase
             opts = struct();
             opts.gaitMode = cfg.gaitMode;
-            opts.mocoObjectiveMode = 'minSpeedFixedEP';
+            opts.mocoObjectiveMode = cfg.objectiveMode;
             opts.mocoEffortTarget = cfg.E0;
             opts.mocoPropulsionTarget = cfg.J_targets(k);
             opts.mocoPropulsionGateSigma = cfg.gateSigma;
@@ -80,8 +86,8 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
             opts.mocoMaxIterations = cfg.maxIterations;
             if iscell(guess), opts.guessInitSto = guess{k}; else, opts.guessInitSto = guess; end
             opts.resultsDir = resultsRoot;
-            fprintf('\n===== minSpeedFixedEP case %d/%d: E0=%.6g, J=%.6g N*s =====\n', ...
-                k, nCase, cfg.E0, cfg.J_targets(k));
+            fprintf('\n===== %s case %d/%d: E0=%.6g, J=%.6g N*s =====\n', ...
+                cfg.objectiveMode, k, nCase, cfg.E0, cfg.J_targets(k));
             try
                 WoC_moco_main(cfg.model, 1, cfg.optMode, caseNames{k}, opts);
                 runMessages(k) = "completed";
@@ -120,7 +126,7 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
     writetable(summary, fullfile(summaryDir, 'summary.csv'));
     writeDefinitions(fullfile(summaryDir, 'definitions.txt'), cfg, impulseScale, boundScale);
 
-    fprintf('\n===== minSpeedFixedEP summary (%s) =====\n', summaryDir);
+    fprintf('\n===== %s summary (%s) =====\n', cfg.objectiveMode, summaryDir);
     disp(summary(:, {'Case', 'PropulsionDefinition', 'Verdict', 'SolverStatus', ...
         'E_target', 'E_actual', 'E_residual', 'P_gate_target', 'P_gate_actual', ...
         'P_gate_residual', 'P_physical', 'v_avg_mps', 'BoundHits'}));
@@ -162,7 +168,8 @@ end
 
 function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
     row = struct('Case', string(caseName), 'CaseIndex', k, ...
-        'TargetSource', string(cfg.targetSource), 'PropulsionDefinition', "", ...
+        'TargetSource', string(cfg.targetSource), ...
+        'ObjectiveMode', string(cfg.objectiveMode), 'PropulsionDefinition', "", ...
         'Verdict', "", 'SolverStatus', "missing", 'Converged', false, ...
         'Iterations', NaN, 'SolverTime_s', NaN, 'Objective', NaN, ...
         'ObjectiveTerms', "", 'OnlySpeedCost', false, ...
@@ -206,6 +213,9 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     params = readParams(fullfile(resultDir, 'result_1', 'moco_result', ...
         'moco_WoC_Solution_iter01_parameters.csv'));
     if isfield(params, 'guess_sto'), row.Guess = string(params.guess_sto); end
+    if isfield(params, 'mocoObjectiveMode')
+        row.ObjectiveMode = string(params.mocoObjectiveMode);
+    end
     if isfield(params, 'mocoEffortTarget')
         row.E_target = str2double(params.mocoEffortTarget);
     end
@@ -251,9 +261,11 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     modelPath = fullfile(resultDir, 'result_1', 'analy_result', [modelName '_1.osim']);
     m = moco_WoC_evalGaitMetrics(modelPath, solFile, impulseScale, ...
         row.GateSigma_N, row.GateThreshold_N);
+    % maxSpeedFixedEP는 weight -w_v로 풀었으므로 objective = -w_v * v_avg 이다.
+    speedCost = row.SpeedWeight * m.v_avg;
+    if row.ObjectiveMode == "maxSpeedFixedEP", speedCost = -speedCost; end
     row.OnlySpeedCost = isequal(termNames, {'objective_average_speed'}) && ...
-        abs(row.Objective - row.SpeedWeight * m.v_avg) <= ...
-        1e-6 * max(1, abs(row.SpeedWeight * m.v_avg));
+        abs(row.Objective - speedCost) <= 1e-6 * max(1, abs(speedCost));
     row.E_actual = m.E_simpson;
     row.E_residual = m.E_simpson - row.E_target;
     row.E_pass = abs(row.E_residual) <= cfg.effortTol;
@@ -388,13 +400,17 @@ end
 function writeDefinitions(path, cfg, impulseScale, boundScale)
     fid = fopen(path, 'w');
     cleaner = onCleanup(@() fclose(fid));
+    isMax = strcmp(cfg.objectiveMode, 'maxSpeedFixedEP');
+    speedVerb = 'minimize';
+    if isMax, speedVerb = 'maximize'; end
     lines = {
-        'minSpeedFixedEP: minimize v_avg s.t. E = E0, P_gate = J_k (endpoint equality constraints)'
+        sprintf('%s: %s v_avg s.t. E = E0, P_gate = J_k (endpoint equality constraints)', ...
+            cfg.objectiveMode, speedVerb)
         sprintf('target source: %s', cfg.targetSource)
         'propulsion_definition: gate_Iplus (meanPropPerVel MeanPropulsiveForce numerator)'
         ''
         sprintf(['v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)  [m/s] ', ...
-                 '(only Moco cost, weight %g)'], cfg.speedWeight)
+                 '(only Moco cost, weight %g)'], (1 - 2*isMax) * cfg.speedWeight)
         'E = (1/d_COM) * int sum_c u_c^2 dt'
         '    c = all model controls, weight 1: 18 muscle excitations, lumbarAct (CoordinateActuator,'
         '        optimal force 1, control = N*m), AFO_r/AFO_l (PrescribedController values;'
