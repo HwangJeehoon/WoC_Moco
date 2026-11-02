@@ -1,6 +1,6 @@
 % test_stateFixed.m
 %
-% 같은 E0에 대해 propulsion target J_k마다 독립적으로 푼다.
+% E0_list의 각 E0와 propulsion target J_k마다 독립적으로 푼다.
 %
 %   minimize (cfg.objectiveMode = 'minSpeedFixedEP') 또는
 %   maximize (cfg.objectiveMode = 'maxSpeedFixedEP')
@@ -17,14 +17,14 @@
 %             비교용으로 함께 보고)
 %   w_v    : 평균속도 cost weight (목적함수의 유일한 항)
 %
-% bound 세트(boundSets)마다 J1..Jn을 차례로 푼다. bound 세트와 initial guess는
-% objectiveMode별로 정한다. 한 J나 한 세트가 수렴하지 않아도 기록만 하고 다음을
-% 계속 푼다 (target, bound, equality는 바꾸지 않는다).
+% E0마다 bound 세트(boundSets)를 돌고, 세트마다 J1..Jn을 차례로 푼다. bound 세트와
+% initial guess(세트별, J별)는 objectiveMode별로 정한다. 한 J나 한 세트가 수렴하지
+% 않아도 기록만 하고 다음을 계속 푼다 (target, bound, equality는 바꾸지 않는다).
 %
-% baseTag = stateFixed_<min|max>_<시각>
-% 결과: <resultsDir>/<baseTag>_<세트>_<sym|asym>_J<k>/ (case별),
-%       <resultsDir>/<baseTag>_<세트>_<mode>_summary/<시각>/ (세트별 summary.csv, 그림),
-%       <resultsDir>/<baseTag>_bounds_summary.csv (전체 세트 비교).
+% baseTag = stateFixed_<min|max>_<시각>, E0 태그 = E<E0의 '.'을 'p'로> (0.12 -> E0p12)
+% 결과: <resultsDir>/<baseTag>_<E0 태그>_<세트>_<sym|asym>_J<k>/ (case별),
+%       <resultsDir>/<baseTag>_<E0 태그>_<세트>_<mode>_summary/<시각>/ (세트별 summary.csv, 그림),
+%       <resultsDir>/<baseTag>_bounds_summary.csv (전체 E0 x 세트 비교).
 %       기존 결과 폴더는 덮어쓰지 않는다.
 % 플러그인이 없으면 먼저 빌드:
 %   run(fullfile('..', 'plugins', 'osimFixedEffortPropulsion', 'build_osimFixedEffortPropulsion.m'))
@@ -33,7 +33,7 @@ thisScriptDir = fileparts(mfilename('fullpath'));
 addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
 
 %% ===== 사용자 입력 =====
-E0 = 0.1;                       % effort target (weight 곱하기 전 effort metric, 무차원)
+E0_list = [0.12, 0.08];         % effort target들 (weight 곱하기 전 effort metric, 무차원), 적힌 순서로 푼다
 J_targets = [30, 40, 50];       % [J1, J2, J3] [N*s], 한 보행주기 양발 P_gate
 
 cfg.objectiveMode = 'maxSpeedFixedEP';   % 'minSpeedFixedEP' | 'maxSpeedFixedEP'
@@ -47,11 +47,16 @@ if strcmp(cfg.objectiveMode, 'maxSpeedFixedEP')
         'name',      {'X1',        'X2',         'X3'}, ...
         'timeBound', {[0.4, 0.8],  [0.33, 0.8],  [0.25, 0.8]}, ...   % 최고 2.50 / 3.64 / 6.00 m/s
         'distBound', {[0.4, 1.0],  [0.4, 1.2],   [0.4, 1.5]});
-    % Initial guess (모든 J 공통): propulsion_compare_no_goal (effort 1 + final time 0.03,
-    % modeOff, modeSym, mesh 300; E = 0.0986, P_gate = 31.7 N*s, v_avg = 1.33 m/s,
-    % 반 걸음 0.448 s / 0.594 m; 모든 세트의 bound 안)
-    cfg.guessSto = fullfile(thisScriptDir, '..', 'results', 'propulsion_compare_no_goal', ...
-        'result_1', 'moco_result', 'moco_WoC_Solution_iter01_kinematics_half.sto');
+    % Initial guess (세트별, J별): stateFixed_max_20261101_160827 (E0 = 0.1, J = 30/40/50)의
+    % 같은 세트 해 중 J가 가장 가까운 case (v_avg 1.53-1.62 m/s; 각 해는 그 세트의 bound 안)
+    guessRun = 'stateFixed_max_20261101_160827';
+    guessJ = [30, 40, 50];      % guessRun의 J1, J2, J3
+    [~, guessIdx] = arrayfun(@(J) min(abs(guessJ - J)), J_targets);
+    for b = 1:numel(boundSets)
+        boundSets(b).guessSto = arrayfun(@(k) fullfile(thisScriptDir, '..', 'results', ...
+            sprintf('%s_%s_sym_J%d', guessRun, boundSets(b).name, k), 'result_1', 'moco_result', ...
+            'moco_WoC_Solution_iter01_kinematics_half.sto'), guessIdx, 'UniformOutput', false);
+    end
 else
     % 이전 실행 [0.4 0.8] s / [0.4 1.0] m은 세 J 모두 0.5 m/s 모서리(time_ub;dist_lb)에 걸렸다.
     boundSets = struct( ...
@@ -61,9 +66,10 @@ else
     % Initial guess (J별): stateFixed_20261030_221717의 같은 J 해
     % (bound [0.4 0.8] s / [0.4 1.0] m, v_avg = 0.5 m/s, E = 0.1, P_gate = J; 모든 세트의 bound 안)
     % (sprintf에는 폴더 이름만 넘긴다: Windows 경로의 '\'를 escape 문자로 읽기 때문)
-    cfg.guessSto = arrayfun(@(k) fullfile(thisScriptDir, '..', 'results', ...
+    minGuess = arrayfun(@(k) fullfile(thisScriptDir, '..', 'results', ...
         sprintf('stateFixed_20261030_221717_sym_J%d', k), 'result_1', 'moco_result', ...
         'moco_WoC_Solution_iter01_kinematics_half.sto'), 1:numel(J_targets), 'UniformOutput', false);
+    [boundSets.guessSto] = deal(minGuess);
 end
 
 cfg.speedWeight = 1;            % 평균속도 cost weight 크기 w_v (방향은 objectiveMode)
@@ -82,33 +88,37 @@ cfg.resultsDir = fullfile(thisScriptDir, '..', 'results');   % 실제 저장 루
 cfg.continuation = false;       % true: case k가 직전 수렴 case의 해에서 시작 (CSV Guess 열에 기록)
 cfg.runOptimizations = true;    % false: 같은 runTag의 기존 결과만 요약
 
-cfg.E0 = E0;
 cfg.J_targets = J_targets;
 cfg.targetSource = 'experiment (user input)';
 
-%% ===== bound 세트별 실행 =====
+%% ===== E0 x bound 세트별 실행 =====
 baseTag = sprintf('stateFixed_%s_%s', erase(cfg.objectiveMode, 'SpeedFixedEP'), ...
     char(datetime('now', 'Format', 'yyyyMMdd_HHmmss')));
-summaries = cell(numel(boundSets), 1);
-for b = 1:numel(boundSets)
-    cfg.timeBound = boundSets(b).timeBound;
-    cfg.distBound = boundSets(b).distBound;
-    cfg.runTag = [baseTag '_' boundSets(b).name];
-    vFloor = cfg.distBound(1) / cfg.timeBound(2);
-    vCeil = cfg.distBound(2) / cfg.timeBound(1);
-    fprintf('\n##### %s bound set %s: time %s s, dist %s m (v range %.3f-%.3f m/s) #####\n', ...
-        cfg.objectiveMode, boundSets(b).name, mat2str(cfg.timeBound), ...
-        mat2str(cfg.distBound), vFloor, vCeil);
-    try
-        s = WoC_moco_runMinSpeedCases(cfg);
-        s.BoundSet = repmat(string(boundSets(b).name), height(s), 1);
-        s.VFloor_mps = repmat(vFloor, height(s), 1);
-        s.VCeil_mps = repmat(vCeil, height(s), 1);
-        summaries{b} = s;
-    catch ME
-        % 한 세트가 실패해도 다음 세트를 계속 돌린다.
-        warning('test_stateFixed:BoundSetFailed', 'Bound set %s failed: %s', ...
-            boundSets(b).name, ME.message);
+summaries = cell(numel(E0_list), numel(boundSets));
+for e = 1:numel(E0_list)
+    cfg.E0 = E0_list(e);
+    e0Tag = ['E' strrep(sprintf('%g', cfg.E0), '.', 'p')];
+    for b = 1:numel(boundSets)
+        cfg.timeBound = boundSets(b).timeBound;
+        cfg.distBound = boundSets(b).distBound;
+        cfg.guessSto = boundSets(b).guessSto;
+        cfg.runTag = sprintf('%s_%s_%s', baseTag, e0Tag, boundSets(b).name);
+        vFloor = cfg.distBound(1) / cfg.timeBound(2);
+        vCeil = cfg.distBound(2) / cfg.timeBound(1);
+        fprintf('\n##### %s E0 = %g, bound set %s: time %s s, dist %s m (v range %.3f-%.3f m/s) #####\n', ...
+            cfg.objectiveMode, cfg.E0, boundSets(b).name, mat2str(cfg.timeBound), ...
+            mat2str(cfg.distBound), vFloor, vCeil);
+        try
+            s = WoC_moco_runMinSpeedCases(cfg);
+            s.BoundSet = repmat(string(boundSets(b).name), height(s), 1);
+            s.VFloor_mps = repmat(vFloor, height(s), 1);
+            s.VCeil_mps = repmat(vCeil, height(s), 1);
+            summaries{e, b} = s;
+        catch ME
+            % 한 세트가 실패해도 다음 세트를 계속 돌린다.
+            warning('test_stateFixed:BoundSetFailed', 'E0 = %g, bound set %s failed: %s', ...
+                cfg.E0, boundSets(b).name, ME.message);
+        end
     end
 end
 
@@ -118,6 +128,6 @@ if isempty(summaries)
 else
     allSummary = vertcat(summaries{:});
     writetable(allSummary, fullfile(cfg.resultsDir, [baseTag '_bounds_summary.csv']));
-    disp(allSummary(:, {'BoundSet', 'Case', 'Verdict', 'v_avg_mps', 'VFloor_mps', ...
+    disp(allSummary(:, {'E_target', 'BoundSet', 'Case', 'Verdict', 'v_avg_mps', 'VFloor_mps', ...
         'VCeil_mps', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}));
 end
