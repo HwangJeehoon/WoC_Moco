@@ -36,7 +36,7 @@ thisScriptDir = fileparts(mfilename('fullpath'));
 addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
 
 %% ===== 사용자 입력 =====
-E0_list = [0.12, 0.08];         % effort target들 (weight 곱하기 전 effort metric, 무차원), 적힌 순서로 푼다
+E0_list = [0.08, 0.10, 0.12];   % effort target들 (weight 곱하기 전 effort metric, 무차원), 적힌 순서로 푼다
 cfg.propulsionMetric = 'meanForce';   % 'impulse' (J = P_gate [N*s]) | 'meanForce' (J = 평균 추진력 [N])
 J_targets = [50, 65, 80];       % [J1, J2, J3], 단위는 propulsionMetric (meanForce: N, 0.08/0.11/0.13 BW)
 
@@ -45,28 +45,19 @@ cfg.objectiveMode = 'maxSpeedFixedEP';   % 'minSpeedFixedEP' | 'maxSpeedFixedEP'
 % bound 세트 (반 걸음 기준, modeAsym은 x2)와 initial guess.
 %   최저 가능 속도 = distBound(1) / timeBound(2), 최고 가능 속도 = distBound(2) / timeBound(1)
 if strcmp(cfg.objectiveMode, 'maxSpeedFixedEP')
-    % 속도를 밀어붙인 이전 해들은 반 걸음 시간 하한 0.4 s에 붙었다. 시간 하한과 거리
-    % 상한을 넓혀 가며 최고 속도가 bound에서 떨어지는지 본다 (X1 = 기존 기본 bound).
+    % X3만 푼다. P_gate 실행(E0 = 0.08/0.10/0.12)에서 X2와 X3의 해가 같아 bound가 최고
+    % 속도를 정하지 않았고, X1 [0.4 0.8] s / [0.4 1.0] m은 일부 case가 time_lb에 걸렸다.
+    % (X2 = [0.33 0.8] s / [0.4 1.2] m)
     boundSets = struct( ...
-        'name',      {'X1',        'X2',         'X3'}, ...
-        'timeBound', {[0.4, 0.8],  [0.33, 0.8],  [0.25, 0.8]}, ...   % 최고 2.50 / 3.64 / 6.00 m/s
-        'distBound', {[0.4, 1.0],  [0.4, 1.2],   [0.4, 1.5]});
-    % Initial guess 후보: 이전 maxSpeedFixedEP 실행들 (P_gate J = 30/40/50; E0 = 0.1, 0.08, 0.12).
-    % case마다 같은 세트의 수렴 해 중 E0가 가장 가까운 해들에서 J 지표 값
-    % (P_gate 또는 평균 추진력)이 J_k에 가장 가까운 해를 쓴다 (각 해는 그 세트의 bound 안).
-    guessRuns = {'stateFixed_max_20261101_160827', 'stateFixed_max_20261102_002630'};
-    candidateColumns = {'Case', 'BoundSet', 'Verdict', 'E_target', 'P_gate_actual', 'MeanPropulsiveForce_N'};
-    guessCandidates = cell(numel(guessRuns), 1);
-    for r = 1:numel(guessRuns)
-        t = readtable(fullfile(thisScriptDir, '..', 'results', [guessRuns{r} '_bounds_summary.csv']), ...
-            'TextType', 'string');
-        guessCandidates{r} = t(:, candidateColumns);
-    end
-    guessCandidates = vertcat(guessCandidates{:});
-    metricColumn = 'P_gate_actual';
-    if strcmp(cfg.propulsionMetric, 'meanForce'), metricColumn = 'MeanPropulsiveForce_N'; end
-    guessFor = @(E0, setName) pickGuess(guessCandidates, setName, E0, J_targets, ...
-        metricColumn, fullfile(thisScriptDir, '..', 'results'));
+        'name',      {'X3'}, ...
+        'timeBound', {[0.25, 0.8]}, ...   % 최고 6.00 m/s
+        'distBound', {[0.4, 1.5]});
+    % Initial guess (모든 E0, 세트, J 공통): propulsion_compare_no_goal (effort 1 + final time 0.03,
+    % modeOff, modeSym, mesh 300; E = 0.0986, P_gate = 31.7 N*s, 평균 추진력 68 N, v_avg = 1.33 m/s,
+    % 반 걸음 0.448 s / 0.594 m; X1-X3 bound 안). P_gate 첫 최대화 실행과 같은 시작점이다.
+    noGoalGuess = fullfile(thisScriptDir, '..', 'results', 'propulsion_compare_no_goal', ...
+        'result_1', 'moco_result', 'moco_WoC_Solution_iter01_kinematics_half.sto');
+    guessFor = @(E0, setName) repmat({noGoalGuess}, 1, numel(J_targets));
 else
     % 이전 실행 [0.4 0.8] s / [0.4 1.0] m은 세 J 모두 0.5 m/s 모서리(time_ub;dist_lb)에 걸렸다.
     boundSets = struct( ...
@@ -150,21 +141,4 @@ else
     disp(allSummary(:, {'E_target', 'BoundSet', 'Case', 'Verdict', 'RunPropulsionTarget', ...
         'P_gate_actual', 'MeanPropulsiveForce_N', 'v_avg_mps', 'VFloor_mps', 'VCeil_mps', ...
         'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}));
-end
-
-
-function guess = pickGuess(candidates, setName, E0, targets, metricColumn, resultsDir)
-% 같은 bound 세트의 수렴(OK) 해 중 E0가 가장 가까운 해들에서, metricColumn 값이
-% target에 가장 가까운 해의 반 걸음 궤적 (J_k마다 하나).
-    c = candidates(candidates.BoundSet == setName & candidates.Verdict == "OK", :);
-    if isempty(c)
-        error('test_stateFixed: bound 세트 %s의 수렴한 guess 후보가 없습니다.', setName);
-    end
-    c = c(abs(c.E_target - E0) == min(abs(c.E_target - E0)), :);
-    guess = cell(1, numel(targets));
-    for k = 1:numel(targets)
-        [~, i] = min(abs(c.(metricColumn) - targets(k)));
-        guess{k} = fullfile(resultsDir, char(c.Case(i)), 'result_1', 'moco_result', ...
-            'moco_WoC_Solution_iter01_kinematics_half.sto');
-    end
 end
