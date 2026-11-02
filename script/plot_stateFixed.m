@@ -119,7 +119,7 @@ end
 legend(ax, hLegend, 'Location', 'best', 'Box', 'off');
 
 xlabel(ax, 'Average Velocity (m/s)');
-ylabel(ax, 'Fixed Effort');
+ylabel(ax, 'Fixed Sum of Efforts per distance');
 yticks(ax, E0_levels);
 vPad = max(0.1 * (max(data.v_avg_mps) - min(data.v_avg_mps)), 0.05);
 xlim(ax, [min(data.v_avg_mps) - vPad, max(data.v_avg_mps) + vPad]);
