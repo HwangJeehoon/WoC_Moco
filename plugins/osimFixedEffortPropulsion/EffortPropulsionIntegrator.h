@@ -31,6 +31,20 @@ States (bound both to 0 at the initial time in the MocoProblem):
     effort_integral     = integral of effort_rate
     propulsive_impulse  = integral of propulsive_impulse_rate   [N*s]
 
+With include_mean_force = true, two more states give the mean propulsive
+force m = Iplus / Tplus as in MeanPropulsiveForce (meanPropPerVel_goal):
+    mean_propulsive_force (m) [N]: zero time derivative, one constant per
+        phase.
+    mean_force_residual (r) [N*s]: integrates
+        mean_force_residual_rate = g(F_r) (F_r - m) + g(F_l) (F_l - m),
+        so r(t_final) - r(t_initial) = Iplus - m * Tplus.
+Bounding r to 0 at both the initial and the final time in the MocoProblem
+enforces m * Tplus = Iplus without a division in the NLP, and bounding
+m(t_initial) fixes the mean propulsive force. g > 0 gives Tplus > 0, so the
+r bounds determine m for every trajectory. m is the same for a half stride
+solved with left-right symmetry and the full stride (Iplus and Tplus both
+halve), so impulse_scale does not apply to it.
+
 Outputs effort_integral and scaled_propulsive_impulse (= impulse_scale *
 propulsive_impulse) are meant for MocoFinalOutputGoal endpoint constraints:
 effort_integral with divide_by_displacement gives the MocoControlGoal value
@@ -54,6 +68,9 @@ public:
             "Gate center F0 (N); g(F0) = 0.5. Default: 5.");
     OpenSim_DECLARE_PROPERTY(impulse_scale, double,
             "Factor of scaled_propulsive_impulse. Default: 1.");
+    OpenSim_DECLARE_PROPERTY(include_mean_force, bool,
+            "Add the states mean_propulsive_force and mean_force_residual. "
+            "Default: false.");
 
     OpenSim_DECLARE_LIST_INPUT(right_contact_forces, SimTK::SpatialVec,
             SimTK::Stage::Dynamics,
@@ -78,6 +95,8 @@ public:
     double calcEffortRate(const SimTK::State& s) const;
     double calcPropulsiveImpulseRate(const SimTK::State& s) const;
     double calcPropulsiveTimeRate(const SimTK::State& s) const;
+    /// Sum over feet of g(F) (F - m) (N); requires include_mean_force.
+    double calcMeanForceResidualRate(const SimTK::State& s) const;
     double getEffortIntegral(const SimTK::State& s) const;
     double getScaledPropulsiveImpulse(const SimTK::State& s) const;
 

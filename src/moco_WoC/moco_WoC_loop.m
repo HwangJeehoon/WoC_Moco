@@ -25,7 +25,10 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %                            (플러그인 osimFixedEffortPropulsion 필요).
 %                            'maxSpeedFixedEP'은 같은 제약에서 평균속도를 최대화한다.
 %       .mocoEffortTarget : 'minSpeedFixedEP'의 E0
-%       .mocoPropulsionTarget : 'minSpeedFixedEP'의 J [N*s, 한 보행주기 gated Iplus]
+%       .mocoPropulsionMetric : min/maxSpeedFixedEP에서 J가 고정하는 지표
+%                            'impulse' (default): 한 보행주기 gated Iplus [N*s]
+%                            'meanForce': 평균 추진력 Iplus / Tplus [N]
+%       .mocoPropulsionTarget : 'minSpeedFixedEP'의 J (단위는 mocoPropulsionMetric)
 %       .mocoPropulsionGateSigma / .mocoPropulsionGateThreshold :
 %                            'minSpeedFixedEP' gate g(F) = 1/(1+exp(-(F-F0)/sigma))의
 %                            sigma, F0 [N] (default = 1, 5)
@@ -48,6 +51,8 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         'mocoPropulsionReferenceDuration', []);
     objectiveMode = getOpt(opts, 'mocoObjectiveMode', 'weighted');
     useFixedEP = ismember(objectiveMode, {'minSpeedFixedEP', 'maxSpeedFixedEP'});
+    propulsionMetric = getOpt(opts, 'mocoPropulsionMetric', 'impulse');
+    useMeanForce = useFixedEP && strcmp(propulsionMetric, 'meanForce');
     gateSigma = getOpt(opts, 'mocoPropulsionGateSigma', 1.0);
     gateThreshold = getOpt(opts, 'mocoPropulsionGateThreshold', 5.0);
     integratorPath = '/effortPropulsion';
@@ -186,7 +191,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         % 저장되는 injected osim은 플러그인 없이도 읽을 수 있게 유지된다.
         moco_WoC_loadFixedEffortPropulsionPlugin();
         addEffortPropulsionIntegrator(model, integratorPath, ...
-            gateSigma, gateThreshold, impulseScale);
+            gateSigma, gateThreshold, impulseScale, useMeanForce);
         problem.setModelProcessor(ModelProcessor(model));
     end
     modelState = model.initSystem();
@@ -296,16 +301,30 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         % form one foot's full cycle, so the full stride P is twice the
         % half-stride integral. E (per COM displacement) and v_avg are equal
         % for the half and full stride.
+        %
+        % mocoPropulsionMetric = 'meanForce' fixes the mean propulsive force
+        % m = Iplus / Tplus (Tplus = integral of g(F_r) + g(F_l)) instead of P,
+        % as in MeanPropulsiveForce (meanPropPerVel_goal): the component's
+        % constant state m and residual state r' = sum g(F) (F - m) with
+        % r(t0) = r(tf) = 0 give Iplus = m * Tplus, and m(t0) = J. m is the
+        % same for the half and full stride.
         speedWeight = getOpt(opts, 'mocoSpeedWeight', 1.0);
         if strcmp(objectiveMode, 'maxSpeedFixedEP')
             speedWeight = -speedWeight;
         end
-        addFixedEPGoals(problem, integratorPath, ...
-            opts.mocoEffortTarget, opts.mocoPropulsionTarget, speedWeight);
-        fprintf(['Moco %s: speed goal weight=%.4g, E0=%.6g, J=%.6g N*s ', ...
-                 '(impulse scale %d, gate sigma %.4g N, F0 %.4g N)\n'], objectiveMode, ...
-                 speedWeight, opts.mocoEffortTarget, opts.mocoPropulsionTarget, ...
-                 impulseScale, gateSigma, gateThreshold);
+        addFixedEPGoals(problem, integratorPath, opts.mocoEffortTarget, ...
+            opts.mocoPropulsionTarget, speedWeight, useMeanForce);
+        if useMeanForce
+            fprintf(['Moco %s: speed goal weight=%.4g, E0=%.6g, J=%.6g N ', ...
+                     '(mean propulsive force, gate sigma %.4g N, F0 %.4g N)\n'], objectiveMode, ...
+                     speedWeight, opts.mocoEffortTarget, opts.mocoPropulsionTarget, ...
+                     gateSigma, gateThreshold);
+        else
+            fprintf(['Moco %s: speed goal weight=%.4g, E0=%.6g, J=%.6g N*s ', ...
+                     '(impulse scale %d, gate sigma %.4g N, F0 %.4g N)\n'], objectiveMode, ...
+                     speedWeight, opts.mocoEffortTarget, opts.mocoPropulsionTarget, ...
+                     impulseScale, gateSigma, gateThreshold);
+        end
     else
         % Effort goal (공통)
         effortGoal = MocoControlGoal('effort', weight_effort);
@@ -399,15 +418,17 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     solver.set_optim_max_iterations(getOpt(opts, 'mocoMaxIterations', 1000));
 
     guessTraj = MocoTrajectory(guessStoPath);
+    meanForceTarget = [];
+    if useMeanForce, meanForceTarget = opts.mocoPropulsionTarget; end
     guessTraj = matchIntegratorGuess(guessTraj, model, problem, integratorPath, ...
-        useFixedEP, injectedOsimPath, guessStoPath);
+        useFixedEP, injectedOsimPath, guessStoPath, meanForceTarget);
     solver.setGuess(guessTraj);
 
     %--------------------------------------------------------------
     % 5. 문제 풀기
     %--------------------------------------------------------------
     if useFixedEP
-        checkFixedEPGoals(problem);
+        checkFixedEPGoals(problem, integratorPath, meanForceTarget);
     end
     moco_WoC_Solution = study.solve();
 
@@ -434,10 +455,11 @@ end
 
 
 function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
-        gateThreshold, impulseScale)
+        gateThreshold, impulseScale, includeMeanForce)
 % Add the plugin component that integrates the effort rate and the gated
 % propulsive impulse rate of each foot (sum of its heel/front sphere_force
-% x-components, as in addPropulsionGoal and MeanPropulsiveForce).
+% x-components, as in addPropulsionGoal and MeanPropulsiveForce), plus the
+% mean propulsive force states when includeMeanForce is true.
     import org.opensim.modeling.*
 
     component = Component.safeDownCast( ...
@@ -448,6 +470,8 @@ function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
         component.updPropertyByName('gate_threshold'));
     PropertyHelper.setValueDouble(impulseScale, ...
         component.updPropertyByName('impulse_scale'));
+    PropertyHelper.setValueBool(includeMeanForce, ...
+        component.updPropertyByName('include_mean_force'));
     sides = {'r', 'right_contact_forces'; 'l', 'left_contact_forces'};
     for k = 1:size(sides, 1)
         input = component.updInput(sides{k, 2});
@@ -460,9 +484,10 @@ end
 
 
 function addFixedEPGoals(problem, componentPath, effortTarget, ...
-        propulsionTarget, speedWeight)
-% Add the v_avg cost (weight speedWeight, negative to maximize) and the E
-% and P endpoint equality constraints.
+        propulsionTarget, speedWeight, useMeanForce)
+% Add the v_avg cost (weight speedWeight, negative to maximize), the E
+% endpoint equality constraint and either the P endpoint equality
+% constraint or (useMeanForce) the bounds that fix the mean propulsive force.
     import org.opensim.modeling.*
 
     speedGoal = MocoGoal.safeDownCast( ...
@@ -481,14 +506,26 @@ function addFixedEPGoals(problem, componentPath, effortTarget, ...
     effortGoal.setEndpointConstraintBounds(equalityBounds(effortTarget));
     problem.addGoal(effortGoal);
 
-    % P_gate = impulse_scale * z_P(tf) [N*s, one stride].
-    propulsionGoal = MocoFinalOutputGoal('propulsion_constraint');
-    propulsionGoal.setOutputPath([componentPath '|scaled_propulsive_impulse']);
-    propulsionGoal.setMode('endpoint_constraint');
-    propulsionGoal.setEndpointConstraintBounds(equalityBounds(propulsionTarget));
-    problem.addGoal(propulsionGoal);
+    if useMeanForce
+        % Mean propulsive force: r(t0) = r(tf) = 0 gives Iplus = m * Tplus,
+        % and m(t0) = J (m' = 0 carries it over the phase). Only the
+        % initial value of m is bounded so that no defect constraint row
+        % has fixed variables only.
+        problem.setStateInfo([componentPath '/mean_propulsive_force'], ...
+            [-Inf, Inf], propulsionTarget);
+        problem.setStateInfo([componentPath '/mean_force_residual'], ...
+            [-Inf, Inf], 0, 0);
+    else
+        % P_gate = impulse_scale * z_P(tf) [N*s, one stride].
+        propulsionGoal = MocoFinalOutputGoal('propulsion_constraint');
+        propulsionGoal.setOutputPath([componentPath '|scaled_propulsive_impulse']);
+        propulsionGoal.setMode('endpoint_constraint');
+        propulsionGoal.setEndpointConstraintBounds(equalityBounds(propulsionTarget));
+        problem.addGoal(propulsionGoal);
+    end
 
-    % Both integrals start at 0. Moco omits states without a state info.
+    % Both integrals start at 0 (z_P is only reported when useMeanForce).
+    % Moco omits states without a state info.
     problem.setStateInfo([componentPath '/effort_integral'], [-Inf, Inf], 0);
     problem.setStateInfo([componentPath '/propulsive_impulse'], [-Inf, Inf], 0);
 end
@@ -502,11 +539,14 @@ end
 
 
 function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
-        componentPath, useIntegrator, modelPath, guessPath)
+        componentPath, useIntegrator, modelPath, guessPath, meanForceTarget)
 % Make the guess match the integral states of the problem. Integral states
 % already in the guess (from a min/maxSpeedFixedEP solution, including the
 % earlier softplus version) are dropped; when the mode is used, the states
-% are rebuilt as running integrals along the guess itself.
+% are rebuilt as running integrals along the guess itself. With a mean
+% force target J (not empty), m = J and r is the running integral of
+% sum g(F) (F - J): the guess then satisfies the dynamics of m and r, and
+% r(tf) = Iplus - J * Tplus of the guess is the only violated bound.
     import org.opensim.modeling.*
 
     statesTable = guessTraj.exportToStatesTable();
@@ -532,6 +572,15 @@ function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
         statePaths = {[componentPath '/effort_integral'], [componentPath '/propulsive_impulse']};
         values = [cumtrapz(m.time, m.effort_rate), ...
                   cumtrapz(m.time, m.gate_impulse_rate)];
+        if ~isempty(meanForceTarget)
+            statePaths = [statePaths, {[componentPath '/mean_propulsive_force'], ...
+                                       [componentPath '/mean_force_residual']}];
+            values = [values, repmat(meanForceTarget, numel(m.time), 1), ...
+                      cumtrapz(m.time, m.gate_impulse_rate - meanForceTarget * m.gate_time_rate)];
+            fprintf(['Mean force guess: m = %.6g N, r(tf) = Iplus - J*Tplus = %.4g N*s ', ...
+                     '(guess mean force %.6g N)\n'], meanForceTarget, values(end, end), ...
+                     trapz(m.time, m.gate_impulse_rate) / trapz(m.time, m.gate_time_rate));
+        end
 
         % Moco 4.5 maps guess states to the problem by position. The guess
         % columns are in system order and the component's states come last,
@@ -542,8 +591,9 @@ function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
             systemNames{k+1} = char(systemOrder.get(k));
         end
         [position, order] = sort(cellfun(@(p) find(strcmp(systemNames, p)), statePaths));
-        if ~isequal(position, numel(systemNames) - [1, 0])
-            error('moco_WoC_loop: 적분 상태가 system order의 마지막 두 상태가 아닙니다.');
+        if ~isequal(position, numel(systemNames) - (numel(statePaths)-1:-1:0))
+            error('moco_WoC_loop: 적분 상태가 system order의 마지막 %d개 상태가 아닙니다.', ...
+                numel(statePaths));
         end
         for k = order
             statesTable.appendColumn(statePaths{k}, Vector.createFromMat(values(:, k)));
@@ -554,25 +604,43 @@ function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
 end
 
 
-function checkFixedEPGoals(problem)
+function checkFixedEPGoals(problem, componentPath, meanForceTarget)
 % Check on the problem Moco solves that v_avg is the only cost, that E and
 % P are endpoint constraints (createRep initializes the goals, so an
 % unsupported endpoint constraint mode would also throw here) and that both
 % read the optimizer's states: MocoCasADiSolver copies them into the
 % SimTK::State only for goals that depend on Stage::Time or later.
+% With a mean force target J, E is the only endpoint constraint and the
+% state bounds must be m(t0) = J and r(t0) = r(tf) = 0.
     names = @(v) arrayfun(@(k) char(v.get(k)), 0:v.size()-1, 'UniformOutput', false);
     rep = problem.createRep();
     costs = names(rep.createCostNames());
     constraints = names(rep.createEndpointConstraintNames());
     fprintf('Moco costs: %s | endpoint constraints: %s\n', ...
         strjoin(costs, ', '), strjoin(constraints, ', '));
-    if ~isequal(costs, {'average_speed'}) || ...
-            ~all(ismember({'effort_constraint', 'propulsion_constraint'}, constraints))
+    expected = {'effort_constraint', 'propulsion_constraint'};
+    if ~isempty(meanForceTarget)
+        expected = {'effort_constraint'};
+    end
+    if ~isequal(costs, {'average_speed'}) || ~all(ismember(expected, constraints)) || ...
+            (~isempty(meanForceTarget) && ismember('propulsion_constraint', constraints))
         error('moco_WoC_loop: min/maxSpeedFixedEP 문제의 cost/endpoint constraint 구성이 예상과 다릅니다.');
+    end
+    if ~isempty(meanForceTarget)
+        % m(t0) = J and r(t0) = r(tf) = 0 on the problem Moco solves.
+        mInit = rep.getStateInfo([componentPath '/mean_propulsive_force']).getInitialBounds();
+        rInfo = rep.getStateInfo([componentPath '/mean_force_residual']);
+        rBounds = [rInfo.getInitialBounds().getLower(), rInfo.getInitialBounds().getUpper(), ...
+                   rInfo.getFinalBounds().getLower(), rInfo.getFinalBounds().getUpper()];
+        fprintf('  mean_propulsive_force initial bounds: [%g, %g] N | mean_force_residual t0/tf bounds: %s\n', ...
+            mInit.getLower(), mInit.getUpper(), mat2str(rBounds));
+        if mInit.getLower() ~= meanForceTarget || mInit.getUpper() ~= meanForceTarget || any(rBounds ~= 0)
+            error('moco_WoC_loop: 평균 추진력 상태의 bound가 m(t0) = J, r(t0) = r(tf) = 0 이 아닙니다.');
+        end
     end
     stageNames = {'Topology', 'Model (or lower)', 'Instance', 'Time', 'Position', 'Velocity', ...
                   'Dynamics', 'Acceleration', 'Report'};
-    for name = {'effort_constraint', 'propulsion_constraint'}
+    for name = expected
         level = stageLevel(rep.getEndpointConstraint(name{1}).getStageDependency());
         fprintf('  %s stage dependency: %s\n', name{1}, stageNames{level});
         if level < 4

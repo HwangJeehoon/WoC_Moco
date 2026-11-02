@@ -14,6 +14,7 @@ void EffortPropulsionIntegrator::constructProperties() {
     constructProperty_gate_sigma(1.0);
     constructProperty_gate_threshold(5.0);
     constructProperty_impulse_scale(1.0);
+    constructProperty_include_mean_force(false);
 }
 
 void EffortPropulsionIntegrator::extendFinalizeFromProperties() {
@@ -37,6 +38,10 @@ void EffortPropulsionIntegrator::extendAddToSystem(
     Super::extendAddToSystem(system);
     addStateVariable("effort_integral");
     addStateVariable("propulsive_impulse");
+    if (get_include_mean_force()) {
+        addStateVariable("mean_propulsive_force");
+        addStateVariable("mean_force_residual");
+    }
 }
 
 void EffortPropulsionIntegrator::computeStateVariableDerivatives(
@@ -45,6 +50,11 @@ void EffortPropulsionIntegrator::computeStateVariableDerivatives(
     setStateVariableDerivativeValue(s, "effort_integral", calcEffortRate(s));
     setStateVariableDerivativeValue(
             s, "propulsive_impulse", calcPropulsiveImpulseRate(s));
+    if (get_include_mean_force()) {
+        setStateVariableDerivativeValue(s, "mean_propulsive_force", 0.0);
+        setStateVariableDerivativeValue(
+                s, "mean_force_residual", calcMeanForceResidualRate(s));
+    }
 }
 
 double EffortPropulsionIntegrator::calcEffortRate(const SimTK::State& s) const {
@@ -90,6 +100,14 @@ double EffortPropulsionIntegrator::calcPropulsiveTimeRate(
         const SimTK::State& s) const {
     return calcGate(calcFootForce(s, "right_contact_forces")) +
            calcGate(calcFootForce(s, "left_contact_forces"));
+}
+
+double EffortPropulsionIntegrator::calcMeanForceResidualRate(
+        const SimTK::State& s) const {
+    const double m = getStateVariableValue(s, "mean_propulsive_force");
+    const double right = calcFootForce(s, "right_contact_forces");
+    const double left = calcFootForce(s, "left_contact_forces");
+    return calcGate(right) * (right - m) + calcGate(left) * (left - m);
 }
 
 double EffortPropulsionIntegrator::getEffortIntegral(

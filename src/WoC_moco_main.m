@@ -55,6 +55,10 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %                         P_gate = int [F_r g(F_r) + F_l g(F_l)] dt,
 %                         g(F) = 1/(1+exp(-(F-F0)/sigma)), F_foot = heel + front x-force.
 %                         modeSym은 반주기 적분의 2배를 J와 맞춘다.
+%                         mocoPropulsionMetric = 'meanForce'이면 J [N]는 평균 추진력
+%                         P_gate / Tplus, Tplus = int [g(F_r) + g(F_l)] dt
+%                         (meanPropPerVel의 MeanPropulsiveForce, 반주기와 한 주기가 같다).
+%     .mocoPropulsionMetric : 'impulse' (default, J = P_gate) | 'meanForce' (J = 평균 추진력)
 %     .mocoPropulsionGateSigma     : 'minSpeedFixedEP' gate 폭 sigma [N] (default = 1)
 %     .mocoPropulsionGateThreshold : 'minSpeedFixedEP' gate 중심 F0 [N] (default = 5)
 %                         (mocoPropulsionSmoothing은 weighted 모드 propulsion 비용항의
@@ -198,6 +202,13 @@ end
 % minSpeedFixedEP/maxSpeedFixedEP의 equality target. 실제 값은 사용자가 지정해야 하며 기본값은 없다.
 mocoEffortTarget = getOpt(opts, 'mocoEffortTarget', []);
 mocoPropulsionTarget = getOpt(opts, 'mocoPropulsionTarget', []);
+% J가 고정하는 propulsion 지표: gated impulse P_gate [N*s] 또는 평균 추진력 [N].
+mocoPropulsionMetric = getOpt(opts, 'mocoPropulsionMetric', 'impulse');
+if ~ismember(mocoPropulsionMetric, {'impulse', 'meanForce'})
+    error('opts.mocoPropulsionMetric 은 ''impulse'' 또는 ''meanForce'' 여야 합니다.');
+end
+propulsionUnit = 'N*s';
+if strcmp(mocoPropulsionMetric, 'meanForce'), propulsionUnit = 'N'; end
 if isFixedEP
     if ~isscalar(mocoEffortTarget) || ~isnumeric(mocoEffortTarget) || ...
             ~isfinite(mocoEffortTarget) || mocoEffortTarget <= 0
@@ -205,8 +216,11 @@ if isFixedEP
     end
     if ~isscalar(mocoPropulsionTarget) || ~isnumeric(mocoPropulsionTarget) || ...
             ~isfinite(mocoPropulsionTarget) || mocoPropulsionTarget <= 0
-        error('opts.mocoPropulsionTarget (J, N*s) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.');
+        error('opts.mocoPropulsionTarget (J, %s) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.', ...
+            propulsionUnit);
     end
+elseif strcmp(mocoPropulsionMetric, 'meanForce')
+    error('opts.mocoPropulsionMetric = ''meanForce'' 는 min/maxSpeedFixedEP 모드에서만 씁니다.');
 end
 
 % minSpeedFixedEP propulsion gate (meanPropPerVel MeanPropulsiveForce와 같은 기본값).
@@ -388,8 +402,13 @@ if isFixedEP
     fprintf('  objective: %s %.4g * v_avg, v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)\n', ...
         speedVerb, mocoSpeedWeight);
     fprintf('  mocoEffortTarget E0: %.6g (effort metric before weight)\n', mocoEffortTarget);
-    fprintf('  mocoPropulsionTarget J: %.6g N*s (full stride, both feet, gated Iplus)\n', ...
-        mocoPropulsionTarget);
+    if strcmp(mocoPropulsionMetric, 'meanForce')
+        fprintf('  mocoPropulsionTarget J: %.6g N (mean propulsive force, gated Iplus / Tplus)\n', ...
+            mocoPropulsionTarget);
+    else
+        fprintf('  mocoPropulsionTarget J: %.6g N*s (full stride, both feet, gated Iplus)\n', ...
+            mocoPropulsionTarget);
+    end
     fprintf('  propulsion gate: sigma %.4g N, F0 %.4g N\n', ...
         mocoPropulsionGateSigma, mocoPropulsionGateThreshold);
 end
@@ -447,6 +466,7 @@ MocoOpts.mocoPropulsionReferenceDuration = mocoPropulsionReferenceDuration;
 MocoOpts.mocoObjectiveMode = mocoObjectiveMode;
 MocoOpts.mocoEffortTarget = mocoEffortTarget;
 MocoOpts.mocoPropulsionTarget = mocoPropulsionTarget;
+MocoOpts.mocoPropulsionMetric = mocoPropulsionMetric;
 MocoOpts.mocoPropulsionGateSigma = mocoPropulsionGateSigma;
 MocoOpts.mocoPropulsionGateThreshold = mocoPropulsionGateThreshold;
 MocoOpts.mocoSpeedWeight = mocoSpeedWeight;
@@ -481,8 +501,14 @@ runParams = [runParams; ...
      'results_root', resultsRoot}];
 if isFixedEP
     % 결과를 다시 요약할 때 실행 당시 propulsion 정의를 구분하기 위한 메타데이터.
-    runParams(end+1, :) = {'propulsion_definition', ...
-        'gate_Iplus: P = impulse_scale * int [F_r g(F_r) + F_l g(F_l)] dt, g = 1/(1+exp(-(F-F0)/sigma))'};
+    if strcmp(mocoPropulsionMetric, 'meanForce')
+        runParams(end+1, :) = {'propulsion_definition', ...
+            ['gate_mean_force: m = Iplus / Tplus, Iplus = int [F_r g(F_r) + F_l g(F_l)] dt, ', ...
+             'Tplus = int [g(F_r) + g(F_l)] dt, g = 1/(1+exp(-(F-F0)/sigma))']};
+    else
+        runParams(end+1, :) = {'propulsion_definition', ...
+            'gate_Iplus: P = impulse_scale * int [F_r g(F_r) + F_l g(F_l)] dt, g = 1/(1+exp(-(F-F0)/sigma))'};
+    end
 end
 if mocoPropulsionWeight > 0 && isempty(mocoPropulsionReferenceDuration)
     runParams(end+1, :) = {'effective_mocoPropulsionReferenceDuration_s', ...
