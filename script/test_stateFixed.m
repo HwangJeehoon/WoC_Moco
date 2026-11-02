@@ -109,7 +109,7 @@ for e = 1:numel(E0_list)
             cfg.objectiveMode, cfg.E0, boundSets(b).name, mat2str(cfg.timeBound), ...
             mat2str(cfg.distBound), vFloor, vCeil);
         try
-            s = WoC_moco_runMinSpeedCases(cfg);
+            s = WoC_moco_runStateFixedCases(cfg);
             s.BoundSet = repmat(string(boundSets(b).name), height(s), 1);
             s.VFloor_mps = repmat(vFloor, height(s), 1);
             s.VCeil_mps = repmat(vCeil, height(s), 1);

@@ -1,6 +1,7 @@
-function summary = WoC_moco_runMinSpeedCases(cfg)
-% WoC_moco_runMinSpeedCases
+function summary = WoC_moco_runStateFixedCases(cfg)
+% WoC_moco_runStateFixedCases
 %
+%   stateFixed 실행기 (min/maxSpeedFixedEP: E와 propulsion을 고정하고 평균속도를 최소/최대화).
 %   같은 E0에 대해 propulsion target J_k마다 하나씩 다음 문제를 독립적으로 푼다
 %   (opts.mocoObjectiveMode = cfg.objectiveMode):
 %
@@ -93,7 +94,7 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
                 runMessages(k) = "completed";
             catch ME
                 runMessages(k) = string(ME.message);
-                warning('WoC_moco_runMinSpeedCases:CaseFailed', ...
+                warning('WoC_moco_runStateFixedCases:CaseFailed', ...
                     'Case %s did not finish: %s', caseNames{k}, ME.message);
             end
             if cfg.continuation
@@ -134,7 +135,7 @@ function summary = WoC_moco_runMinSpeedCases(cfg)
     try
         plotCases(summary, summaryDir);
     catch ME
-        warning('WoC_moco_runMinSpeedCases:PlotFailed', '그림 저장 실패: %s', ME.message);
+        warning('WoC_moco_runStateFixedCases:PlotFailed', '그림 저장 실패: %s', ME.message);
     end
 end
 
@@ -469,7 +470,9 @@ function plotCases(summary, outDir)
     end
     xlabel(ax, 'Propulsion target J (P_{gate}, N\cdots, one stride)');
     ylabel(ax, 'Average speed v_{avg} (m/s)');
-    title(ax, sprintf('Minimum average speed at E_0 = %.4g', summary.E_target(1)), ...
+    speedLabel = 'Minimum';
+    if summary.ObjectiveMode(1) == "maxSpeedFixedEP", speedLabel = 'Maximum'; end
+    title(ax, sprintf('%s average speed at E_0 = %.4g', speedLabel, summary.E_target(1)), ...
         'Color', ink(1, :));
     padLimits(ax, target, summary.v_avg_mps);
     saveFigure(fig, fullfile(outDir, 'speed_vs_propulsion_target.png'));
