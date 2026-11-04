@@ -49,17 +49,12 @@ addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
 Index = 'H';                   % 결과 폴더 접두어. 같은 Index의 마지막 번호 다음부터 이어간다
 cfg.objectiveMode = 'maxSpeedStateFixed';   % 'minSpeedStateFixed' | 'maxSpeedStateFixed'
 
-% State Fixed 설정
+% State Fixed 설정 - Energy
 cfg.energyMetric = 'metabolicCoT';  % 'effort' | 'metabolicCoT'
 E0_effort = [0.08, 0.10, 0.12];     % effort target들 (weight 곱하기 전 effort metric, 무차원)
 E0_CoT = [3.2, 3.35, 3.5];          % metabolic CoT target들 [J/kg/m]: 낮음 / 중간 / 높음
-if strcmp(cfg.energyMetric, 'metabolicCoT')
-    E0_list = E0_CoT;               % 적힌 순서로 푼다
-    cfg.energyTol = 1e-3;           % |CoT - E0| 검증 허용오차 [J/kg/m]
-else
-    E0_list = E0_effort;
-    cfg.energyTol = 1e-3;           % |E - E0| 검증 허용오차 [-]
-end
+
+% State Fixed 설정 - Target J
 cfg.propulsionMetric = 'meanForce';   % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
 J_targets = [50, 65, 80];       % [J1, J2, J3]
 
@@ -79,6 +74,7 @@ stateFixedGuess = fullfile(thisScriptDir, '..', 'inputs', 'guess_init_stateFixed
 guessFor = @(E0, setName) repmat({stateFixedGuess}, 1, numel(J_targets));
 
 % 기타 설정
+
 cfg.speedWeight = 1;            % 평균속도 cost weight 크기 w_v (방향은 objectiveMode)
 cfg.gateSigma = 1.0;            % propulsion gate 폭 sigma [N] (meanPropPerVel 기본값)
 cfg.gateThreshold = 5.0;        % propulsion gate 중심 F0 [N] (meanPropPerVel 기본값)
@@ -91,6 +87,13 @@ cfg.constraintTolerance = 5e-5;
 cfg.maxIterations = 5000;
 cfg.propulsionTol = 1e-2; % |J 지표 - J| 검증 허용오차
 if strcmp(cfg.propulsionMetric, 'meanForce'), cfg.propulsionTol = 0.1; end % |J 지표 - J| 검증 허용오차
+if strcmp(cfg.energyMetric, 'metabolicCoT')
+    E0_list = E0_CoT;
+    cfg.energyTol = 1e-5;           % |CoT - E0| 검증 허용오차 [J/kg/m]
+else
+    E0_list = E0_effort;
+    cfg.energyTol = 1e-3;           % |E - E0| 검증 허용오차 [-]
+end
 cfg.resultsDir = fullfile(thisScriptDir, '..', 'results');   % 실제 저장 루트
 cfg.Index = Index;
 cfg.continuation = false;       % true: case k가 직전 수렴 case의 해에서 시작 (CSV Guess 열에 기록)
