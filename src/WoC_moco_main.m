@@ -38,7 +38,7 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %     .mocoObjectiveMode : Moco 목적함수 (QP의 .cost와 별개)
 %         'weighted'        : effort + final time (+ propulsion) 가중합 (default)
 %         'minSpeedStateFixed' : 평균속도 v_avg = (pelvis_tx(tf)-pelvis_tx(t0))/(tf-t0)
-%                             만 최소화하고 E = mocoEffortTarget,
+%                             만 최소화하고 E = mocoEnergyTarget (지표는 mocoEnergyMetric),
 %                             P = mocoPropulsionTarget 을 endpoint equality
 %                             constraint로 강제한다. mocoEffort / mocoFinalTime /
 %                             mocoPropulsionWeight 는 쓰지 않는다(0이 아니면 error).
@@ -47,10 +47,18 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %         'maxSpeedStateFixed' : minSpeedStateFixed와 같은 제약에서 v_avg를 최대화한다
 %                             (Moco cost = -mocoSpeedWeight * v_avg).
 %                             아래의 'minSpeedStateFixed' 옵션은 이 모드에도 같이 쓰인다.
-%     .mocoEffortTarget : E0 ('minSpeedStateFixed' 필수). weighted 모드 effort goal과
-%                         같은 정의의 weight 곱하기 전 값
-%                         E = (1/d_COM) * int sum_c u_c^2 dt
-%                         (AFO_r/AFO_l 제외, 근육 excitation과 lumbarAct, weight 1)
+%     .mocoEnergyMetric : min/maxSpeedStateFixed에서 E0로 고정하는 에너지 지표
+%         'effort' (default)  : weighted 모드 effort goal과 같은 정의의 weight 곱하기 전 값
+%                               E = (1/d_COM) * int sum_c u_c^2 dt [-]
+%                               (AFO_r/AFO_l 제외, 근육 excitation과 lumbarAct, weight 1)
+%         'metabolicCoT'      : metabolic cost of transport [J/kg/m]
+%                               CoT = int P_met dt / (mass * d_COM),
+%                               P_met = Bhargava2004SmoothedMuscleMetabolics의
+%                               total_metabolic_rate [W] (basal 포함, use_smoothing,
+%                               모든 Muscle component 등록: moco_WoC_addMetabolics).
+%                               modeSym은 반주기 에너지 / 반주기 COM 변위.
+%     .mocoEnergyTarget : E0 ('minSpeedStateFixed' 필수, 단위는 mocoEnergyMetric)
+%     .mocoEffortTarget : mocoEnergyTarget의 이전 이름 (effort 지표에서만 허용)
 %     .mocoPropulsionTarget : J [N*s] ('minSpeedStateFixed' 필수). 한 보행주기 동안
 %                         양발 gated propulsive impulse의 합 (meanPropPerVel의 Iplus)
 %                         P_gate = int [F_r g(F_r) + F_l g(F_l)] dt,
@@ -201,7 +209,34 @@ if isStateFixed
 end
 
 % minSpeedStateFixed/maxSpeedStateFixed의 equality target. 실제 값은 사용자가 지정해야 하며 기본값은 없다.
+% E0가 고정하는 에너지 지표: effort (이전 실행과 같은 기본값) 또는 metabolic CoT [J/kg/m].
+mocoEnergyMetric = getOpt(opts, 'mocoEnergyMetric', 'effort');
+if ~ismember(mocoEnergyMetric, {'effort', 'metabolicCoT'})
+    error('opts.mocoEnergyMetric 은 ''effort'' 또는 ''metabolicCoT'' 여야 합니다.');
+end
+mocoEnergyTarget = getOpt(opts, 'mocoEnergyTarget', []);
 mocoEffortTarget = getOpt(opts, 'mocoEffortTarget', []);
+if strcmp(mocoEnergyMetric, 'effort')
+    % 이전 호출의 mocoEffortTarget을 그대로 받는다.
+    if isempty(mocoEnergyTarget)
+        mocoEnergyTarget = mocoEffortTarget;
+    elseif ~isempty(mocoEffortTarget) && ~isequal(mocoEffortTarget, mocoEnergyTarget)
+        error('opts.mocoEnergyTarget 과 opts.mocoEffortTarget 이 다릅니다.');
+    end
+    mocoEffortTarget = mocoEnergyTarget;
+    energyUnit = '-';
+    energyDefinition = 'effort: int sum_c u_c^2 dt / d_COM; excludes AFO_r and AFO_l; includes lumbarAct';
+else
+    % effort 목표값을 CoT 목표값으로 쓰지 않는다.
+    if ~isempty(mocoEffortTarget)
+        error(['opts.mocoEffortTarget 은 effort 지표의 목표값입니다. metabolicCoT 목표값은 ', ...
+               'opts.mocoEnergyTarget [J/kg/m] 으로 지정하세요.']);
+    end
+    energyUnit = 'J/kg/m';
+    energyDefinition = ['metabolicCoT: int P_met dt / (mass * d_COM), P_met = /metabolics|', ...
+        'total_metabolic_rate [W] (basal included), mass = model total mass, d_COM = |r_COM(tf) - ', ...
+        'r_COM(t0)| of the solved phase (modeSym: half stride energy / half stride displacement)'];
+end
 mocoPropulsionTarget = getOpt(opts, 'mocoPropulsionTarget', []);
 % J가 고정하는 propulsion 지표: gated impulse P_gate [N*s] 또는 평균 추진력 [N].
 mocoPropulsionMetric = getOpt(opts, 'mocoPropulsionMetric', 'impulse');
@@ -211,9 +246,10 @@ end
 propulsionUnit = 'N*s';
 if strcmp(mocoPropulsionMetric, 'meanForce'), propulsionUnit = 'N'; end
 if isStateFixed
-    if ~isscalar(mocoEffortTarget) || ~isnumeric(mocoEffortTarget) || ...
-            ~isfinite(mocoEffortTarget) || mocoEffortTarget <= 0
-        error('opts.mocoEffortTarget (E0) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.');
+    if ~isscalar(mocoEnergyTarget) || ~isnumeric(mocoEnergyTarget) || ...
+            ~isfinite(mocoEnergyTarget) || mocoEnergyTarget <= 0
+        error('opts.mocoEnergyTarget (E0, %s [%s]) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.', ...
+            mocoEnergyMetric, energyUnit);
     end
     if ~isscalar(mocoPropulsionTarget) || ~isnumeric(mocoPropulsionTarget) || ...
             ~isfinite(mocoPropulsionTarget) || mocoPropulsionTarget <= 0
@@ -222,6 +258,8 @@ if isStateFixed
     end
 elseif strcmp(mocoPropulsionMetric, 'meanForce')
     error('opts.mocoPropulsionMetric = ''meanForce'' 는 min/maxSpeedStateFixed 모드에서만 씁니다.');
+elseif strcmp(mocoEnergyMetric, 'metabolicCoT')
+    error('opts.mocoEnergyMetric = ''metabolicCoT'' 는 min/maxSpeedStateFixed 모드에서만 씁니다.');
 end
 
 % minSpeedStateFixed propulsion gate (meanPropPerVel MeanPropulsiveForce와 같은 기본값).
@@ -402,7 +440,12 @@ if isStateFixed
     if strcmp(mocoObjectiveMode, 'maxSpeedStateFixed'), speedVerb = 'maximize'; end
     fprintf('  objective: %s %.4g * v_avg, v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)\n', ...
         speedVerb, mocoSpeedWeight);
-    fprintf('  mocoEffortTarget E0: %.6g (effort metric before weight)\n', mocoEffortTarget);
+    if strcmp(mocoEnergyMetric, 'metabolicCoT')
+        fprintf('  mocoEnergyTarget E0: %.6g J/kg/m (metabolic CoT, Bhargava2004 incl. basal)\n', ...
+            mocoEnergyTarget);
+    else
+        fprintf('  mocoEnergyTarget E0: %.6g (effort metric before weight)\n', mocoEnergyTarget);
+    end
     if strcmp(mocoPropulsionMetric, 'meanForce')
         fprintf('  mocoPropulsionTarget J: %.6g N (mean propulsive force, gated Iplus / Tplus)\n', ...
             mocoPropulsionTarget);
@@ -465,7 +508,9 @@ MocoOpts.mocoPropulsionWeight = mocoPropulsionWeight;
 MocoOpts.mocoPropulsionSmoothing = mocoPropulsionSmoothing;
 MocoOpts.mocoPropulsionReferenceDuration = mocoPropulsionReferenceDuration;
 MocoOpts.mocoObjectiveMode = mocoObjectiveMode;
-MocoOpts.mocoEffortTarget = mocoEffortTarget;
+MocoOpts.mocoEffortTarget = mocoEffortTarget;   % effort 지표일 때만 (이전 결과와 같은 열)
+MocoOpts.mocoEnergyMetric = mocoEnergyMetric;
+MocoOpts.mocoEnergyTarget = mocoEnergyTarget;
 MocoOpts.mocoPropulsionTarget = mocoPropulsionTarget;
 MocoOpts.mocoPropulsionMetric = mocoPropulsionMetric;
 MocoOpts.mocoPropulsionGateSigma = mocoPropulsionGateSigma;
@@ -502,6 +547,15 @@ runParams = [runParams; ...
      'results_root', resultsRoot; ...
      'effort_definition', 'int sum_c u_c^2 dt / d_COM; excludes AFO_r and AFO_l; includes lumbarAct'}];
 if isStateFixed
+    % E0가 고정한 에너지 지표. 이 항목이 없는 이전 결과는 effort 지표로 읽는다.
+    runParams = [runParams; {'energy_metric', mocoEnergyMetric; 'energy_unit', energyUnit; ...
+                             'energy_definition', energyDefinition}];
+    if strcmp(mocoEnergyMetric, 'metabolicCoT')
+        [~, metabolicsInfo] = moco_WoC_addMetabolics([]);
+        runParams = [runParams; {'metabolics_settings', metabolicsInfo.settings; ...
+            'cot_constraint', ['MocoFinalOutputGoal metabolic_cot_constraint: ', ...
+            '/effortPropulsion|metabolic_energy, divide_by_mass, divide_by_displacement, endpoint_constraint']}];
+    end
     % 결과를 다시 요약할 때 실행 당시 propulsion 정의를 구분하기 위한 메타데이터.
     if strcmp(mocoPropulsionMetric, 'meanForce')
         runParams(end+1, :) = {'propulsion_definition', ...

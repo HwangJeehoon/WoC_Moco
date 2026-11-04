@@ -15,6 +15,7 @@ void EffortPropulsionIntegrator::constructProperties() {
     constructProperty_gate_threshold(5.0);
     constructProperty_impulse_scale(1.0);
     constructProperty_include_mean_force(false);
+    constructProperty_include_metabolic_energy(false);
 }
 
 void EffortPropulsionIntegrator::extendFinalizeFromProperties() {
@@ -31,6 +32,13 @@ void EffortPropulsionIntegrator::extendFinalizeFromProperties() {
         OPENSIM_THROW_IF_FRMOBJ(getInput(input).getNumConnectees() == 0,
                 Exception, fmt::format("Input '{}' has no connectees.", input));
     }
+    OPENSIM_THROW_IF_FRMOBJ(get_include_metabolic_energy() &&
+                                    getInput("metabolic_rate")
+                                            .getConnecteePath()
+                                            .empty(),
+            Exception,
+            "include_metabolic_energy requires the input 'metabolic_rate' to "
+            "be connected.");
 }
 
 void EffortPropulsionIntegrator::extendAddToSystem(
@@ -41,6 +49,9 @@ void EffortPropulsionIntegrator::extendAddToSystem(
     if (get_include_mean_force()) {
         addStateVariable("mean_propulsive_force");
         addStateVariable("mean_force_residual");
+    }
+    if (get_include_metabolic_energy()) {
+        addStateVariable("metabolic_energy");
     }
 }
 
@@ -54,6 +65,12 @@ void EffortPropulsionIntegrator::computeStateVariableDerivatives(
         setStateVariableDerivativeValue(s, "mean_propulsive_force", 0.0);
         setStateVariableDerivativeValue(
                 s, "mean_force_residual", calcMeanForceResidualRate(s));
+    }
+    if (get_include_metabolic_energy()) {
+        // The metabolic rate output is computed at Stage::Dynamics; state
+        // derivatives are evaluated while realizing Stage::Acceleration.
+        setStateVariableDerivativeValue(s, "metabolic_energy",
+                getInput<double>("metabolic_rate").getValue(s));
     }
 }
 
@@ -121,4 +138,9 @@ double EffortPropulsionIntegrator::getEffortIntegral(
 double EffortPropulsionIntegrator::getScaledPropulsiveImpulse(
         const SimTK::State& s) const {
     return get_impulse_scale() * getStateVariableValue(s, "propulsive_impulse");
+}
+
+double EffortPropulsionIntegrator::getMetabolicEnergy(
+        const SimTK::State& s) const {
+    return getStateVariableValue(s, "metabolic_energy");
 }

@@ -94,92 +94,24 @@ function moco_WoC_getResult(moco_WoC_Solution, outputDir, opts)
     STOFileAdapter.write(externalForcesTableFlat, fullfile(outputDir, [prefix '_GRF.sto']));
 
     %----------------------------------------------------------
-    % 3. Metabolic cost (Bhargava2004)
+    % 3. Metabolic cost (Bhargava2004, full stride 기준)
+    %    최적화의 CoT 제약과 같은 대사 모델(moco_WoC_addMetabolics), 이름 기반
+    %    control 적용, COM 변위/총질량 정규화를 moco_WoC_evalGaitMetrics로 쓴다.
+    %    (gate 파라미터는 대사량과 무관하다.)
     %----------------------------------------------------------
-    metModel = Model(modelPath);
+    met = moco_WoC_evalGaitMetrics(modelPath, kinStoPath, 1, 1.0, 5.0);
+    t            = met.time;
+    nRow         = numel(t);
+    met_rate_W   = met.metabolic_rate;
+    act_rate_W   = met.metabolic_parts(:, 1);
+    maint_rate_W = met.metabolic_parts(:, 2);
+    short_rate_W = met.metabolic_parts(:, 3);
+    mech_rate_W  = met.metabolic_parts(:, 4);
 
-    metabolics = Bhargava2004SmoothedMuscleMetabolics();
-    metabolics.setName('metabolics');
-    metabolics.set_use_smoothing(true);
-    metabolics.set_include_negative_mechanical_work(true);
-    metabolics.set_forbid_negative_total_power(true);
-
-    muscleNames = {};
-    compList = metModel.getComponentsList();
-    it = compList.begin();
-    while ~it.equals(compList.end())
-        mus = Muscle.safeDownCast(it.deref());
-        if ~isempty(mus)
-            muscleNames{end+1} = char(mus.getName());
-        end
-        it.next();
-    end
-
-    for i = 1:numel(muscleNames)
-        metabolics.addMuscle(muscleNames{i}, ...
-            Muscle.safeDownCast(metModel.getComponent(muscleNames{i})));
-    end
-
-    metModel.addComponent(metabolics);
-    metModel.finalizeConnections();
-    metState = metModel.initSystem();
-
-    metComp = Bhargava2004SmoothedMuscleMetabolics.safeDownCast( ...
-                  metModel.getComponent('/metabolics'));
-
-    statesTable   = solution_full.exportToStatesTable();
-    controlsTable = solution_full.exportToControlsTable();
-
-    statesTraj = StatesTrajectory.createFromStatesTable(metModel, statesTable, true, true);
-    nRow       = int32(statesTraj.getSize());
-    nCtrlCols  = int32(controlsTable.getColumnLabels().size());
-
-    t            = zeros(nRow, 1);
-    met_rate_W   = zeros(nRow, 1);
-    act_rate_W   = zeros(nRow, 1);
-    maint_rate_W = zeros(nRow, 1);
-    short_rate_W = zeros(nRow, 1);
-    mech_rate_W  = zeros(nRow, 1);
-
-    for k = 0:nRow-1
-        s = statesTraj.get(k);
-
-        controls = Vector(metModel.getNumControls(), 0.0);
-        for j = 0:nCtrlCols-1
-            col = controlsTable.getDependentColumnAtIndex(j);
-            controls.set(j, col.get(k));
-        end
-
-        metModel.realizePosition(s);
-        metModel.setControls(s, controls);
-        metModel.realizeDynamics(s);
-
-        t(k+1)            = s.getTime();
-        met_rate_W(k+1)   = metComp.getTotalMetabolicRate(s);
-        act_rate_W(k+1)   = metComp.getTotalActivationRate(s);
-        maint_rate_W(k+1) = metComp.getTotalMaintenanceRate(s);
-        short_rate_W(k+1) = metComp.getTotalShorteningRate(s);
-        mech_rate_W(k+1)  = metComp.getTotalMechanicalWorkRate(s);
-    end
-
-    total_energy_J = trapz(t, met_rate_W);
+    total_energy_J = met.metabolic_energy_trapz;
     avg_rate_W     = total_energy_J / (t(end) - t(1));
-    totalMass      = metModel.getTotalMass(metState);
-
-    txStateName = '/jointset/groundPelvis/pelvis_tx/value';
-    labels = statesTable.getColumnLabels();
-    txIdx  = -1;
-    for i = 0:labels.size()-1
-        if strcmp(char(labels.get(i)), txStateName)
-            txIdx = i;
-            break;
-        end
-    end
-    if txIdx < 0
-        error('moco_WoC_getResult: 상태 열 없음: %s', txStateName);
-    end
-    txCol      = statesTable.getDependentColumnAtIndex(txIdx);
-    distance_m = txCol.get(txCol.size()-1) - txCol.get(0);
+    totalMass      = met.mass_kg;
+    distance_m     = met.distance;   % pelvis_tx 변위 (기존 'Distance(m)' 정의)
 
     metOutName = [prefix '_metabolic.sto'];
     metOutPath = fullfile(outputDir, metOutName);
@@ -195,6 +127,14 @@ function moco_WoC_getResult(moco_WoC_Solution, outputDir, opts)
     fprintf(fid, 'Distance(m)=%.4f\n',                    distance_m);
     fprintf(fid, 'Total metabolic energy(J)=%.4f\n',      total_energy_J);
     fprintf(fid, 'Avg metabolic rate(W)=%.4f\n',          avg_rate_W);
+    fprintf(fid, 'Total metabolic energy Simpson(J)=%.6f\n', met.metabolic_energy_simpson);
+    fprintf(fid, 'COM displacement(m)=%.6f\n',            met.com_displacement);
+    fprintf(fid, 'CoT(J/kg/m)=%.6f\n',                    met.CoT_simpson);
+    fprintf(fid, 'CoT trapz(J/kg/m)=%.6f\n',              met.CoT_trapz);
+    fprintf(fid, 'CoT definition=int total_metabolic_rate dt / (body mass * COM displacement), full stride\n');
+    fprintf(fid, 'Basal rate(W)=%.6f\n',                  met.basal_rate_W);
+    fprintf(fid, 'Metabolic muscles=%d\n',                met.n_metabolic_muscles);
+    fprintf(fid, 'Metabolics settings=%s\n',              strrep(met.metabolics_settings, '=', ':'));
     fprintf(fid, 'endheader\n');
     fprintf(fid, 'time\tmet_rate_W\tact_rate_W\tmaint_rate_W\tshort_rate_W\tmech_rate_W\n');
     for k = 1:nRow

@@ -1,6 +1,8 @@
 % plot_stateFixed.m
 %
-% run_stateFixed 결과를 x = 평균속도 v_avg, y = effort target E0로 그린다.
+% run_stateFixed 결과를 x = 평균속도 v_avg, y = 고정한 에너지 target E0로 그린다
+% (EnergyMetric: effort [-] 또는 metabolic CoT [J/kg/m]; 이 열이 없는 이전 요약은 effort).
+% 한 묶음 안에 effort 결과와 CoT 결과가 섞이면 같은 축에 그리지 않고 멈춘다.
 % 한 bound 세트(boundSet)의 case만 쓰고, E0마다 J1-J2-J3 점을 찍어 선으로 잇는다.
 % 점 색은 J1 -> J3로 갈수록 진해진다 (J 값 오름차순, 한 hue).
 % Verdict가 OK가 아닌 case는 속이 빈 마커로 그린다 (수렴 여부와 상관없이 데이터는 그린다).
@@ -34,7 +36,7 @@ mkdir(outDir);
 for g = 1:numel(runGroups)
     data = readRuns(resultsDir, runGroups{g}, boundSet);
     spec = metricSpec(data);
-    figTag = sprintf('%s_%s_%s', spec.modeTag, spec.metricTag, boundSet);
+    figTag = sprintf('%s_%s%s_%s', spec.modeTag, spec.metricTag, spec.energyTag, boundSet);
     names = {['E0_vs_speed_' figTag], ['apgrf_r_' figTag]};
     % 같은 objectiveMode, 같은 J 지표의 묶음이 둘이면 파일 이름이 겹친다.
     if isfile(fullfile(outDir, [names{1} '.png']))
@@ -47,7 +49,7 @@ for g = 1:numel(runGroups)
     end
     writetable(data, fullfile(outDir, [names{1} '_data.csv']));
     fprintf('\n##### 묶음 %d (%s): %s #####\n', g, figTag, strjoin(runGroups{g}, ', '));
-    disp(data(:, {'E0', 'J', 'Verdict', 'v_avg_mps', 'E_actual', 'P_gate_actual', ...
+    disp(data(:, {'EnergyMetric', 'E0', 'J', 'Verdict', 'v_avg_mps', 'E_actual', 'P_gate_actual', ...
         'MeanPropulsiveForce_N', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}));
 end
 fprintf('저장: %s\n', outDir);
@@ -58,7 +60,8 @@ function data = readRuns(resultsDir, runTags, boundSet)
     cols = {'Case', 'ObjectiveMode', 'PropulsionDefinition', 'GaitMode', 'Verdict', 'BoundSet', ...
         'E_target', 'RunPropulsionTarget', 'v_avg_mps', 'E_actual', 'P_gate_actual', ...
         'MeanPropulsiveForce_N', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'};
-    textCols = {'Case', 'ObjectiveMode', 'PropulsionDefinition', 'GaitMode', 'Verdict', 'BoundSet', 'BoundHits'};
+    textCols = {'Case', 'ObjectiveMode', 'PropulsionDefinition', 'GaitMode', 'Verdict', 'BoundSet', 'BoundHits', ...
+        'EnergyMetric'};
     parts = cell(numel(runTags), 1);
     for r = 1:numel(runTags)
         f = fullfile(resultsDir, [runTags{r} '_bounds_summary.csv']);
@@ -72,7 +75,14 @@ function data = readRuns(resultsDir, runTags, boundSet)
         end
         % 저장된 과거 요약도 같은 min/max 태그로 그린다 (원본 CSV는 변경하지 않는다).
         t.ObjectiveMode = replace(t.ObjectiveMode, 'SpeedFixedEP', 'SpeedStateFixed');
-        parts{r} = t(:, cols);
+        % EnergyMetric 열이 없는 이전 요약은 effort 지표로 풀었다.
+        if ismember('EnergyMetric', t.Properties.VariableNames)
+            t.EnergyMetric = fillmissing(string(t.EnergyMetric), 'constant', "effort");
+            t.EnergyMetric(t.EnergyMetric == "") = "effort";
+        else
+            t.EnergyMetric = repmat("effort", height(t), 1);
+        end
+        parts{r} = t(:, [cols, {'EnergyMetric'}]);
     end
     data = vertcat(parts{:});
     data.BoundHits = fillmissing(data.BoundHits, 'constant', "");
@@ -95,12 +105,31 @@ end
 
 
 function spec = metricSpec(data)
-% 묶음의 J 지표 이름, 단위, 파일 태그. objectiveMode, gaitMode, J 지표가 섞여 있으면 멈춘다.
+% 묶음의 J 지표 이름, 단위, 파일 태그와 에너지 축. objectiveMode, gaitMode, J 지표,
+% 에너지 지표가 섞여 있으면 멈춘다.
     objectiveMode = unique(data.ObjectiveMode);
     gaitMode = unique(data.GaitMode);
+    energyMetric = unique(data.EnergyMetric);
     isMeanForce = startsWith(data.PropulsionDefinition, 'gate_mean_force');
     if numel(objectiveMode) > 1 || numel(gaitMode) > 1 || any(isMeanForce) ~= all(isMeanForce)
         error('plot_stateFixed:MixedRuns', 'objectiveMode, gaitMode나 J 지표가 다른 실행이 섞여 있습니다.');
+    end
+    if numel(energyMetric) > 1
+        error('plot_stateFixed:MixedEnergyMetric', ...
+            'effort 결과와 CoT 결과가 한 묶음에 섞여 있습니다 (%s). runGroups를 나누세요.', ...
+            strjoin(energyMetric, ', '));
+    end
+    switch energyMetric
+        case "effort"
+            spec.energyLabel = 'Fixed Sum of Efforts per distance';
+            spec.energyRowText = 'Effort = %g';
+            spec.energyTag = '';
+        case "metabolicCoT"
+            spec.energyLabel = 'Fixed Metabolic CoT (J kg^{-1} m^{-1})';
+            spec.energyRowText = 'Metabolic CoT = %g J/kg/m';
+            spec.energyTag = '_cot';
+        otherwise
+            error('plot_stateFixed:EnergyMetric', '알 수 없는 EnergyMetric: %s', energyMetric);
     end
     if all(isMeanForce)
         spec.jName = 'Mean Propulsive Force'; spec.jUnit = 'N'; spec.metricTag = 'mpf';
@@ -160,7 +189,7 @@ function fig = plotSpeed(data, spec, connectBy)
     legend(ax, hLegend, 'Location', 'best', 'Box', 'off');
 
     xlabel(ax, 'Velocity (m/s)');
-    ylabel(ax, 'Fixed Sum of Efforts per distance');
+    ylabel(ax, spec.energyLabel);
     yticks(ax, E0_levels);
     vPad = max(0.1 * (max(data.v_avg_mps) - min(data.v_avg_mps)), 0.05);
     xlim(ax, [min(data.v_avg_mps) - vPad, max(data.v_avg_mps) + vPad]);
@@ -201,7 +230,7 @@ function fig = plotApGrf(data, spec, resultsDir)
                 j, J_levels(j), spec.jUnit, data.v_avg_mps(row), note));
             tRange = [min(tRange(1), grf(1, 1)), max(tRange(2), grf(end, 1))];
         end
-        title(axs(e), sprintf('Effort = %g', E0_levels(e)), 'Color', ink(1, :), 'FontWeight', 'normal');
+        title(axs(e), sprintf(spec.energyRowText, E0_levels(e)), 'Color', ink(1, :), 'FontWeight', 'normal');
         % 오른쪽 아래는 유각기(0 N) 아래라 비어 있다 (오른쪽 위는 0 N 선과 겹친다).
         legend(axs(e), 'Location', 'southeast', 'Box', 'off');
         % 시간 눈금 숫자는 맨 아래 행에만 둔다 (세로 grid는 모든 행에 남는다).

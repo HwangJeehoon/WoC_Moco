@@ -1,14 +1,22 @@
-function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSigma, gateThreshold)
+function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSigma, gateThreshold, opts)
 % moco_WoC_evalGaitMetrics
 %
-%   저장된 Moco 궤적에서 effort E, gated propulsive impulse P_gate, 평균속도를
-%   OpenSim 모델로 다시 계산한다. control과 접촉력에서 직접 적분하며(Moco goal,
-%   플러그인 코드, 궤적의 적분 상태 열을 쓰지 않음), 적분 상태 열은 무시한다.
+%   저장된 Moco 궤적에서 effort E, metabolic CoT, gated propulsive impulse P_gate,
+%   평균속도를 OpenSim 모델로 다시 계산한다. control, 상태, 접촉력에서 직접
+%   적분하며(Moco goal, 플러그인 코드, 궤적의 적분 상태 열을 쓰지 않음), 적분
+%   상태 열은 무시한다.
 %
 %   E = (1/d) * int sum_c u_c^2 dt
 %       c: AFO_r/AFO_l을 제외한 모델 control (근육 excitation 18개, lumbarAct).
 %       E_afo_simpson은 제외된 AFO control의 진단값이며 E에 합산하지 않는다.
 %       d: 질량중심 변위 |r_com(tf) - r_com(t0)| (MocoGoal divide_by_displacement)
+%   CoT = int P_met dt / (mass * d)   [J/kg/m]
+%       P_met: moco_WoC_addMetabolics의 Bhargava2004SmoothedMuscleMetabolics
+%       total_metabolic_rate [W] (basal 포함). 궤적의 상태(근육 activation 포함)와
+%       control을 모델 control 이름에 맞춰 적용하고 Stage::Dynamics까지 realize해
+%       점마다 계산한다. 궤적에 없는 control(PrescribedController의 AFO)은 모델의
+%       controller 값을 쓴다. mass: 모델 총질량, d: E와 같은 COM 변위.
+%       모든 점의 P_met이 basal 값과 같으면(근육 미등록) error.
 %   P_gate = impulseScale * int [F_r g(F_r) + F_l g(F_l)] dt          [N*s]
 %   Tplus  = impulseScale * int [g(F_r) + g(F_l)] dt                    [s]
 %       F_foot = contactHeel x-force + contactFront x-force (발에 작용하는 힘)
@@ -23,20 +31,28 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
 %     impulseScale  : modeSym 반주기 궤적은 2 (한 주기로 환산), 한 주기 궤적은 1
 %     gateSigma     : gate 폭 sigma [N]
 %     gateThreshold : gate 중심 F0 [N]
+%     opts          : (선택) struct. .metabolics = false면 대사율 계산을 건너뛴다
+%                     (default true; 건너뛰면 대사 관련 필드는 NaN)
 %
 %   출력 m (struct): *_simpson은 Hermite-Simpson 격자(mesh+midpoint, 점 수
 %   2N+1)의 Simpson 가중치(Moco 적분과 같은 quadrature), *_trapz는 모든 점에
-%   대한 사다리꼴 적분이다.
+%   대한 사다리꼴 적분이다. 반주기 궤적의 CoT는 반주기 에너지와 반주기 COM
+%   변위로 구하며 impulseScale을 곱하지 않는다.
 
     import org.opensim.modeling.*
+    if nargin < 6 || isempty(opts), opts = struct(); end
+    computeMetabolics = ~isfield(opts, 'metabolics') || opts.metabolics;
 
     model = Model(modelPath);
+    if computeMetabolics
+        [~, metInfo] = moco_WoC_addMetabolics(model);
+    end
     model.initSystem();
     traj = MocoTrajectory(trajPath);
     t = traj.getTimeMat();
     n = numel(t);
 
-    % 모델 control 순서로 궤적 control을 배치하고, 궤적에 없는 control
+    % 모델 control 순서로 궤적 control을 이름으로 배치하고, 궤적에 없는 control
     % (PrescribedController가 정하는 AFO)은 모델에서 계산한다.
     modelNames = opensimSimulation.createControlNamesFromModel(model);
     nCtrl = modelNames.size();
@@ -50,8 +66,17 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
     U = zeros(n, nCtrl);
     for k = 0:trajNames.size()-1
         idx = find(strcmp(ctrlNames, char(trajNames.get(k))));
+        if numel(idx) ~= 1
+            error('moco_WoC_evalGaitMetrics: 궤적 control %s 가 모델 control에 없습니다.', ...
+                char(trajNames.get(k)));
+        end
         U(:, idx) = trajCtrl(:, k+1);
         inTraj(idx) = true;
+    end
+    notPrescribed = setdiff(ctrlNames(~inTraj), controlledActuatorPaths(model));
+    if ~isempty(notPrescribed)
+        error(['moco_WoC_evalGaitMetrics: 궤적에 없고 controller도 정하지 않는 control이 ', ...
+               '있습니다: %s'], strjoin(notPrescribed, ', '));
     end
 
     statesTraj = StatesTrajectory.createFromStatesTable(model, ...
@@ -61,6 +86,13 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
         model.getComponent(p)), contacts, 'UniformOutput', false);
     F = zeros(n, 2);       % [right, left] foot AP force [N]
     com = zeros(n, 3);
+    P = NaN(n, 1);         % total metabolic rate [W]
+    Pparts = NaN(n, 4);    % activation, maintenance, shortening, mechanical work [W]
+    controlMismatch = 0;
+    if computeMetabolics
+        metabolics = Bhargava2004SmoothedMuscleMetabolics.safeDownCast( ...
+            model.getComponent(metInfo.componentPath));
+    end
     for k = 0:n-1
         s = statesTraj.get(k);
         model.realizeVelocity(s);
@@ -76,6 +108,22 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
         end
         r = model.calcMassCenterPosition(s);
         com(k+1, :) = [r.get(0), r.get(1), r.get(2)];
+        if computeMetabolics
+            % 모델 control 순서의 전체 control(궤적 값 + controller 값)을 넣고
+            % 대사율 Output의 stage(Dynamics)까지 realize한다.
+            model.setControls(s, Vector.createFromMat(U(k+1, :)'));
+            model.realizeDynamics(s);
+            controlMismatch = max(controlMismatch, ...
+                max(abs(model.getControls(s).getAsMat() - U(k+1, :)')));
+            P(k+1) = metabolics.getTotalMetabolicRate(s);
+            Pparts(k+1, :) = [metabolics.getTotalActivationRate(s), ...
+                metabolics.getTotalMaintenanceRate(s), metabolics.getTotalShorteningRate(s), ...
+                metabolics.getTotalMechanicalWorkRate(s)];
+        end
+    end
+    if controlMismatch > 1e-12
+        error('moco_WoC_evalGaitMetrics: 적용한 control이 궤적 값과 다릅니다 (max %.3g).', ...
+            controlMismatch);
     end
 
     G = gate(F, gateSigma, gateThreshold);
@@ -117,6 +165,49 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
     m.effort_rate = effortRate;                     % sum_c u_c^2, excluding AFO_r/AFO_l
     m.gate_impulse_rate = sum(F .* G, 2);           % sum_foot F g(F) [N]
     m.gate_time_rate = sum(G, 2);                   % sum_foot g(F)
+
+    % Metabolic CoT: MocoFinalOutputGoal(divide_by_mass, divide_by_displacement)와
+    % 같은 정규화 (모델 총질량, 같은 phase의 COM 변위). g나 duration으로 나누지 않는다.
+    m.mass_kg = model.getTotalMass(statesTraj.get(0));
+    m.metabolic_rate = P;                           % total_metabolic_rate [W]
+    m.metabolic_parts = Pparts;                     % [activation, maintenance, shortening, mech. work] [W]
+    m.metabolic_energy_simpson = w' * P;            % [J]
+    m.metabolic_energy_trapz = trapz(t, P);         % [J]
+    m.CoT_simpson = m.metabolic_energy_simpson / (m.mass_kg * m.com_displacement);
+    m.CoT_trapz = m.metabolic_energy_trapz / (m.mass_kg * m.com_displacement);
+    m.basal_rate_W = NaN;
+    m.metabolics_settings = '';
+    m.n_metabolic_muscles = 0;
+    if computeMetabolics
+        m.basal_rate_W = metInfo.basal_coefficient * m.mass_kg ^ metInfo.basal_exponent;
+        m.metabolics_settings = metInfo.settings;
+        m.n_metabolic_muscles = metInfo.numMuscles;
+        % 근육이 대사 모델에 기여하지 않으면 대사율이 basal 상수뿐이다.
+        if max(abs(P - m.basal_rate_W)) <= 1e-9 * m.basal_rate_W
+            error(['moco_WoC_evalGaitMetrics: 대사율이 모든 점에서 basal 값(%.6g W)과 같습니다. ', ...
+                   '근육이 대사 모델에 기여하지 않습니다.'], m.basal_rate_W);
+        end
+    end
+end
+
+
+function paths = controlledActuatorPaths(model)
+% 모델의 controller(PrescribedController 등)가 control을 정하는 actuator 경로.
+    import org.opensim.modeling.*
+    paths = {};
+    list = model.getComponentsList();
+    it = list.begin();
+    while ~it.equals(list.end())
+        controller = Controller.safeDownCast(it.deref());
+        if ~isempty(controller)
+            socket = controller.getSocket('actuators');
+            for i = 0:socket.getNumConnectees()-1
+                paths{end+1} = char(Component.safeDownCast( ...
+                    socket.getConnecteeAsObject(i)).getAbsolutePathString()); %#ok<AGROW>
+            end
+        end
+        it.next();
+    end
 end
 
 

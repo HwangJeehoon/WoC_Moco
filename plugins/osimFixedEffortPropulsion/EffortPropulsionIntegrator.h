@@ -45,12 +45,24 @@ r bounds determine m for every trajectory. m is the same for a half stride
 solved with left-right symmetry and the full stride (Iplus and Tplus both
 halve), so impulse_scale does not apply to it.
 
-Outputs effort_integral and scaled_propulsive_impulse (= impulse_scale *
-propulsive_impulse) are meant for MocoFinalOutputGoal endpoint constraints:
-effort_integral with divide_by_displacement gives the MocoControlGoal value
-(1/d) * integral of sum_c u_c^2 dt. impulse_scale converts the solved phase
-to the target phase (2 for a half stride solved with left-right symmetry).
-Both outputs depend on Stage::Time: MocoCasADiSolver copies the optimizer's
+With include_metabolic_energy = true, one more state integrates the
+whole-body metabolic rate connected to the input metabolic_rate (e.g.
+/metabolics|total_metabolic_rate of a Bhargava2004SmoothedMuscleMetabolics,
+basal term included):
+    metabolic_energy [J] = integral of metabolic_rate [W]
+(bound to 0 at the initial time in the MocoProblem). Its output with a
+MocoFinalOutputGoal that divides by mass and displacement is the metabolic
+cost of transport z_met(t_final) / (m d) [J/kg/m]. It is not related to
+effort_integral, which stays the integral of sum_c u_c^2.
+
+Outputs effort_integral, scaled_propulsive_impulse (= impulse_scale *
+propulsive_impulse) and metabolic_energy are meant for MocoFinalOutputGoal
+endpoint constraints: effort_integral with divide_by_displacement gives the
+MocoControlGoal value (1/d) * integral of sum_c u_c^2 dt. impulse_scale
+converts the solved phase to the target phase (2 for a half stride solved
+with left-right symmetry); it does not apply to metabolic_energy, whose CoT
+uses the energy and the displacement of the same phase.
+These outputs depend on Stage::Time: MocoCasADiSolver copies the optimizer's
 state values into the SimTK::State only for goals whose stage dependency is
 at least Stage::Time, so a lower stage would read stale states.
 
@@ -71,7 +83,14 @@ public:
     OpenSim_DECLARE_PROPERTY(include_mean_force, bool,
             "Add the states mean_propulsive_force and mean_force_residual. "
             "Default: false.");
+    OpenSim_DECLARE_PROPERTY(include_metabolic_energy, bool,
+            "Add the state metabolic_energy, the integral of the input "
+            "metabolic_rate (connect it). Default: false.");
 
+    OpenSim_DECLARE_INPUT(metabolic_rate, double, SimTK::Stage::Dynamics,
+            "Whole-body metabolic rate (W), e.g. "
+            "/metabolics|total_metabolic_rate. Used only with "
+            "include_metabolic_energy.");
     OpenSim_DECLARE_LIST_INPUT(right_contact_forces, SimTK::SpatialVec,
             SimTK::Stage::Dynamics,
             "Right-foot contact forces, e.g. /contactHeel_r|sphere_force.");
@@ -89,6 +108,8 @@ public:
             SimTK::Stage::Time);
     OpenSim_DECLARE_OUTPUT(scaled_propulsive_impulse, double,
             getScaledPropulsiveImpulse, SimTK::Stage::Time);
+    OpenSim_DECLARE_OUTPUT(metabolic_energy, double, getMetabolicEnergy,
+            SimTK::Stage::Time);
 
     EffortPropulsionIntegrator();
 
@@ -99,6 +120,8 @@ public:
     double calcMeanForceResidualRate(const SimTK::State& s) const;
     double getEffortIntegral(const SimTK::State& s) const;
     double getScaledPropulsiveImpulse(const SimTK::State& s) const;
+    /// State metabolic_energy (J); requires include_metabolic_energy.
+    double getMetabolicEnergy(const SimTK::State& s) const;
 
 protected:
     void extendFinalizeFromProperties() override;

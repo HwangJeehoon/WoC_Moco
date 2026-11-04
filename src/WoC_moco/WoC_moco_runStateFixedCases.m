@@ -15,7 +15,11 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 %   수렴하지 않거나 실패해도 기록만 하고 다음 case를 계속 푼다.
 %
 %   cfg 필드:
-%     E0, J_targets      : effort target, propulsion target 벡터 (지표는 propulsionMetric)
+%     E0, J_targets      : energy target, propulsion target 벡터 (지표는 energyMetric,
+%                          propulsionMetric)
+%     energyMetric       : 'effort' (없으면 이 값, E = (1/d_COM) int sum_c u_c^2 dt [-])
+%                          | 'metabolicCoT' (E = int P_met dt / (mass * d_COM) [J/kg/m],
+%                          P_met = Bhargava2004 total_metabolic_rate, basal 포함)
 %     propulsionMetric   : 'impulse' (없으면 이 값, J = P_gate [N*s, 한 보행주기])
 %                          | 'meanForce' (J = 평균 추진력 P_gate / Tplus [N])
 %     objectiveMode      : 'minSpeedStateFixed' (없으면 이 값) | 'maxSpeedStateFixed'
@@ -26,7 +30,9 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 %                          J_targets와 길이가 같은 cell이면 case k가 guessSto{k}에서 시작)
 %     timeBound, distBound : 반 걸음 기준 bound (modeAsym은 WoC_moco_main이 x2)
 %     meshIntervals, convergenceTolerance, constraintTolerance, maxIterations
-%     effortTol, propulsionTol : equality 검증 허용오차 (|E-E0|, |J 지표 - J| [N*s 또는 N])
+%     energyTol, propulsionTol : equality 검증 허용오차 (|E-E0| [energyMetric 단위],
+%                          |J 지표 - J| [N*s 또는 N]). energyTol이 없으면 이전 이름
+%                          effortTol을 쓴다 (effort 지표에서만)
 %     resultsDir, runTag : 결과 루트와 이름. case는 <resultsDir>/<runTag>_<mode>_J<k>,
 %                          요약은 <resultsDir>/<runTag>_<mode>_summary/<시각>/ 에
 %                          저장한다(이전 요약을 덮어쓰지 않는다)
@@ -50,6 +56,20 @@ function summary = WoC_moco_runStateFixedCases(cfg)
     end
     unit = 'N*s';
     if strcmp(cfg.propulsionMetric, 'meanForce'), unit = 'N'; end
+    % 에너지 지표가 없던 이전 호출은 effort 지표다.
+    if ~isfield(cfg, 'energyMetric') || isempty(cfg.energyMetric), cfg.energyMetric = 'effort'; end
+    if ~ismember(cfg.energyMetric, {'effort', 'metabolicCoT'})
+        error('cfg.energyMetric 은 ''effort'' 또는 ''metabolicCoT'' 이어야 합니다.');
+    end
+    if ~isfield(cfg, 'energyTol') || isempty(cfg.energyTol)
+        if ~strcmp(cfg.energyMetric, 'effort') || ~isfield(cfg, 'effortTol')
+            error('cfg.energyTol (|E - E0| 허용오차, %s 단위)을 지정하세요.', energyUnitOf(cfg.energyMetric));
+        end
+        cfg.energyTol = cfg.effortTol;
+    elseif isfield(cfg, 'effortTol') && strcmp(cfg.energyMetric, 'metabolicCoT')
+        warning('WoC_moco_runStateFixedCases:EffortTolIgnored', ...
+            'cfg.effortTol은 effort 지표용이므로 metabolicCoT 판정에는 cfg.energyTol만 씁니다.');
+    end
     if iscell(cfg.guessSto) && numel(cfg.guessSto) ~= numel(cfg.J_targets)
         error('guessSto가 cell이면 J_targets와 길이가 같아야 합니다 (%d vs %d).', ...
             numel(cfg.guessSto), numel(cfg.J_targets));
@@ -95,7 +115,8 @@ function summary = WoC_moco_runStateFixedCases(cfg)
             opts = struct();
             opts.gaitMode = cfg.gaitMode;
             opts.mocoObjectiveMode = cfg.objectiveMode;
-            opts.mocoEffortTarget = cfg.E0;
+            opts.mocoEnergyMetric = cfg.energyMetric;
+            opts.mocoEnergyTarget = cfg.E0;
             opts.mocoPropulsionTarget = cfg.J_targets(k);
             opts.mocoPropulsionMetric = cfg.propulsionMetric;
             opts.mocoPropulsionGateSigma = cfg.gateSigma;
@@ -109,8 +130,9 @@ function summary = WoC_moco_runStateFixedCases(cfg)
             opts.mocoMaxIterations = cfg.maxIterations;
             if iscell(guess), opts.guessInitSto = guess{k}; else, opts.guessInitSto = guess; end
             opts.resultsDir = resultsRoot;
-            fprintf('\n===== %s case %d/%d: E0=%.6g, J=%.6g %s (%s) =====\n', ...
-                cfg.objectiveMode, k, nCase, cfg.E0, cfg.J_targets(k), unit, cfg.propulsionMetric);
+            fprintf('\n===== %s case %d/%d: E0=%.6g %s (%s), J=%.6g %s (%s) =====\n', ...
+                cfg.objectiveMode, k, nCase, cfg.E0, energyUnitOf(cfg.energyMetric), ...
+                cfg.energyMetric, cfg.J_targets(k), unit, cfg.propulsionMetric);
             try
                 WoC_moco_main(cfg.model, 1, cfg.optMode, caseNames{k}, opts);
                 runMessages(k) = "completed";
@@ -155,8 +177,9 @@ function summary = WoC_moco_runStateFixedCases(cfg)
     else
         propulsionColumns = {'P_gate_target', 'P_gate_actual', 'P_gate_residual', 'P_physical'};
     end
-    disp(summary(:, [{'Case', 'PropulsionDefinition', 'Verdict', 'SolverStatus', ...
-        'E_target', 'E_actual', 'E_residual'}, propulsionColumns, {'v_avg_mps', 'BoundHits'}]));
+    disp(summary(:, [{'Case', 'EnergyMetric', 'PropulsionDefinition', 'Verdict', 'SolverStatus', ...
+        'E_target', 'E_actual', 'E_residual', 'E_constraint_value'}, propulsionColumns, ...
+        {'v_avg_mps', 'BoundHits'}]));
 
     try
         plotCases(summary, summaryDir);
@@ -229,12 +252,15 @@ function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
     row = struct('Case', string(caseName), 'CaseIndex', k, ...
         'TargetSource', string(cfg.targetSource), ...
         'ObjectiveMode', string(cfg.objectiveMode), ...
+        'EnergyMetric', string(cfg.energyMetric), ...
+        'EnergyUnit', string(energyUnitOf(cfg.energyMetric)), ...
+        'EnergyDefinition', string(energyDefinitionOf(cfg.energyMetric)), ...
         'PropulsionMetric', string(cfg.propulsionMetric), 'PropulsionDefinition', "", ...
         'Verdict', "", 'SolverStatus', "missing", 'Converged', false, ...
         'Iterations', NaN, 'SolverTime_s', NaN, 'Objective', NaN, ...
         'ObjectiveTerms', "", 'OnlySpeedCost', false, ...
         'E_target', cfg.E0, 'E_actual', NaN, 'E_residual', NaN, 'E_pass', false, ...
-        'E_constraint_value', NaN, ...
+        'E_constraint_value', NaN, 'E_trapz', NaN, ...
         'P_gate_target', jTarget(cfg, k, 'impulse'), 'P_gate_actual', NaN, ...
         'P_gate_residual', NaN, 'P_gate_pass', false, 'P_gate_constraint_value', NaN, ...
         'P_physical', NaN, 'P_gate_minus_physical', NaN, 'Tplus_s', NaN, ...
@@ -242,10 +268,15 @@ function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
         'MPF_pass', false, 'MPF_constraint_value', NaN, 'RunPropulsionTarget', NaN, ...
         'v_avg_mps', NaN, 'PhaseDistance_m', NaN, 'PhaseDuration_s', NaN, ...
         'StrideLength_m', NaN, 'StrideTime_s', NaN, 'BoundHits', "", ...
-        'E_trapz', NaN, 'E_muscle', NaN, 'E_lumbar', NaN, 'E_afo', NaN, ...
+        'Effort_simpson', NaN, 'Effort_trapz', NaN, 'Effort_constraint_value', NaN, ...
+        'Effort_muscle', NaN, 'Effort_lumbar', NaN, 'Effort_afo', NaN, ...
+        'MetabolicEnergy_J', NaN, 'MetabolicEnergy_trapz_J', NaN, 'MetabolicEnergy_state_J', NaN, ...
+        'Mass_kg', NaN, 'COMDisplacement_m', NaN, 'CoT_simpson', NaN, 'CoT_trapz', NaN, ...
+        'CoT_constraint_value', NaN, 'CoT_fullStride', NaN, 'BasalRate_W', NaN, ...
+        'MetabolicMuscles', NaN, 'MetabolicsSettings', "", ...
         'P_gate_trapz', NaN, 'Tplus_trapz_s', NaN, ...
         'Indep_v_avg_mps', NaN, 'Indep_P_gate', NaN, 'Indep_Tplus_s', NaN, ...
-        'Indep_P_physical', NaN, 'Indep_E_noAFO', NaN, ...
+        'Indep_P_physical', NaN, 'Indep_Effort_noAFO', NaN, ...
         'GateSigma_N', cfg.gateSigma, 'GateThreshold_N', cfg.gateThreshold, ...
         'ImpulseScale', impulseScale, 'SpeedWeight', cfg.speedWeight, ...
         'Model', string(cfg.model), 'OptMode', string(cfg.optMode), ...
@@ -254,7 +285,7 @@ function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
         'ConstraintTol', cfg.constraintTolerance, 'MaxIterations', cfg.maxIterations, ...
         'TimeBound_s', string(mat2str(cfg.timeBound * boundScale)), ...
         'DistBound_m', string(mat2str(cfg.distBound * boundScale)), ...
-        'EffortTol', cfg.effortTol, 'PropulsionTol', cfg.propulsionTol, ...
+        'EnergyTol', cfg.energyTol, 'PropulsionTol', cfg.propulsionTol, ...
         'ResultDir', string(resultDir), 'RunMessage', "", 'SummaryError', "");
 end
 
@@ -284,7 +315,17 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     if isfield(params, 'mocoObjectiveMode')
         row.ObjectiveMode = string(params.mocoObjectiveMode);
     end
-    if isfield(params, 'mocoEffortTarget')
+    % 에너지 지표 항목이 없는 이전 실행은 effort 지표로 풀었다.
+    runEnergyMetric = 'effort';
+    if isfield(params, 'mocoEnergyMetric') && ~isempty(params.mocoEnergyMetric)
+        runEnergyMetric = params.mocoEnergyMetric;
+    end
+    row.EnergyMetric = string(runEnergyMetric);
+    row.EnergyUnit = string(energyUnitOf(runEnergyMetric));
+    row.EnergyDefinition = string(energyDefinitionOf(runEnergyMetric));
+    if isfield(params, 'mocoEnergyTarget') && ~isempty(params.mocoEnergyTarget)
+        row.E_target = str2double(params.mocoEnergyTarget);
+    elseif isfield(params, 'mocoEffortTarget') && strcmp(runEnergyMetric, 'effort')
         row.E_target = str2double(params.mocoEffortTarget);
     end
     if isfield(params, 'mocoPropulsionTarget')
@@ -345,9 +386,31 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     if row.ObjectiveMode == "maxSpeedStateFixed", speedCost = -speedCost; end
     row.OnlySpeedCost = isequal(termNames, {'objective_average_speed'}) && ...
         abs(row.Objective - speedCost) <= 1e-6 * max(1, abs(speedCost));
-    row.E_actual = m.E_simpson;
-    row.E_residual = m.E_simpson - row.E_target;
-    row.E_pass = abs(row.E_residual) <= cfg.effortTol;
+    % E_*: 실행 당시 에너지 지표 (effort 또는 metabolic CoT). 다른 지표 값은 별도 열.
+    isCoT = row.EnergyMetric == "metabolicCoT";
+    if isCoT
+        row.E_actual = m.CoT_simpson;
+        row.E_trapz = m.CoT_trapz;
+    else
+        row.E_actual = m.E_simpson;
+        row.E_trapz = m.E_trapz;
+    end
+    row.E_residual = row.E_actual - row.E_target;
+    row.E_pass = abs(row.E_residual) <= cfg.energyTol;
+    row.Effort_simpson = m.E_simpson;
+    row.Effort_trapz = m.E_trapz;
+    row.Effort_muscle = m.E_muscle_simpson;
+    row.Effort_lumbar = m.E_lumbar_simpson;
+    row.Effort_afo = m.E_afo_simpson;
+    row.MetabolicEnergy_J = m.metabolic_energy_simpson;
+    row.MetabolicEnergy_trapz_J = m.metabolic_energy_trapz;
+    row.Mass_kg = m.mass_kg;
+    row.COMDisplacement_m = m.com_displacement;
+    row.CoT_simpson = m.CoT_simpson;
+    row.CoT_trapz = m.CoT_trapz;
+    row.BasalRate_W = m.basal_rate_W;
+    row.MetabolicMuscles = m.n_metabolic_muscles;
+    row.MetabolicsSettings = string(m.metabolics_settings);
     row.P_gate_actual = m.P_gate_simpson;
     row.P_gate_residual = m.P_gate_simpson - row.P_gate_target;
     row.P_gate_pass = abs(row.P_gate_residual) <= cfg.propulsionTol;
@@ -362,21 +425,34 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     row.PhaseDuration_s = m.duration;
     row.StrideLength_m = m.distance * impulseScale;
     row.StrideTime_s = m.duration * impulseScale;
-    row.E_trapz = m.E_trapz;
-    row.E_muscle = m.E_muscle_simpson;
-    row.E_lumbar = m.E_lumbar_simpson;
-    row.E_afo = m.E_afo_simpson;
     row.P_gate_trapz = m.P_gate_trapz;
     row.Tplus_trapz_s = m.Tplus_trapz;
 
-    % Moco가 제약한 값: 적분 상태의 최종값 (상태는 t0에서 0).
+    % Moco가 제약한 값: 적분 상태의 최종값 (상태는 t0에서 0). CoT는 반주기
+    % 에너지 / (총질량 * 반주기 COM 변위)이며 impulseScale을 곱하지 않는다.
     [sol, solLabels] = readSto(solFile);
     zE = sol(:, strcmp(solLabels, '/effortPropulsion/effort_integral'));
     zP = sol(:, strcmp(solLabels, '/effortPropulsion/propulsive_impulse'));
     zM = sol(:, strcmp(solLabels, '/effortPropulsion/mean_propulsive_force'));
-    if ~isempty(zE), row.E_constraint_value = zE(end) / m.com_displacement; end
+    zMet = sol(:, strcmp(solLabels, '/effortPropulsion/metabolic_energy'));
+    if ~isempty(zE), row.Effort_constraint_value = zE(end) / m.com_displacement; end
+    if ~isempty(zMet)
+        row.MetabolicEnergy_state_J = zMet(end);
+        row.CoT_constraint_value = zMet(end) / (m.mass_kg * m.com_displacement);
+    end
+    if isCoT
+        row.E_constraint_value = row.CoT_constraint_value;
+    else
+        row.E_constraint_value = row.Effort_constraint_value;
+    end
     if ~isempty(zP), row.P_gate_constraint_value = impulseScale * zP(end); end
     if ~isempty(zM), row.MPF_constraint_value = zM(1); end
+    % getResult이 한 보행주기 궤적으로 계산한 CoT (이 header 항목이 없는 이전 파일은 NaN).
+    metFile = regexprep(solFile, '_kinematics(_half)?\.sto$', '_metabolic.sto');
+    if isfile(metFile)
+        cot = regexp(fileread(metFile), 'CoT\(J/kg/m\)=([^\r\n]+)', 'tokens', 'once');
+        if ~isempty(cot), row.CoT_fullStride = str2double(cot{1}); end
+    end
 
     % 결과가 bound에 붙어 있는지 (반 걸음/한 걸음 phase 기준).
     tb = cfg.timeBound * boundScale;
@@ -412,14 +488,19 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
         isControl = ~startsWith(kinLabels, {'/jointset', '/effortPropulsion'}) & ...
             ~endsWith(kinLabels, '/activation') & ~strcmp(kinLabels, 'time') & ...
             ~ismember(regexprep(kinLabels, '^.*/', ''), {'AFO_r', 'AFO_l'});
-        row.Indep_E_noAFO = trapz(t, sum(kin(:, isControl).^2, 2)) / ...
+        row.Indep_Effort_noAFO = trapz(t, sum(kin(:, isControl).^2, 2)) / ...
             norm(com(end, 2:4) - com(1, 2:4));
     end
 
     % 판정에 쓰는 propulsion equality: 실행 당시 지표 (P_gate 또는 평균 추진력).
     propulsionPass = row.P_gate_pass;
     if row.PropulsionMetric == "meanForce", propulsionPass = row.MPF_pass; end
-    if ~isGateRun
+    if row.EnergyMetric ~= string(cfg.energyMetric)
+        % 다른 에너지 지표의 결과를 이 지표의 target과 tolerance로 판정하지 않는다.
+        row.E_pass = false;
+        row.Verdict = "Energy metric mismatch (run " + row.EnergyMetric + ...
+            ", cfg " + cfg.energyMetric + ")";
+    elseif ~isGateRun
         row.Verdict = "Not a gate run (" + row.PropulsionDefinition + ")";
     elseif ~row.Converged
         if row.E_pass && propulsionPass
@@ -495,43 +576,69 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
     isMax = strcmp(cfg.objectiveMode, 'maxSpeedStateFixed');
     speedVerb = 'minimize';
     if isMax, speedVerb = 'maximize'; end
+    isCoT = strcmp(cfg.energyMetric, 'metabolicCoT');
+    if isCoT
+        energyName = 'CoT';
+        energyLine = '    E (energy_metric metabolicCoT): MocoFinalOutputGoal metabolic_cot_constraint z_met(tf)/(mass d_COM) = E0 [J/kg/m] (E_constraint_value)';
+        stateLine = 'Constraint implementation: states z_met'' = P_met, z_P'' = F_r g(F_r) + F_l g(F_l), z(t0) = 0';
+    else
+        energyName = 'E';
+        energyLine = '    E (energy_metric effort): MocoFinalOutputGoal effort_constraint z_E(tf)/d_COM = E0 (E_constraint_value)';
+        stateLine = 'Constraint implementation: states z_E'' = sum_c u_c^2, z_P'' = F_r g(F_r) + F_l g(F_l), z(t0) = 0';
+    end
+    energyUnit = energyUnitOf(cfg.energyMetric);
     if strcmp(cfg.propulsionMetric, 'meanForce')
         metricLines = {
-            sprintf('%s: %s v_avg s.t. E = E0 (endpoint equality), mean propulsive force = J_k [N]', ...
-                cfg.objectiveMode, speedVerb)
+            sprintf('%s: %s v_avg s.t. %s = E0 (endpoint equality), mean propulsive force = J_k [N]', ...
+                cfg.objectiveMode, speedVerb, energyName)
             sprintf('target source: %s', cfg.targetSource)
             'propulsion_definition: gate_mean_force (meanPropPerVel MeanPropulsiveForce m = Iplus / Tplus)'};
         constraintLines = {
-            'Constraint implementation: states z_E'' = sum_c u_c^2, z_P'' = F_r g(F_r) + F_l g(F_l), z(t0) = 0;'
-            '    E: MocoFinalOutputGoal endpoint constraint z_E(tf)/d_COM = E0 (E_constraint_value)'
+            [stateLine ';']
+            energyLine
             '    mean propulsive force (as MeanPropulsiveForce): states m'' = 0 and'
             '    r'' = g(F_r) (F_r - m) + g(F_l) (F_l - m) with bounds r(t0) = r(tf) = 0 (Iplus = m * Tplus)'
             '    and m(t0) = J (MPF_constraint_value). m is the same for the half and the full stride.'
             '    P_gate is not constrained (z_P is reported only).'};
-        tolLine = sprintf('verification tolerances: |E - E0| <= %g, |mean propulsive force - J| <= %g N', ...
-            cfg.effortTol, cfg.propulsionTol);
+        tolLine = sprintf('verification tolerances: |%s - E0| <= %g %s, |mean propulsive force - J| <= %g N', ...
+            energyName, cfg.energyTol, energyUnit, cfg.propulsionTol);
     else
         metricLines = {
-            sprintf('%s: %s v_avg s.t. E = E0, P_gate = J_k (endpoint equality constraints)', ...
-                cfg.objectiveMode, speedVerb)
+            sprintf('%s: %s v_avg s.t. %s = E0, P_gate = J_k (endpoint equality constraints)', ...
+                cfg.objectiveMode, speedVerb, energyName)
             sprintf('target source: %s', cfg.targetSource)
             'propulsion_definition: gate_Iplus (meanPropPerVel MeanPropulsiveForce numerator)'};
         constraintLines = {
-            'Constraint implementation: states z_E'' = sum_c u_c^2, z_P'' = F_r g(F_r) + F_l g(F_l),'
-            '    z(t0) = 0; MocoFinalOutputGoal endpoint constraints (Stage::Time outputs)'
-            sprintf('    z_E(tf)/d_COM = E0 and %d * z_P(tf) = J (E_constraint_value, P_gate_constraint_value)', impulseScale)};
-        tolLine = sprintf('verification tolerances: |E - E0| <= %g, |P_gate - J| <= %g N*s', ...
-            cfg.effortTol, cfg.propulsionTol);
+            [stateLine ';']
+            '    MocoFinalOutputGoal endpoint constraints (Stage::Time outputs):'
+            energyLine
+            sprintf('    %d * z_P(tf) = J (P_gate_constraint_value)', impulseScale)};
+        tolLine = sprintf('verification tolerances: |%s - E0| <= %g %s, |P_gate - J| <= %g N*s', ...
+            energyName, cfg.energyTol, energyUnit, cfg.propulsionTol);
+    end
+    if isCoT
+        [~, metInfo] = moco_WoC_addMetabolics([]);
+        energyLines = {
+            'E = metabolic CoT = int P_met dt / (mass * d_COM)  [J/kg/m] (energy_metric metabolicCoT)'
+            '    P_met = /metabolics|total_metabolic_rate [W] of Bhargava2004SmoothedMuscleMetabolics,'
+            '        every Muscle component registered (moco_WoC_addMetabolics); basal term included.'
+            ['    ' metInfo.settings]
+            '    mass = model total mass (MocoGoal divide_by_mass), d_COM = |r_COM(tf) - r_COM(t0)|'
+            '        (divide_by_displacement). Not divided by g or the phase duration.'
+            '    modeSym: half-stride energy / half-stride COM displacement (impulseScale is not applied).'
+            '    The effort integral z_E is reported only (Effort_* columns), not constrained.'};
+    else
+        energyLines = {
+            'E = (1/d_COM) * int sum_c u_c^2 dt (energy_metric effort)'
+            '    c = model controls excluding AFO_r/AFO_l, weight 1: 18 muscle excitations and'
+            '        lumbarAct (CoordinateActuator, optimal force 1, control = N*m). No reserve actuators.'
+            '    AFO controls are explicitly excluded in both the integrator and weighted effort goal.'
+            '    d_COM = |r_COM(tf) - r_COM(t0)|; identical to the weighted-mode effort goal before weight.'};
     end
     lines = [metricLines; {
         ''
         sprintf(['v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)  [m/s] ', ...
-                 '(only Moco cost, weight %g)'], (1 - 2*isMax) * cfg.speedWeight)
-        'E = (1/d_COM) * int sum_c u_c^2 dt'
-        '    c = model controls excluding AFO_r/AFO_l, weight 1: 18 muscle excitations and'
-        '        lumbarAct (CoordinateActuator, optimal force 1, control = N*m). No reserve actuators.'
-        '    AFO controls are explicitly excluded in both the integrator and weighted effort goal.'
-        '    d_COM = |r_COM(tf) - r_COM(t0)|; identical to the weighted-mode effort goal before weight.'
+                 '(only Moco cost, weight %g)'], (1 - 2*isMax) * cfg.speedWeight)}; energyLines; {
         sprintf('P_gate = %d * int_phase [F_r g(F_r) + F_l g(F_l)] dt  [N*s] (one stride, both feet)', impulseScale)
         '    F_foot = contactHeel x-force + contactFront x-force on the foot (summed per foot, then gated)'
         sprintf('    g(F) = 1 / (1 + exp(-(F - F0)/sigma)), sigma = %.4g N, F0 = %.4g N', cfg.gateSigma, cfg.gateThreshold)
@@ -542,11 +649,19 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
         'P_physical = int sum_foot max(F_foot, 0) dt over the saved full stride (trapezoid, comparison only)'
         ''}; constraintLines; {
         'E_actual, P_gate_actual, Tplus_s, MeanPropulsiveForce_N: recomputed from controls/contact forces'
-        '    with Simpson quadrature on the saved mesh+midpoint grid (= Hermite-Simpson quadrature);'
-        '    used for E_pass/P_gate_pass/MPF_pass'
-        'E_afo: excluded AFO squared-control integral per distance (diagnostic only, not part of E_actual)'
+        '    (CoT: total_metabolic_rate of the saved states and controls applied by control name to the'
+        '    model, realized to Stage::Dynamics) with Simpson quadrature on the saved mesh+midpoint grid'
+        '    (= Hermite-Simpson quadrature); used for E_pass/P_gate_pass/MPF_pass'
+        'E_target/E_actual/E_residual/E_pass/E_constraint_value/E_trapz: the run''s energy metric (EnergyMetric)'
+        'Effort_*: effort diagnostics (always effort, never CoT); Effort_afo: excluded AFO squared-control'
+        '    integral per distance (diagnostic only)'
+        'MetabolicEnergy_J, CoT_simpson, CoT_trapz: recomputed metabolic energy and CoT (any energy metric);'
+        '    MetabolicEnergy_state_J, CoT_constraint_value: z_met(tf) of the solution (metabolicCoT runs);'
+        '    CoT_fullStride: getResult full-stride CoT (*_metabolic.sto);'
+        '    BasalRate_W = basal_coefficient * mass^basal_exponent (included in P_met)'
         '*_trapz: trapezoid on the same grid; Indep_*: saved full-stride .sto files only (no OpenSim)'
-        'Indep_E_noAFO: trajectory controls with AFO_r/AFO_l explicitly excluded'
+        'Indep_Effort_noAFO: trajectory controls with AFO_r/AFO_l explicitly excluded'
+        'Runs without energy_metric in *_parameters.csv are effort runs.'
         'Targets and gate parameters of each case are read from its *_parameters.csv; runs without'
         '    propulsion_definition (earlier softplus version) are marked softplus_legacy, not gate.'
         sprintf('bounds (phase): time %s s, pelvis_tx %s m; BoundHits tolerance 1e-4', ...
@@ -559,8 +674,40 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
 end
 
 
+function unit = energyUnitOf(energyMetric)
+    if strcmp(energyMetric, 'metabolicCoT'), unit = 'J/kg/m'; else, unit = '-'; end
+end
+
+
+function text = energyDefinitionOf(energyMetric)
+    if strcmp(energyMetric, 'metabolicCoT')
+        text = ['int total_metabolic_rate dt / (mass * d_COM); Bhargava2004 smoothed, ', ...
+                'basal included; solved phase'];
+    else
+        text = 'int sum_c u_c^2 dt / d_COM; excludes AFO_r/AFO_l; includes lumbarAct';
+    end
+end
+
+
 function plotCases(summary, outDir)
 % Case 색은 J 순서(entity)로 고정한다. 성공/실패는 마커 채움과 라벨로 표시한다.
+    % 에너지 축은 한 지표만 그린다 (effort와 CoT 결과를 한 축에 섞지 않는다).
+    if numel(unique(summary.EnergyMetric)) ~= 1
+        error('WoC_moco_runStateFixedCases:MixedEnergyMetric', ...
+            '에너지 지표가 다른 case가 섞여 있습니다: %s', strjoin(unique(summary.EnergyMetric), ', '));
+    end
+    isCoT = summary.EnergyMetric(1) == "metabolicCoT";
+    if isCoT
+        energyAxis = 'Metabolic CoT (J kg^{-1} m^{-1})';
+        energyTitle = 'Metabolic CoT: target (bar) vs actual (circle)';
+        energyTargetText = 'CoT_0 = %.4g J/kg/m';
+        energyFile = 'cot_propulsion_target_vs_actual.png';
+    else
+        energyAxis = 'Effort E (-)';
+        energyTitle = 'Effort: target (bar) vs actual (circle)';
+        energyTargetText = 'E_0 = %.4g';
+        energyFile = 'effort_propulsion_target_vs_actual.png';
+    end
     colors = hex2rgb({'#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', ...
                       '#008300', '#6250d6', '#e34948'});
     ink = hex2rgb({'#0b0b0b', '#52514e'});
@@ -599,15 +746,15 @@ function plotCases(summary, outDir)
     ylabel(ax, 'Average speed v_{avg} (m/s)');
     speedLabel = 'Minimum';
     if summary.ObjectiveMode(1) == "maxSpeedStateFixed", speedLabel = 'Maximum'; end
-    title(ax, sprintf('%s average speed at E_0 = %.4g', speedLabel, summary.E_target(1)), ...
+    title(ax, sprintf(['%s average speed at ' energyTargetText], speedLabel, summary.E_target(1)), ...
         'Color', ink(1, :));
     padLimits(ax, target, summary.v_avg_mps);
     saveFigure(fig, fullfile(outDir, 'speed_vs_propulsion_target.png'));
 
-    % 2. effort / propulsion target vs actual (small multiples, 각자 축)
+    % 2. energy / propulsion target vs actual (small multiples, 각자 축)
     fig = newFigure([900 380]);
     tl = tiledlayout(fig, 1, 2, 'TileSpacing', 'compact');
-    specs = [{'E_target', 'E_actual', [], 'Effort E (-)'}; propulsionSpec];
+    specs = [{'E_target', 'E_actual', [], energyAxis}; propulsionSpec];
     for p = 1:2
         ax = nexttile(tl); hold(ax, 'on'); styleAxes(ax, ink);
         for k = 1:n
@@ -634,12 +781,12 @@ function plotCases(summary, outDir)
         xticklabels(ax, compose('J%d', 1:n));
         ylabel(ax, specs{p, 4});
         if p == 1
-            title(ax, 'Effort: target (bar) vs actual (circle)', 'Color', ink(1, :));
+            title(ax, energyTitle, 'Color', ink(1, :));
         else
             title(ax, propulsionTitle, 'Color', ink(1, :));
         end
     end
-    saveFigure(fig, fullfile(outDir, 'effort_propulsion_target_vs_actual.png'));
+    saveFigure(fig, fullfile(outDir, energyFile));
 
     % 3. 좌우 AP-GRF, 4. pelvis 전진속도 (한 보행주기, 해의 t0 = 0%)
     fig = newFigure([960 380]);

@@ -24,7 +24,12 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %                            propulsion을 endpoint equality로 고정한다
 %                            (플러그인 osimFixedEffortPropulsion 필요).
 %                            'maxSpeedStateFixed'은 같은 제약에서 평균속도를 최대화한다.
-%       .mocoEffortTarget : 'minSpeedStateFixed'의 E0
+%       .mocoEnergyMetric : min/maxSpeedStateFixed에서 E가 고정하는 에너지 지표
+%                            'effort' (default): (1/d_COM) int sum_c u_c^2 dt [-]
+%                            'metabolicCoT': Bhargava2004 total_metabolic_rate의
+%                            적분 / (mass * d_COM) [J/kg/m]
+%       .mocoEnergyTarget : E0 (단위는 mocoEnergyMetric)
+%       .mocoEffortTarget : mocoEnergyTarget이 없을 때 effort 지표의 E0 (이전 이름)
 %       .mocoPropulsionMetric : min/maxSpeedStateFixed에서 J가 고정하는 지표
 %                            'impulse' (default): 한 보행주기 gated Iplus [N*s]
 %                            'meanForce': 평균 추진력 Iplus / Tplus [N]
@@ -57,6 +62,16 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     useStateFixed = ismember(objectiveMode, {'minSpeedStateFixed', 'maxSpeedStateFixed'});
     propulsionMetric = getOpt(opts, 'mocoPropulsionMetric', 'impulse');
     useMeanForce = useStateFixed && strcmp(propulsionMetric, 'meanForce');
+    energyMetric = getOpt(opts, 'mocoEnergyMetric', 'effort');
+    if ~ismember(energyMetric, {'effort', 'metabolicCoT'})
+        error('opts.mocoEnergyMetric 는 ''effort'' 또는 ''metabolicCoT'' 여야 합니다.');
+    end
+    useCoT = useStateFixed && strcmp(energyMetric, 'metabolicCoT');
+    energyTarget = getOpt(opts, 'mocoEnergyTarget', []);
+    if isempty(energyTarget) && strcmp(energyMetric, 'effort')
+        energyTarget = getOpt(opts, 'mocoEffortTarget', []);
+    end
+    metabolicRatePath = '';
     gateSigma = getOpt(opts, 'mocoPropulsionGateSigma', 1.0);
     gateThreshold = getOpt(opts, 'mocoPropulsionGateThreshold', 5.0);
     integratorPath = '/effortPropulsion';
@@ -194,11 +209,19 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         % 적분 상태 component는 Moco 문제의 모델에만 추가한다.
         % 저장되는 injected osim은 플러그인 없이도 읽을 수 있게 유지된다.
         moco_WoC_loadFixedEffortPropulsionPlugin();
+        if useCoT
+            % 대사 모델도 Moco 문제의 모델에만 추가한다 (모든 실제 근육 등록 검사 포함).
+            [~, metabolicsInfo] = moco_WoC_addMetabolics(model);
+            metabolicRatePath = metabolicsInfo.outputPath;
+        end
         addEffortPropulsionIntegrator(model, integratorPath, ...
-            gateSigma, gateThreshold, impulseScale, useMeanForce);
+            gateSigma, gateThreshold, impulseScale, useMeanForce, metabolicRatePath);
         problem.setModelProcessor(ModelProcessor(model));
     end
     modelState = model.initSystem();
+    if useCoT
+        checkMetabolicEnergyRate(model, modelState, integratorPath, metabolicsInfo);
+    end
 
     %--------------------------------------------------------------
     % 2. Goal 설정
@@ -282,7 +305,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         % speed at fixed effort and propulsion.
         %
         %   minimize   +/- v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
-        %   subject to E = mocoEffortTarget, P = mocoPropulsionTarget
+        %   subject to E = mocoEnergyTarget, P = mocoPropulsionTarget
         %
         % Moco minimizes the objective, so maxSpeedStateFixed gives the speed
         % goal the weight -mocoSpeedWeight.
@@ -313,21 +336,34 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         % constant state m and residual state r' = sum g(F) (F - m) with
         % r(t0) = r(tf) = 0 give Iplus = m * Tplus, and m(t0) = J. m is the
         % same for the half and full stride.
+        %
+        % mocoEnergyMetric = 'metabolicCoT' fixes the metabolic cost of
+        % transport instead of E (still an endpoint equality, not a cost):
+        % the model also gets the Bhargava2004SmoothedMuscleMetabolics of
+        % moco_WoC_addMetabolics (every Muscle component registered), its
+        % total_metabolic_rate P_met [W, basal included] drives the
+        % component's state z_met' = P_met, z_met(t0) = 0, and
+        %   z_met(tf) / (mass * d_COM) = E0  [J/kg/m]
+        % is a MocoFinalOutputGoal endpoint constraint (divide_by_mass,
+        % divide_by_displacement). modeSym uses the half-stride energy and
+        % the half-stride COM displacement (impulseScale does not apply).
         speedWeight = getOpt(opts, 'mocoSpeedWeight', 1.0);
         if strcmp(objectiveMode, 'maxSpeedStateFixed')
             speedWeight = -speedWeight;
         end
-        addStateFixedGoals(problem, integratorPath, opts.mocoEffortTarget, ...
+        addStateFixedGoals(problem, integratorPath, energyMetric, energyTarget, ...
             opts.mocoPropulsionTarget, speedWeight, useMeanForce);
+        energyText = sprintf('E0=%.6g (effort)', energyTarget);
+        if useCoT, energyText = sprintf('E0=%.6g J/kg/m (metabolic CoT)', energyTarget); end
         if useMeanForce
-            fprintf(['Moco %s: speed goal weight=%.4g, E0=%.6g, J=%.6g N ', ...
+            fprintf(['Moco %s: speed goal weight=%.4g, %s, J=%.6g N ', ...
                      '(mean propulsive force, gate sigma %.4g N, F0 %.4g N)\n'], objectiveMode, ...
-                     speedWeight, opts.mocoEffortTarget, opts.mocoPropulsionTarget, ...
+                     speedWeight, energyText, opts.mocoPropulsionTarget, ...
                      gateSigma, gateThreshold);
         else
-            fprintf(['Moco %s: speed goal weight=%.4g, E0=%.6g, J=%.6g N*s ', ...
+            fprintf(['Moco %s: speed goal weight=%.4g, %s, J=%.6g N*s ', ...
                      '(impulse scale %d, gate sigma %.4g N, F0 %.4g N)\n'], objectiveMode, ...
-                     speedWeight, opts.mocoEffortTarget, opts.mocoPropulsionTarget, ...
+                     speedWeight, energyText, opts.mocoPropulsionTarget, ...
                      impulseScale, gateSigma, gateThreshold);
         end
     else
@@ -426,15 +462,18 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     guessTraj = MocoTrajectory(guessStoPath);
     meanForceTarget = [];
     if useMeanForce, meanForceTarget = opts.mocoPropulsionTarget; end
-    guessTraj = matchIntegratorGuess(guessTraj, model, problem, integratorPath, ...
-        useStateFixed, injectedOsimPath, guessStoPath, meanForceTarget);
+    [guessTraj, guessMetrics] = matchIntegratorGuess(guessTraj, model, problem, integratorPath, ...
+        useStateFixed, injectedOsimPath, guessStoPath, meanForceTarget, useCoT);
     solver.setGuess(guessTraj);
 
     %--------------------------------------------------------------
     % 5. 문제 풀기
     %--------------------------------------------------------------
     if useStateFixed
-        checkStateFixedGoals(problem, integratorPath, meanForceTarget);
+        checkStateFixedGoals(problem, integratorPath, meanForceTarget, energyMetric, ...
+            energyTarget, metabolicRatePath);
+        checkConstraintOutputsOnGuess(study, problem, model, guessTraj, integratorPath, ...
+            energyMetric, useMeanForce, impulseScale, guessMetrics, metabolicRatePath);
     end
     moco_WoC_Solution = study.solve();
 
@@ -461,11 +500,13 @@ end
 
 
 function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
-        gateThreshold, impulseScale, includeMeanForce)
+        gateThreshold, impulseScale, includeMeanForce, metabolicRatePath)
 % Add the plugin component that integrates the effort rate and the gated
 % propulsive impulse rate of each foot (sum of its heel/front sphere_force
 % x-components, as in addPropulsionGoal and MeanPropulsiveForce), plus the
-% mean propulsive force states when includeMeanForce is true.
+% mean propulsive force states when includeMeanForce is true and the
+% metabolic energy state (input connected to metabolicRatePath, e.g.
+% /metabolics|total_metabolic_rate) when metabolicRatePath is not empty.
     import org.opensim.modeling.*
 
     component = Component.safeDownCast( ...
@@ -478,6 +519,11 @@ function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
         component.updPropertyByName('impulse_scale'));
     PropertyHelper.setValueBool(includeMeanForce, ...
         component.updPropertyByName('include_mean_force'));
+    PropertyHelper.setValueBool(~isempty(metabolicRatePath), ...
+        component.updPropertyByName('include_metabolic_energy'));
+    if ~isempty(metabolicRatePath)
+        component.updInput('metabolic_rate').setConnecteePath(metabolicRatePath);
+    end
     sides = {'r', 'right_contact_forces'; 'l', 'left_contact_forces'};
     for k = 1:size(sides, 1)
         input = component.updInput(sides{k, 2});
@@ -489,11 +535,12 @@ function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
 end
 
 
-function addStateFixedGoals(problem, componentPath, effortTarget, ...
+function addStateFixedGoals(problem, componentPath, energyMetric, energyTarget, ...
         propulsionTarget, speedWeight, useMeanForce)
-% Add the v_avg cost (weight speedWeight, negative to maximize), the E
-% endpoint equality constraint and either the P endpoint equality
-% constraint or (useMeanForce) the bounds that fix the mean propulsive force.
+% Add the v_avg cost (weight speedWeight, negative to maximize), the energy
+% endpoint equality constraint (E = effort or metabolic CoT, energyMetric)
+% and either the P endpoint equality constraint or (useMeanForce) the
+% bounds that fix the mean propulsive force.
     import org.opensim.modeling.*
 
     speedGoal = MocoGoal.safeDownCast( ...
@@ -504,13 +551,21 @@ function addStateFixedGoals(problem, componentPath, effortTarget, ...
         speedGoal.updPropertyByName('coordinate_path'));
     problem.addGoal(speedGoal);
 
-    % E = z_E(tf) / d_COM: same displacement normalization as the effort goal.
-    effortGoal = MocoFinalOutputGoal('effort_constraint');
-    effortGoal.setOutputPath([componentPath '|effort_integral']);
-    effortGoal.setDivideByDisplacement(true);
-    effortGoal.setMode('endpoint_constraint');
-    effortGoal.setEndpointConstraintBounds(equalityBounds(effortTarget));
-    problem.addGoal(effortGoal);
+    energyGoal = MocoFinalOutputGoal(energyConstraintName(energyMetric));
+    if strcmp(energyMetric, 'metabolicCoT')
+        % CoT = z_met(tf) / (mass * d_COM) [J/kg/m] (MocoGoal mass and COM
+        % displacement of the solved phase; no g, no duration).
+        energyGoal.setOutputPath([componentPath '|metabolic_energy']);
+        energyGoal.setDivideByMass(true);
+        problem.setStateInfo([componentPath '/metabolic_energy'], [-Inf, Inf], 0);
+    else
+        % E = z_E(tf) / d_COM: same displacement normalization as the effort goal.
+        energyGoal.setOutputPath([componentPath '|effort_integral']);
+    end
+    energyGoal.setDivideByDisplacement(true);
+    energyGoal.setMode('endpoint_constraint');
+    energyGoal.setEndpointConstraintBounds(equalityBounds(energyTarget));
+    problem.addGoal(energyGoal);
 
     if useMeanForce
         % Mean propulsive force: r(t0) = r(tf) = 0 gives Iplus = m * Tplus,
@@ -530,10 +585,20 @@ function addStateFixedGoals(problem, componentPath, effortTarget, ...
         problem.addGoal(propulsionGoal);
     end
 
-    % Both integrals start at 0 (z_P is only reported when useMeanForce).
-    % Moco omits states without a state info.
+    % Both integrals start at 0 (z_P is only reported when useMeanForce, and
+    % z_E only when the energy metric is the metabolic CoT). Their final
+    % values are free: no periodicity on the accumulated integrals.
     problem.setStateInfo([componentPath '/effort_integral'], [-Inf, Inf], 0);
     problem.setStateInfo([componentPath '/propulsive_impulse'], [-Inf, Inf], 0);
+end
+
+
+function name = energyConstraintName(energyMetric)
+    if strcmp(energyMetric, 'metabolicCoT')
+        name = 'metabolic_cot_constraint';
+    else
+        name = 'effort_constraint';
+    end
 end
 
 
@@ -544,16 +609,21 @@ function bounds = equalityBounds(value)
 end
 
 
-function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
-        componentPath, useIntegrator, modelPath, guessPath, meanForceTarget)
+function [guessTraj, m] = matchIntegratorGuess(guessTraj, model, problem, ...
+        componentPath, useIntegrator, modelPath, guessPath, meanForceTarget, useCoT)
 % Make the guess match the integral states of the problem. Integral states
-% already in the guess (from a min/maxSpeedStateFixed solution, including the
-% earlier softplus version) are dropped; when the mode is used, the states
-% are rebuilt as running integrals along the guess itself. With a mean
-% force target J (not empty), m = J and r is the running integral of
-% sum g(F) (F - J): the guess then satisfies the dynamics of m and r, and
-% r(tf) = Iplus - J * Tplus of the guess is the only violated bound.
+% already in the guess (from a min/maxSpeedStateFixed solution with either
+% energy metric, including the earlier softplus version) are dropped; when
+% the mode is used, the states the problem has are rebuilt as running
+% integrals along the guess itself. With a mean force target J (not
+% empty), m = J and r is the running integral of sum g(F) (F - J): the
+% guess then satisfies the dynamics of m and r, and r(tf) = Iplus - J *
+% Tplus of the guess is the only violated bound. With useCoT, z_met is the
+% running integral of the guess's own metabolic rate (moco_WoC_evalGaitMetrics,
+% same metabolics as the problem). m returns the guess metrics ([] when the
+% integrator is not used).
     import org.opensim.modeling.*
+    m = [];
 
     statesTable = guessTraj.exportToStatesTable();
     labels = statesTable.getColumnLabels();
@@ -574,7 +644,8 @@ function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
         component = model.getComponent(componentPath);
         m = moco_WoC_evalGaitMetrics(modelPath, guessPath, 1, ...
             PropertyHelper.getValueDouble(component.getPropertyByName('gate_sigma')), ...
-            PropertyHelper.getValueDouble(component.getPropertyByName('gate_threshold')));
+            PropertyHelper.getValueDouble(component.getPropertyByName('gate_threshold')), ...
+            struct('metabolics', useCoT));
         statePaths = {[componentPath '/effort_integral'], [componentPath '/propulsive_impulse']};
         values = [cumtrapz(m.time, m.effort_rate), ...
                   cumtrapz(m.time, m.gate_impulse_rate)];
@@ -586,6 +657,13 @@ function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
             fprintf(['Mean force guess: m = %.6g N, r(tf) = Iplus - J*Tplus = %.4g N*s ', ...
                      '(guess mean force %.6g N)\n'], meanForceTarget, values(end, end), ...
                      trapz(m.time, m.gate_impulse_rate) / trapz(m.time, m.gate_time_rate));
+        end
+        if useCoT
+            statePaths = [statePaths, {[componentPath '/metabolic_energy']}];
+            values = [values, cumtrapz(m.time, m.metabolic_rate)];
+            fprintf(['Metabolic guess: z_met(tf) = %.6g J, mass %.6g kg, d_COM %.6g m, ', ...
+                     'CoT = %.6g J/kg/m (Simpson %.6g)\n'], values(end, end), m.mass_kg, ...
+                     m.com_displacement, m.CoT_trapz, m.CoT_simpson);
         end
 
         % Moco 4.5 maps guess states to the problem by position. The guess
@@ -610,27 +688,89 @@ function guessTraj = matchIntegratorGuess(guessTraj, model, problem, ...
 end
 
 
-function checkStateFixedGoals(problem, componentPath, meanForceTarget)
-% Check on the problem Moco solves that v_avg is the only cost, that E and
-% P are endpoint constraints (createRep initializes the goals, so an
-% unsupported endpoint constraint mode would also throw here) and that both
-% read the optimizer's states: MocoCasADiSolver copies them into the
-% SimTK::State only for goals that depend on Stage::Time or later.
-% With a mean force target J, E is the only endpoint constraint and the
-% state bounds must be m(t0) = J and r(t0) = r(tf) = 0.
+function checkStateFixedGoals(problem, componentPath, meanForceTarget, ...
+        energyMetric, energyTarget, metabolicRatePath)
+% Check on the problem Moco solves that v_avg is the only cost, that the
+% energy (effort E or metabolic CoT) and P are endpoint constraints
+% (createRep initializes the goals, so an unsupported endpoint constraint
+% mode would also throw here) and that both read the optimizer's states:
+% MocoCasADiSolver copies them into the SimTK::State only for goals that
+% depend on Stage::Time or later.
+% With a mean force target J, the energy is the only endpoint constraint
+% and the state bounds must be m(t0) = J and r(t0) = r(tf) = 0.
+% The energy constraint must read the metric's output with the metric's
+% normalization and bounds [E0, E0], the other energy constraint must be
+% absent, and no periodicity pair may contain an integral state. With the
+% metabolic CoT, every Muscle of the Moco model must be registered in its
+% metabolics, whose total_metabolic_rate drives the integrator.
+    import org.opensim.modeling.*
     names = @(v) arrayfun(@(k) char(v.get(k)), 0:v.size()-1, 'UniformOutput', false);
     rep = problem.createRep();
     costs = names(rep.createCostNames());
     constraints = names(rep.createEndpointConstraintNames());
     fprintf('Moco costs: %s | endpoint constraints: %s\n', ...
         strjoin(costs, ', '), strjoin(constraints, ', '));
-    expected = {'effort_constraint', 'propulsion_constraint'};
+    energyName = energyConstraintName(energyMetric);
+    otherEnergyName = setdiff({'effort_constraint', 'metabolic_cot_constraint'}, energyName);
+    expected = {energyName, 'propulsion_constraint'};
     if ~isempty(meanForceTarget)
-        expected = {'effort_constraint'};
+        expected = {energyName};
     end
     if ~isequal(costs, {'average_speed'}) || ~all(ismember(expected, constraints)) || ...
+            any(ismember(otherEnergyName, constraints)) || ...
             (~isempty(meanForceTarget) && ismember('propulsion_constraint', constraints))
         error('moco_WoC_loop: min/maxSpeedStateFixed 문제의 cost/endpoint constraint 구성이 예상과 다릅니다.');
+    end
+
+    % Energy constraint definition on the problem Moco solves.
+    goal = MocoFinalOutputGoal.safeDownCast(rep.getEndpointConstraint(energyName));
+    bounds = constraintBounds(goal);
+    isCoT = strcmp(energyMetric, 'metabolicCoT');
+    expectedOutput = [componentPath '|effort_integral'];
+    if isCoT, expectedOutput = [componentPath '|metabolic_energy']; end
+    fprintf(['  %s: output %s, divide_by_mass %d, divide_by_displacement %d, ', ...
+             'endpoint constraint %d, bounds %s (E0 %g)\n'], energyName, ...
+             char(goal.getOutputPath()), goal.getDivideByMass(), goal.getDivideByDisplacement(), ...
+             goal.getModeIsEndpointConstraint(), mat2str(bounds), energyTarget);
+    if ~strcmp(char(goal.getOutputPath()), expectedOutput) || ...
+            goal.getDivideByMass() ~= isCoT || ~goal.getDivideByDisplacement() || ...
+            goal.getDivideByDuration() || ~goal.getModeIsEndpointConstraint() || ...
+            ~isequal(bounds, [energyTarget, energyTarget])
+        error('moco_WoC_loop: %s 의 output/정규화/bound가 %s 정의와 다릅니다.', ...
+            energyName, energyMetric);
+    end
+    energyState = [componentPath '/effort_integral'];
+    if isCoT, energyState = [componentPath '/metabolic_energy']; end
+    initial = rep.getStateInfo(energyState).getInitialBounds();
+    final = rep.getStateInfo(energyState).getFinalBounds();
+    if initial.getLower() ~= 0 || initial.getUpper() ~= 0 || final.isSet()
+        error('moco_WoC_loop: %s 는 t0에서 0이고 tf에서 자유여야 합니다.', energyState);
+    end
+    for k = 1:numel(constraints)
+        periodic = MocoPeriodicityGoal.safeDownCast(rep.getEndpointConstraint(constraints{k}));
+        if isempty(periodic), continue; end
+        pairs = periodic.getPropertyByName('state_pairs');
+        for p = 0:pairs.size()-1
+            pair = pairs.getValueAsObject(p);
+            ends = {char(PropertyHelper.getValueString(pair.getPropertyByName('initial_variable'))), ...
+                    char(PropertyHelper.getValueString(pair.getPropertyByName('final_variable')))};
+            if any(startsWith(ends, [componentPath '/']))
+                error('moco_WoC_loop: %s 에 적분 상태의 주기성 pair가 있습니다: %s -> %s', ...
+                    constraints{k}, ends{:});
+            end
+        end
+    end
+    if isCoT
+        repModel = rep.getModelBase();
+        metabolicsPath = extractBefore(metabolicRatePath, '|');
+        numMuscles = moco_WoC_checkMetabolics(repModel, metabolicsPath);
+        connectee = char(repModel.getComponent(componentPath).getInput('metabolic_rate').getConnecteePath());
+        fprintf('  Moco model: %d muscles registered in %s; %s/metabolic_rate <- %s\n', ...
+            numMuscles, metabolicsPath, componentPath, connectee);
+        if ~strcmp(connectee, metabolicRatePath)
+            error('moco_WoC_loop: 적분기의 metabolic_rate 입력이 %s 가 아니라 %s 에 연결돼 있습니다.', ...
+                metabolicRatePath, connectee);
+        end
     end
     if ~isempty(meanForceTarget)
         % m(t0) = J and r(t0) = r(tf) = 0 on the problem Moco solves.
@@ -653,6 +793,135 @@ function checkStateFixedGoals(problem, componentPath, meanForceTarget)
             error('moco_WoC_loop: %s 의 stage dependency(%s)가 Stage::Time보다 낮습니다.', ...
                 name{1}, stageNames{level});
         end
+    end
+end
+
+
+function checkMetabolicEnergyRate(model, state, componentPath, metabolicsInfo)
+% On the model given to Moco: at the same time and pose, change every muscle
+% activation and excitation (0.1 -> 0.5) and check that
+%   (1) total_metabolic_rate changes and exceeds the basal rate (a model
+%       whose muscles are not registered gives the basal constant only), and
+%   (2) the integrator's z_met' equals total_metabolic_rate.
+    import org.opensim.modeling.*
+    metabolics = Bhargava2004SmoothedMuscleMetabolics.safeDownCast( ...
+        model.getComponent(metabolicsInfo.componentPath));
+    integrator = model.getComponent(componentPath);
+    controlNames = opensimSimulation.createControlNamesFromModel(model);
+    names = arrayfun(@(k) char(controlNames.get(k)), 0:controlNames.size()-1, ...
+        'UniformOutput', false);
+    muscleControl = ismember(names, metabolicsInfo.musclePaths);
+    if nnz(muscleControl) ~= metabolicsInfo.numMuscles
+        error('moco_WoC_loop: 근육 control 수(%d)가 등록 근육 수(%d)와 다릅니다.', ...
+            nnz(muscleControl), metabolicsInfo.numMuscles);
+    end
+    s = State(state);
+    levels = [0.1, 0.5];
+    rate = zeros(size(levels));
+    derivative = zeros(size(levels));
+    for i = 1:numel(levels)
+        for k = 1:metabolicsInfo.numMuscles
+            Muscle.safeDownCast(model.getComponent(metabolicsInfo.musclePaths{k})) ...
+                .setActivation(s, levels(i));
+        end
+        model.realizeVelocity(s);
+        u = model.getControls(s).getAsMat();
+        u(muscleControl) = levels(i);
+        model.setControls(s, Vector.createFromMat(u));
+        model.realizeAcceleration(s);
+        rate(i) = metabolics.getTotalMetabolicRate(s);
+        derivative(i) = integrator.getStateVariableDerivativeValue(s, 'metabolic_energy');
+    end
+    basal = metabolicsInfo.basal_coefficient * ...
+        model.getTotalMass(s) ^ metabolicsInfo.basal_exponent;
+    fprintf(['Metabolic rate check (same time/pose): activation/excitation %s -> ', ...
+             'P_met %s W (basal %.4g W), z_met'' %s W\n'], mat2str(levels), ...
+             mat2str(rate, 8), basal, mat2str(derivative, 8));
+    if any(abs(derivative - rate) > 1e-9 * max(1, abs(rate)))
+        error('moco_WoC_loop: z_met''이 total_metabolic_rate와 다릅니다.');
+    end
+    if abs(rate(2) - rate(1)) <= 1e-6 * abs(rate(1)) || max(rate) <= basal * (1 + 1e-6)
+        error(['moco_WoC_loop: 근육 activation/excitation을 바꿔도 대사율이 변하지 않거나 ', ...
+               'basal 값뿐입니다.']);
+    end
+end
+
+
+function checkConstraintOutputsOnGuess(study, problem, model, guessTraj, componentPath, ...
+        energyMetric, useMeanForce, impulseScale, guessMetrics, metabolicRatePath)
+% Evaluate the constrained outputs along the guess on the model Moco
+% solves (MocoStudy.analyze): each output must equal its state column of
+% the guess at every time (no stale state) and grow over the phase (not a
+% constant). With the metabolic CoT, the metabolic rate the integrator
+% reads must equal the independent recomputation of moco_WoC_evalGaitMetrics
+% (same states and controls, controls applied by name).
+% analyze needs every model control, so a copy of the guess gets the
+% controller (PrescribedController AFO) controls added; the solver keeps
+% the original guess.
+    import org.opensim.modeling.*
+    guessTraj = MocoTrajectory.createFromStatesControlsTables(problem.createRep(), ...
+        guessTraj.exportToStatesTable(), guessTraj.exportToControlsTable());
+    guessTraj.generateControlsFromModelControllers(model);
+    isCoT = strcmp(energyMetric, 'metabolicCoT');
+    checks = {[componentPath '|effort_integral'], [componentPath '/effort_integral'], 1};
+    if isCoT
+        checks = {[componentPath '|metabolic_energy'], [componentPath '/metabolic_energy'], 1};
+    end
+    if ~useMeanForce
+        checks(end+1, :) = {[componentPath '|scaled_propulsive_impulse'], ...
+            [componentPath '/propulsive_impulse'], impulseScale};
+    end
+    outputs = checks(:, 1);
+    if isCoT, outputs{end+1} = metabolicRatePath; end
+    patterns = StdVectorString();
+    for k = 1:numel(outputs)
+        patterns.add(regexptranslate('escape', outputs{k}));
+    end
+    table = study.analyze(guessTraj, patterns);
+    column = @(label) columnValues(table, label);
+    for k = 1:size(checks, 1)
+        value = column(checks{k, 1});
+        expected = checks{k, 3} * guessTraj.getStateMat(checks{k, 2});
+        err = max(abs(value - expected));
+        fprintf('  guess %s: tf value %.6g, max |output - %g*state| %.3g\n', ...
+            checks{k, 1}, value(end), checks{k, 3}, err);
+        if err > 1e-9 * max(1, max(abs(expected))) || ~(value(end) > value(1))
+            error('moco_WoC_loop: %s 가 guess 상태와 다르거나 phase 동안 증가하지 않습니다.', ...
+                checks{k, 1});
+        end
+    end
+    if isCoT
+        rate = column(metabolicRatePath);
+        err = max(abs(rate - guessMetrics.metabolic_rate));
+        fprintf(['  guess %s (Moco model) vs independent recomputation: max |diff| %.3g W ', ...
+                 '(range %.4g-%.4g W)\n'], metabolicRatePath, err, min(rate), max(rate));
+        if err > 1e-6 * max(abs(rate))
+            error('moco_WoC_loop: Moco 모델의 대사율이 독립 재계산과 다릅니다 (max %.3g W).', err);
+        end
+    end
+end
+
+
+function bounds = constraintBounds(goal)
+% [lower, upper] of each endpoint constraint bound of a MocoGoal, one row per
+% goal output. MocoGoal.getConstraintInfo() is opaque in the MATLAB
+% binding, so read its unnamed MocoConstraintInfo property instead.
+    import org.opensim.modeling.*
+    info = goal.getPropertyByName('MocoConstraintInfo').getValueAsObject(0);
+    list = info.getPropertyByName('bounds');
+    bounds = zeros(list.size(), 2);
+    for k = 0:list.size()-1
+        b = MocoBounds.safeDownCast(list.getValueAsObject(k));
+        bounds(k+1, :) = [b.getLower(), b.getUpper()];
+    end
+end
+
+
+function v = columnValues(table, label)
+    col = table.getDependentColumn(label);
+    v = zeros(col.size(), 1);
+    for i = 0:col.size()-1
+        v(i+1) = col.get(i);
     end
 end
 
