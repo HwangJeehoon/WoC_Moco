@@ -1,6 +1,6 @@
 % plot_stateFixed.m
 %
-% test_stateFixed 결과를 x = 평균속도 v_avg, y = effort target E0로 그린다.
+% run_stateFixed 결과를 x = 평균속도 v_avg, y = effort target E0로 그린다.
 % 한 bound 세트(boundSet)의 case만 쓰고, E0마다 J1-J2-J3 점을 찍어 선으로 잇는다.
 % 점 색은 J1 -> J3로 갈수록 진해진다 (J 값 오름차순, 한 hue).
 % Verdict가 OK가 아닌 case는 속이 빈 마커로 그린다 (수렴 여부와 상관없이 데이터는 그린다).
@@ -8,7 +8,7 @@
 % 같은 J 색을 쓴다. 각 case의 평균속도는 범례에 숫자로 적는다 (OK가 아닌 case는 점선).
 % 실행 묶음(runGroups)마다 두 그림을 따로 그린다 (예: J = P_gate 묶음, J = 평균 추진력 묶음).
 %
-% 데이터: <resultsDir>/<runTag>_bounds_summary.csv (test_stateFixed가 쓰는 E0 x 세트 전체 요약),
+% 데이터: <resultsDir>/<runTag>_bounds_summary.csv (run_stateFixed가 쓰는 E0 x 세트 전체 요약),
 %         <resultsDir>/<Case>/result_1/moco_result/moco_WoC_Solution_iter01_GRF.sto (case별 GRF)
 % 그림:   <resultsDir>/stateFixed_plots/<시각>/ (묶음별 png, fig, 그린 데이터 csv;
 %         기존 폴더는 덮어쓰지 않는다)
@@ -17,7 +17,7 @@ thisScriptDir = fileparts(mfilename('fullpath'));
 
 %% ===== 사용자 입력 =====
 resultsDir = fullfile(thisScriptDir, '..', 'results');
-% 그릴 실행 묶음 (test_stateFixed의 baseTag). 묶음 하나가 그림 두 장이 되고, 한 묶음 안의 실행은
+% 그릴 실행 묶음 (run_stateFixed의 baseTag). 묶음 하나가 그림 두 장이 되고, 한 묶음 안의 실행은
 % 같은 objectiveMode, 같은 J 지표여야 한다.
 %   J = P_gate:  stateFixed_max_20261101_160827 (E0 = 0.10), stateFixed_max_20261102_002630 (E0 = 0.08, 0.12)
 %   J = 평균 추진력: stateFixed_max_mpf_20261102_164708 (E0 = 0.08, 0.10, 0.12)

@@ -30,6 +30,9 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 %     resultsDir, runTag : 결과 루트와 이름. case는 <resultsDir>/<runTag>_<mode>_J<k>,
 %                          요약은 <resultsDir>/<runTag>_<mode>_summary/<시각>/ 에
 %                          저장한다(이전 요약을 덮어쓰지 않는다)
+%     Index              : 결과 폴더 접두어 (예: 'H'). 같은 접두어의 최대 번호 다음부터
+%                          case마다 H001_<기존 이름> 형태로 붙인다. 생략/빈 값은 기존 이름.
+%                          재요약 시 같은 case 이름의 가장 큰 번호를 읽는다.
 %     continuation       : true면 case k가 직전 수렴 case의 해에서 시작
 %     runOptimizations   : false면 이미 있는 결과만 요약한다
 %
@@ -51,6 +54,15 @@ function summary = WoC_moco_runStateFixedCases(cfg)
         error('guessSto가 cell이면 J_targets와 길이가 같아야 합니다 (%d vs %d).', ...
             numel(cfg.guessSto), numel(cfg.J_targets));
     end
+    if ~isfield(cfg, 'Index'), cfg.Index = ''; end
+    if ~((ischar(cfg.Index) && (isrow(cfg.Index) || isempty(cfg.Index))) || ...
+            (isstring(cfg.Index) && isscalar(cfg.Index)))
+        error('cfg.Index는 영문자로 된 접두어 또는 빈 문자열이어야 합니다.');
+    end
+    indexPrefix = char(cfg.Index);
+    if ~isempty(indexPrefix) && isempty(regexp(indexPrefix, '^[A-Za-z]+$', 'once'))
+        error('cfg.Index는 영문자로 된 접두어 또는 빈 문자열이어야 합니다.');
+    end
 
     % WoC_moco_main과 같은 절대경로 결과 루트를 저장, 검사, guess, 요약에 쓴다.
     resultsRoot = char(java.io.File(cfg.resultsDir).getCanonicalPath());
@@ -62,6 +74,7 @@ function summary = WoC_moco_runStateFixedCases(cfg)
     nCase = numel(cfg.J_targets);
     caseNames = arrayfun(@(k) sprintf('%s_%s_J%d', cfg.runTag, modeTag, k), ...
         1:nCase, 'UniformOutput', false);
+    caseNames = indexedCaseNames(resultsRoot, caseNames, indexPrefix, cfg.runOptimizations);
     caseDirs = fullfile(resultsRoot, caseNames);
 
     runMessages = strings(nCase, 1);
@@ -149,6 +162,38 @@ function summary = WoC_moco_runStateFixedCases(cfg)
         plotCases(summary, summaryDir);
     catch ME
         warning('WoC_moco_runStateFixedCases:PlotFailed', '그림 저장 실패: %s', ME.message);
+    end
+end
+
+
+function caseNames = indexedCaseNames(resultsRoot, caseNames, indexPrefix, runOptimizations)
+% 결과 루트의 폴더만 확인한다. 빠진 번호를 재사용하지 않고 최대 번호부터 이어간다.
+    if isempty(indexPrefix), return; end
+    entries = dir(resultsRoot);
+    folderNames = {entries([entries.isdir]).name};
+    pattern = ['^' regexptranslate('escape', indexPrefix) '(\d+)_(.+)$'];
+    tokens = regexpi(folderNames, pattern, 'tokens', 'once');
+    matched = ~cellfun(@isempty, tokens);
+    folderNames = folderNames(matched);
+    tokens = tokens(matched);
+    numbers = cellfun(@(t) str2double(t{1}), tokens);
+    originalNames = cellfun(@(t) t{2}, tokens, 'UniformOutput', false);
+
+    if runOptimizations
+        lastNumber = max([0, numbers]);
+        for k = 1:numel(caseNames)
+            caseNames{k} = sprintf('%s%03d_%s', indexPrefix, lastNumber + k, caseNames{k});
+        end
+    else
+        % 저장된 결과를 다시 요약할 때 새 번호를 만들지 않는다.
+        % 접두어가 없는 과거 결과는 원래 case 이름으로 계속 읽을 수 있다.
+        for k = 1:numel(caseNames)
+            candidates = find(strcmp(originalNames, caseNames{k}));
+            if ~isempty(candidates)
+                [~, latest] = max(numbers(candidates));
+                caseNames{k} = folderNames{candidates(latest)};
+            end
+        end
     end
 end
 
