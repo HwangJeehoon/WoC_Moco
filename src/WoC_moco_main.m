@@ -49,7 +49,8 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %                             아래의 'minSpeedStateFixed' 옵션은 이 모드에도 같이 쓰인다.
 %     .mocoEffortTarget : E0 ('minSpeedStateFixed' 필수). weighted 모드 effort goal과
 %                         같은 정의의 weight 곱하기 전 값
-%                         E = (1/d_COM) * int sum_c u_c^2 dt (모든 control, weight 1)
+%                         E = (1/d_COM) * int sum_c u_c^2 dt
+%                         (AFO_r/AFO_l 제외, 근육 excitation과 lumbarAct, weight 1)
 %     .mocoPropulsionTarget : J [N*s] ('minSpeedStateFixed' 필수). 한 보행주기 동안
 %                         양발 gated propulsive impulse의 합 (meanPropPerVel의 Iplus)
 %                         P_gate = int [F_r g(F_r) + F_l g(F_l)] dt,
@@ -498,7 +499,8 @@ end
 runParams = [runParams; ...
     {'effective_final_time_bound_s', mocoTimeBound * boundScale; ...
      'effective_final_pelvis_tx_bound_m', mocoDistBound * boundScale; ...
-     'results_root', resultsRoot}];
+     'results_root', resultsRoot; ...
+     'effort_definition', 'int sum_c u_c^2 dt / d_COM; excludes AFO_r and AFO_l; includes lumbarAct'}];
 if isStateFixed
     % 결과를 다시 요약할 때 실행 당시 propulsion 정의를 구분하기 위한 메타데이터.
     if strcmp(mocoPropulsionMetric, 'meanForce')

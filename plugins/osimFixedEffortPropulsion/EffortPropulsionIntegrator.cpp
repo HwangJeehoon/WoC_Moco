@@ -61,6 +61,9 @@ double EffortPropulsionIntegrator::calcEffortRate(const SimTK::State& s) const {
     double rate = 0;
     for (const auto& actuator : getModel().getComponentList<Actuator>()) {
         if (!actuator.get_appliesForce()) { continue; }
+        // Assistance is not part of the biological effort budget.
+        const auto& name = actuator.getName();
+        if (name == "AFO_r" || name == "AFO_l") { continue; }
         const auto controls = actuator.getControls(s);
         for (int i = 0; i < controls.size(); ++i) {
             rate += controls[i] * controls[i];

@@ -9,7 +9,7 @@
 %
 %   E      : weighted 모드 effort goal의 weight 곱하기 전 값
 %            (1/d_COM) * int sum_c u_c^2 dt, c = 근육 excitation 18개 + lumbarAct
-%            (+ AFO_r/AFO_l: PrescribedController 값, modeOff에서는 0)
+%            (AFO_r/AFO_l control은 명시적으로 제외)
 %   J 지표 (cfg.propulsionMetric):
 %     'impulse'   : P_gate, 한 보행주기 양발 gated propulsive impulse [N*s] (meanPropPerVel의 Iplus)
 %                   int [F_r g(F_r) + F_l g(F_l)] dt, F_foot = heel + front x-force,

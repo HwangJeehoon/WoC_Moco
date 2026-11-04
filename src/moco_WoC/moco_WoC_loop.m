@@ -294,7 +294,8 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         % the feet. Both integrals are states of the
         % EffortPropulsionIntegrator component (plugin
         % osimFixedEffortPropulsion), zero at t0:
-        %   z_E' = sum_c u_c^2,   z_P' = F_r g(F_r) + F_l g(F_l),
+        %   z_E' = sum_{c excluding AFO_r/AFO_l} u_c^2,
+        %   z_P' = F_r g(F_r) + F_l g(F_l),
         % and the equalities are MocoFinalOutputGoal endpoint constraints
         %   z_E(tf) / d_COM = E0,   impulseScale * z_P(tf) = J.
         % (MocoControlGoal does not support endpoint constraint mode, and an
@@ -334,6 +335,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         effortGoal = MocoControlGoal('effort', weight_effort);
         effortGoal.setExponent(2); % 2로 사용
         effortGoal.setDivideByDisplacement(true);
+        effortGoal.setWeightForControlPattern('(^|.*/)AFO_[rl]$', 0);
         problem.addGoal(effortGoal);
 
         % Final time goal (공통)

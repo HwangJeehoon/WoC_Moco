@@ -407,10 +407,11 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     comFile = fullfile(resultDir, 'result_1', 'analy_result', ...
         '2D_gait_AFO_pc_PointKinematics_CoM_pos.sto');
     if isfile(comFile)
-        % 궤적에 저장된 control(근육, lumbarAct). AFO는 궤적에 없으므로 제외한다.
+        % 궤적에 저장된 control(근육, lumbarAct). AFO 열이 있어도 명시적으로 제외한다.
         com = readSto(comFile);
         isControl = ~startsWith(kinLabels, {'/jointset', '/effortPropulsion'}) & ...
-            ~endsWith(kinLabels, '/activation') & ~strcmp(kinLabels, 'time');
+            ~endsWith(kinLabels, '/activation') & ~strcmp(kinLabels, 'time') & ...
+            ~ismember(regexprep(kinLabels, '^.*/', ''), {'AFO_r', 'AFO_l'});
         row.Indep_E_noAFO = trapz(t, sum(kin(:, isControl).^2, 2)) / ...
             norm(com(end, 2:4) - com(1, 2:4));
     end
@@ -527,9 +528,9 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
         sprintf(['v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)  [m/s] ', ...
                  '(only Moco cost, weight %g)'], (1 - 2*isMax) * cfg.speedWeight)
         'E = (1/d_COM) * int sum_c u_c^2 dt'
-        '    c = all model controls, weight 1: 18 muscle excitations, lumbarAct (CoordinateActuator,'
-        '        optimal force 1, control = N*m), AFO_r/AFO_l (PrescribedController values;'
-        '        MocoControlGoal ignore_controlled_actuators = false). No reserve actuators.'
+        '    c = model controls excluding AFO_r/AFO_l, weight 1: 18 muscle excitations and'
+        '        lumbarAct (CoordinateActuator, optimal force 1, control = N*m). No reserve actuators.'
+        '    AFO controls are explicitly excluded in both the integrator and weighted effort goal.'
         '    d_COM = |r_COM(tf) - r_COM(t0)|; identical to the weighted-mode effort goal before weight.'
         sprintf('P_gate = %d * int_phase [F_r g(F_r) + F_l g(F_l)] dt  [N*s] (one stride, both feet)', impulseScale)
         '    F_foot = contactHeel x-force + contactFront x-force on the foot (summed per foot, then gated)'
@@ -543,8 +544,9 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
         'E_actual, P_gate_actual, Tplus_s, MeanPropulsiveForce_N: recomputed from controls/contact forces'
         '    with Simpson quadrature on the saved mesh+midpoint grid (= Hermite-Simpson quadrature);'
         '    used for E_pass/P_gate_pass/MPF_pass'
+        'E_afo: excluded AFO squared-control integral per distance (diagnostic only, not part of E_actual)'
         '*_trapz: trapezoid on the same grid; Indep_*: saved full-stride .sto files only (no OpenSim)'
-        'Indep_E_noAFO: trajectory controls only (AFO controls are not in the trajectory file)'
+        'Indep_E_noAFO: trajectory controls with AFO_r/AFO_l explicitly excluded'
         'Targets and gate parameters of each case are read from its *_parameters.csv; runs without'
         '    propulsion_definition (earlier softplus version) are marked softplus_legacy, not gate.'
         sprintf('bounds (phase): time %s s, pelvis_tx %s m; BoundHits tolerance 1e-4', ...

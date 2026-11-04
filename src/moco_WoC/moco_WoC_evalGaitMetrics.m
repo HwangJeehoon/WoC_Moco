@@ -6,9 +6,8 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
 %   플러그인 코드, 궤적의 적분 상태 열을 쓰지 않음), 적분 상태 열은 무시한다.
 %
 %   E = (1/d) * int sum_c u_c^2 dt
-%       c: 모델의 모든 control (근육 excitation 18개, lumbarAct, AFO_r/AFO_l).
-%       AFO는 PrescribedController 값이며 MocoControlGoal의
-%       ignore_controlled_actuators=false(기본값)이므로 포함된다.
+%       c: AFO_r/AFO_l을 제외한 모델 control (근육 excitation 18개, lumbarAct).
+%       E_afo_simpson은 제외된 AFO control의 진단값이며 E에 합산하지 않는다.
 %       d: 질량중심 변위 |r_com(tf) - r_com(t0)| (MocoGoal divide_by_displacement)
 %   P_gate = impulseScale * int [F_r g(F_r) + F_l g(F_l)] dt          [N*s]
 %   Tplus  = impulseScale * int [g(F_r) + g(F_l)] dt                    [s]
@@ -80,9 +79,11 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
     end
 
     G = gate(F, gateSigma, gateThreshold);
-    isMuscle = endsWith(ctrlNames, {'_r', '_l'}) & ~startsWith(ctrlNames, '/AFO');
-    groups = struct('muscle', isMuscle, 'lumbar', strcmp(ctrlNames, '/lumbarAct'), ...
-                    'afo', startsWith(ctrlNames, '/AFO'));
+    actuatorNames = regexprep(ctrlNames, '^.*/', '');
+    isAfo = ismember(actuatorNames, {'AFO_r', 'AFO_l'});
+    isMuscle = endsWith(actuatorNames, {'_r', '_l'}) & ~isAfo;
+    groups = struct('muscle', isMuscle, 'lumbar', strcmp(actuatorNames, 'lumbarAct'), ...
+                    'afo', isAfo);
 
     w = simpsonWeights(t);
     m.n_points = n;
@@ -93,7 +94,7 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
     m.com_displacement = norm(com(end, :) - com(1, :));
     m.control_names = ctrlNames;
 
-    effortRate = sum(U.^2, 2);
+    effortRate = sum(U(:, ~isAfo).^2, 2);
     m.E_simpson = w' * effortRate / m.com_displacement;
     m.E_trapz = trapz(t, effortRate) / m.com_displacement;
     for g = fieldnames(groups)'
@@ -113,7 +114,7 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
     m.P_gate_foot_simpson = w' * (F .* G);          % [right, left], 궤적 구간 그대로
     m.time = t;
     m.F_ap = F;
-    m.effort_rate = effortRate;                     % sum_c u_c^2
+    m.effort_rate = effortRate;                     % sum_c u_c^2, excluding AFO_r/AFO_l
     m.gate_impulse_rate = sum(F .* G, 2);           % sum_foot F g(F) [N]
     m.gate_time_rate = sum(G, 2);                   % sum_foot g(F)
 end

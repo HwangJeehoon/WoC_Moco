@@ -12,10 +12,10 @@ that both can be constrained at the final time (used by moco_WoC_loop for
 opts.mocoObjectiveMode = 'minSpeedStateFixed').
 
     effort_rate = sum_c u_c^2
-        c: every control of every actuator with appliesForce = true, weight 1.
-        This is the integrand of MocoControlGoal with its defaults (exponent
-        2, no control weights, ignore_controlled_actuators = false), so
-        controls set by a PrescribedController are included.
+        c: every control of every actuator with appliesForce = true except
+        AFO_r and AFO_l, weight 1 (muscle excitations and lumbarAct).
+        This matches the weighted-mode MocoControlGoal with exponent 2 and
+        explicit zero weights for the two AFO controls.
     propulsive_impulse_rate = F_r g(F_r) + F_l g(F_l)                  [N]
     propulsive_time_rate    = g(F_r) + g(F_l)                          [-]
         F_side = sum of the force-x components of the side's contact-force
