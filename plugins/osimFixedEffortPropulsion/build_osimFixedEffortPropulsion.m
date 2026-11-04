@@ -1,7 +1,7 @@
 function build_osimFixedEffortPropulsion(openSimDir)
 % build_osimFixedEffortPropulsion
 %
-%   opts.mocoObjectiveMode = 'minSpeedFixedEP' 에 필요한 C++ 플러그인
+%   opts.mocoObjectiveMode = 'minSpeedStateFixed' 에 필요한 C++ 플러그인
 %   (EffortPropulsionIntegrator, MocoCoordinateAverageSpeedGoal)을 CMake로 빌드한다.
 %   결과: build/Release/osimFixedEffortPropulsion.dll (Windows)
 %         build/libosimFixedEffortPropulsion.so       (Linux)

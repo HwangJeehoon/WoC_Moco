@@ -70,6 +70,8 @@ function data = readRuns(resultsDir, runTags, boundSet)
         if ~isempty(missing)
             error('plot_stateFixed:MissingColumn', '%s에 열이 없습니다: %s', f, strjoin(missing, ', '));
         end
+        % 저장된 과거 요약도 같은 min/max 태그로 그린다 (원본 CSV는 변경하지 않는다).
+        t.ObjectiveMode = replace(t.ObjectiveMode, 'SpeedFixedEP', 'SpeedStateFixed');
         parts{r} = t(:, cols);
     end
     data = vertcat(parts{:});
@@ -105,7 +107,7 @@ function spec = metricSpec(data)
     else
         spec.jName = 'Propulsion'; spec.jUnit = 'N\cdots'; spec.metricTag = 'pgate';
     end
-    spec.modeTag = char(erase(objectiveMode, 'SpeedFixedEP'));
+    spec.modeTag = char(erase(objectiveMode, 'SpeedStateFixed'));
     spec.targetText = sprintf('Target(J) : %s', spec.jName);   % 예: 'Target(J) : Propulsion'
 end
 

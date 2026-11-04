@@ -1,5 +1,5 @@
 # OpenSim/Moco plugin used by moco_WoC_loop when
-# opts.mocoObjectiveMode = 'minSpeedFixedEP' (EffortPropulsionIntegrator and
+# opts.mocoObjectiveMode = 'minSpeedStateFixed' (EffortPropulsionIntegrator and
 # MocoCoordinateAverageSpeedGoal).
 #
 # Build from MATLAB with build_osimFixedEffortPropulsion.m, or manually against

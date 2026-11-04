@@ -2,8 +2,8 @@
 %
 % E0_list의 각 E0와 propulsion target J_k마다 독립적으로 푼다.
 %
-%   minimize (cfg.objectiveMode = 'minSpeedFixedEP') 또는
-%   maximize (cfg.objectiveMode = 'maxSpeedFixedEP')
+%   minimize (cfg.objectiveMode = 'minSpeedStateFixed') 또는
+%   maximize (cfg.objectiveMode = 'maxSpeedStateFixed')
 %               w_v * v_avg,  v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
 %   subject to  E = E0, J 지표 = J_k, 기존 동역학/주기성/대칭성/상태·제어 bounds
 %
@@ -40,11 +40,11 @@ E0_list = [0.08, 0.10, 0.12];   % effort target들 (weight 곱하기 전 effort 
 cfg.propulsionMetric = 'meanForce';   % 'impulse' (J = P_gate [N*s]) | 'meanForce' (J = 평균 추진력 [N])
 J_targets = [50, 65, 80];       % [J1, J2, J3], 단위는 propulsionMetric (meanForce: N, 0.08/0.11/0.13 BW)
 
-cfg.objectiveMode = 'maxSpeedFixedEP';   % 'minSpeedFixedEP' | 'maxSpeedFixedEP'
+cfg.objectiveMode = 'maxSpeedStateFixed';   % 'minSpeedStateFixed' | 'maxSpeedStateFixed'
 
 % bound 세트 (반 걸음 기준, modeAsym은 x2)와 initial guess.
 %   최저 가능 속도 = distBound(1) / timeBound(2), 최고 가능 속도 = distBound(2) / timeBound(1)
-if strcmp(cfg.objectiveMode, 'maxSpeedFixedEP')
+if strcmp(cfg.objectiveMode, 'maxSpeedStateFixed')
     % X3만 푼다. P_gate 실행(E0 = 0.08/0.10/0.12)에서 X2와 X3의 해가 같아 bound가 최고
     % 속도를 정하지 않았고, X1 [0.4 0.8] s / [0.4 1.0] m은 일부 case가 time_lb에 걸렸다.
     % (X2 = [0.33 0.8] s / [0.4 1.2] m)
@@ -98,7 +98,7 @@ cfg.targetSource = 'experiment (user input)';
 %% ===== E0 x bound 세트별 실행 =====
 metricTag = '';
 if strcmp(cfg.propulsionMetric, 'meanForce'), metricTag = '_mpf'; end
-baseTag = sprintf('stateFixed_%s%s_%s', erase(cfg.objectiveMode, 'SpeedFixedEP'), metricTag, ...
+baseTag = sprintf('stateFixed_%s%s_%s', erase(cfg.objectiveMode, 'SpeedStateFixed'), metricTag, ...
     char(datetime('now', 'Format', 'yyyyMMdd_HHmmss')));
 summaries = cell(numel(E0_list), numel(boundSets));
 for e = 1:numel(E0_list)

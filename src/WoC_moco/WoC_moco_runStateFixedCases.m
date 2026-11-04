@@ -1,11 +1,11 @@
 function summary = WoC_moco_runStateFixedCases(cfg)
 % WoC_moco_runStateFixedCases
 %
-%   stateFixed 실행기 (min/maxSpeedFixedEP: E와 propulsion을 고정하고 평균속도를 최소/최대화).
+%   stateFixed 실행기 (min/maxSpeedStateFixed: E와 propulsion을 고정하고 평균속도를 최소/최대화).
 %   같은 E0에 대해 propulsion target J_k마다 하나씩 다음 문제를 독립적으로 푼다
 %   (opts.mocoObjectiveMode = cfg.objectiveMode):
 %
-%     minimize (minSpeedFixedEP) 또는 maximize (maxSpeedFixedEP)
+%     minimize (minSpeedStateFixed) 또는 maximize (maxSpeedStateFixed)
 %                 w_v * v_avg,  v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
 %     subject to  E = E0, P_gate = J_k (또는 평균 추진력 = J_k), 기존 동역학/주기성/대칭성/bounds
 %
@@ -18,7 +18,7 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 %     E0, J_targets      : effort target, propulsion target 벡터 (지표는 propulsionMetric)
 %     propulsionMetric   : 'impulse' (없으면 이 값, J = P_gate [N*s, 한 보행주기])
 %                          | 'meanForce' (J = 평균 추진력 P_gate / Tplus [N])
-%     objectiveMode      : 'minSpeedFixedEP' (없으면 이 값) | 'maxSpeedFixedEP'
+%     objectiveMode      : 'minSpeedStateFixed' (없으면 이 값) | 'maxSpeedStateFixed'
 %     speedWeight        : 평균속도 cost weight 크기 w_v (없으면 1)
 %     targetSource       : target 출처 설명 (CSV에 기록)
 %     gateSigma, gateThreshold : propulsion gate sigma, F0 [N]
@@ -37,9 +37,9 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 
     validateTargets(cfg.E0, cfg.J_targets);
     if ~isfield(cfg, 'speedWeight'), cfg.speedWeight = 1; end
-    if ~isfield(cfg, 'objectiveMode'), cfg.objectiveMode = 'minSpeedFixedEP'; end
-    if ~ismember(cfg.objectiveMode, {'minSpeedFixedEP', 'maxSpeedFixedEP'})
-        error('cfg.objectiveMode 는 ''minSpeedFixedEP'' 또는 ''maxSpeedFixedEP'' 이어야 합니다.');
+    if ~isfield(cfg, 'objectiveMode'), cfg.objectiveMode = 'minSpeedStateFixed'; end
+    if ~ismember(cfg.objectiveMode, {'minSpeedStateFixed', 'maxSpeedStateFixed'})
+        error('cfg.objectiveMode 는 ''minSpeedStateFixed'' 또는 ''maxSpeedStateFixed'' 이어야 합니다.');
     end
     if ~isfield(cfg, 'propulsionMetric'), cfg.propulsionMetric = 'impulse'; end
     if ~ismember(cfg.propulsionMetric, {'impulse', 'meanForce'})
@@ -267,7 +267,7 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
             row.MPF_target = NaN;
         end
     elseif isfield(params, 'mocoObjectiveMode') && ...
-            strcmp(params.mocoObjectiveMode, 'minSpeedFixedEP')
+            strcmp(params.mocoObjectiveMode, 'minSpeedStateFixed')
         % 이전 버전: smooth max(softplus) impulse를 제약했던 실행이다.
         row.PropulsionDefinition = "softplus_legacy";
         row.P_gate_target = NaN;
@@ -295,9 +295,9 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     modelPath = fullfile(resultDir, 'result_1', 'analy_result', [modelName '_1.osim']);
     m = moco_WoC_evalGaitMetrics(modelPath, solFile, impulseScale, ...
         row.GateSigma_N, row.GateThreshold_N);
-    % maxSpeedFixedEP는 weight -w_v로 풀었으므로 objective = -w_v * v_avg 이다.
+    % maxSpeedStateFixed는 weight -w_v로 풀었으므로 objective = -w_v * v_avg 이다.
     speedCost = row.SpeedWeight * m.v_avg;
-    if row.ObjectiveMode == "maxSpeedFixedEP", speedCost = -speedCost; end
+    if row.ObjectiveMode == "maxSpeedStateFixed", speedCost = -speedCost; end
     row.OnlySpeedCost = isequal(termNames, {'objective_average_speed'}) && ...
         abs(row.Objective - speedCost) <= 1e-6 * max(1, abs(speedCost));
     row.E_actual = m.E_simpson;
@@ -402,6 +402,11 @@ function params = readParams(path)
         params.(matlab.lang.makeValidName(parts(1))) = ...
             char(regexprep(value, '^"(.*)"$', '$1'));
     end
+    % 이전 실행의 모드 이름은 읽을 때만 현재 stateFixed 용어로 통일한다.
+    if isfield(params, 'mocoObjectiveMode')
+        params.mocoObjectiveMode = strrep(params.mocoObjectiveMode, ...
+            'SpeedFixedEP', 'SpeedStateFixed');
+    end
 end
 
 
@@ -441,7 +446,7 @@ end
 function writeDefinitions(path, cfg, impulseScale, boundScale)
     fid = fopen(path, 'w');
     cleaner = onCleanup(@() fclose(fid));
-    isMax = strcmp(cfg.objectiveMode, 'maxSpeedFixedEP');
+    isMax = strcmp(cfg.objectiveMode, 'maxSpeedStateFixed');
     speedVerb = 'minimize';
     if isMax, speedVerb = 'maximize'; end
     if strcmp(cfg.propulsionMetric, 'meanForce')
@@ -546,7 +551,7 @@ function plotCases(summary, outDir)
     xlabel(ax, targetLabel);
     ylabel(ax, 'Average speed v_{avg} (m/s)');
     speedLabel = 'Minimum';
-    if summary.ObjectiveMode(1) == "maxSpeedFixedEP", speedLabel = 'Maximum'; end
+    if summary.ObjectiveMode(1) == "maxSpeedStateFixed", speedLabel = 'Maximum'; end
     title(ax, sprintf('%s average speed at E_0 = %.4g', speedLabel, summary.E_target(1)), ...
         'Color', ink(1, :));
     padLimits(ax, target, summary.v_avg_mps);

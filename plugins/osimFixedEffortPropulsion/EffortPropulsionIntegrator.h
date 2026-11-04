@@ -9,7 +9,7 @@ namespace OpenSim {
 
 /** Integrates the effort and the gated propulsive impulse over a phase so
 that both can be constrained at the final time (used by moco_WoC_loop for
-opts.mocoObjectiveMode = 'minSpeedFixedEP').
+opts.mocoObjectiveMode = 'minSpeedStateFixed').
 
     effort_rate = sum_c u_c^2
         c: every control of every actuator with appliesForce = true, weight 1.

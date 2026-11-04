@@ -84,7 +84,7 @@ function moco_WoC_getResult(moco_WoC_Solution, outputDir, opts)
     contact_l.add('contactHeel_l');
     contact_l.add('contactFront_l');
 
-    % minSpeedFixedEP 적분 상태처럼 modelPath 모델에 없는 상태 열은 무시한다
+    % minSpeedStateFixed 적분 상태처럼 modelPath 모델에 없는 상태 열은 무시한다
     % (MocoTrajectory 버전은 추가 열이 있으면 예외). 누락 열은 허용하지 않는다.
     statesTrajGRF = StatesTrajectory.createFromStatesTable( ...
         model, solution_full.exportToStatesTable(), false, true);
