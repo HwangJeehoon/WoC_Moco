@@ -59,6 +59,8 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %                               modeSym은 반주기 에너지 / 반주기 COM 변위.
 %     .mocoEnergyTarget : E0 ('minSpeedStateFixed' 필수, 단위는 mocoEnergyMetric)
 %     .mocoEffortTarget : mocoEnergyTarget의 이전 이름 (effort 지표에서만 허용)
+%     .mocoLumbarControlBound : lumbarAct control 범위 [lower, upper] [N*m]
+%                         (없거나 비어 있으면 모델의 control 범위를 그대로 쓴다)
 %     .mocoPropulsionTarget : J [N*s] ('minSpeedStateFixed' 필수). 한 보행주기 동안
 %                         양발 gated propulsive impulse의 합 (meanPropPerVel의 Iplus)
 %                         P_gate = int [F_r g(F_r) + F_l g(F_l)] dt,
@@ -279,6 +281,12 @@ if ~isscalar(mocoSpeedWeight) || ~isnumeric(mocoSpeedWeight) || ...
         ~isfinite(mocoSpeedWeight) || mocoSpeedWeight <= 0
     error('opts.mocoSpeedWeight 는 양의 유한 scalar여야 합니다.');
 end
+mocoLumbarControlBound = getOpt(opts, 'mocoLumbarControlBound', []);
+if ~isempty(mocoLumbarControlBound) && (~isnumeric(mocoLumbarControlBound) || ...
+        numel(mocoLumbarControlBound) ~= 2 || any(~isfinite(mocoLumbarControlBound)) || ...
+        mocoLumbarControlBound(1) >= mocoLumbarControlBound(2))
+    error('opts.mocoLumbarControlBound 는 비어 있거나 [lower, upper] (lower < upper, N*m) 여야 합니다.');
+end
 
 if ~isfield(opts, 'mocoEffort') || isempty(opts.mocoEffort)
     mocoEffort = 1;
@@ -446,6 +454,9 @@ if isStateFixed
     else
         fprintf('  mocoEnergyTarget E0: %.6g (effort metric before weight)\n', mocoEnergyTarget);
     end
+    if ~isempty(mocoLumbarControlBound)
+        fprintf('  lumbarAct control bound: %s N*m\n', mat2str(mocoLumbarControlBound));
+    end
     if strcmp(mocoPropulsionMetric, 'meanForce')
         fprintf('  mocoPropulsionTarget J: %.6g N (mean propulsive force, gated Iplus / Tplus)\n', ...
             mocoPropulsionTarget);
@@ -511,6 +522,7 @@ MocoOpts.mocoObjectiveMode = mocoObjectiveMode;
 MocoOpts.mocoEffortTarget = mocoEffortTarget;   % effort 지표일 때만 (이전 결과와 같은 열)
 MocoOpts.mocoEnergyMetric = mocoEnergyMetric;
 MocoOpts.mocoEnergyTarget = mocoEnergyTarget;
+MocoOpts.mocoLumbarControlBound = mocoLumbarControlBound;
 MocoOpts.mocoPropulsionTarget = mocoPropulsionTarget;
 MocoOpts.mocoPropulsionMetric = mocoPropulsionMetric;
 MocoOpts.mocoPropulsionGateSigma = mocoPropulsionGateSigma;

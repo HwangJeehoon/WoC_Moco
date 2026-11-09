@@ -52,11 +52,13 @@ cfg.objectiveMode = 'maxSpeedStateFixed';   % 'minSpeedStateFixed' | 'maxSpeedSt
 % State Fixed 설정 - Energy
 cfg.energyMetric = 'metabolicCoT';  % 'effort' | 'metabolicCoT'
 E0_effort = [0.08, 0.10, 0.12];     % effort target들 (weight 곱하기 전 effort metric, 무차원)
-E0_CoT = [3.2, 3.35, 3.5];          % metabolic CoT target들 [J/kg/m]: 낮음 / 중간 / 높음
+E0_CoT = [3.0, 3.25, 3.5];          % metabolic CoT target들 [J/kg/m]:
 
 % State Fixed 설정 - Target J
-cfg.propulsionMetric = 'meanForce';   % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
-J_targets = [50, 65, 80];       % [J1, J2, J3]
+% cfg.propulsionMetric = 'meanForce';   % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
+% J_targets = [50, 65, 80];       % [J1, J2, J3]
+cfg.propulsionMetric = 'impulse';   % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
+J_targets = [30, 40, 50];       % [J1, J2, J3]
 
 % Bound 및 Initial guess 설정
 if strcmp(cfg.objectiveMode, 'maxSpeedStateFixed')
@@ -90,6 +92,7 @@ if strcmp(cfg.propulsionMetric, 'meanForce'), cfg.propulsionTol = 0.1; end % |J 
 if strcmp(cfg.energyMetric, 'metabolicCoT')
     E0_list = E0_CoT;
     cfg.energyTol = 1e-5;           % |CoT - E0| 검증 허용오차 [J/kg/m]
+    cfg.lumbarControlBound = [-1, 1];   % lumbarAct 토크 범위 [N*m] (CoT에 포함되지 않아 제한한다)
 else
     E0_list = E0_effort;
     cfg.energyTol = 1e-3;           % |E - E0| 검증 허용오차 [-]

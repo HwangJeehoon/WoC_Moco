@@ -24,6 +24,8 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 %                          | 'meanForce' (J = 평균 추진력 P_gate / Tplus [N])
 %     objectiveMode      : 'minSpeedStateFixed' (없으면 이 값) | 'maxSpeedStateFixed'
 %     speedWeight        : 평균속도 cost weight 크기 w_v (없으면 1)
+%     lumbarControlBound : lumbarAct control 범위 [lower, upper] [N*m]
+%                          (없거나 비어 있으면 모델의 control 범위)
 %     targetSource       : target 출처 설명 (CSV에 기록)
 %     gateSigma, gateThreshold : propulsion gate sigma, F0 [N]
 %     model, optMode, gaitMode, guessSto ('' 이면 WoC_moco_main 기본 guess,
@@ -117,6 +119,9 @@ function summary = WoC_moco_runStateFixedCases(cfg)
             opts.mocoObjectiveMode = cfg.objectiveMode;
             opts.mocoEnergyMetric = cfg.energyMetric;
             opts.mocoEnergyTarget = cfg.E0;
+            if isfield(cfg, 'lumbarControlBound')
+                opts.mocoLumbarControlBound = cfg.lumbarControlBound;
+            end
             opts.mocoPropulsionTarget = cfg.J_targets(k);
             opts.mocoPropulsionMetric = cfg.propulsionMetric;
             opts.mocoPropulsionGateSigma = cfg.gateSigma;

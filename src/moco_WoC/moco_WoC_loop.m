@@ -30,6 +30,8 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
 %                            적분 / (mass * d_COM) [J/kg/m]
 %       .mocoEnergyTarget : E0 (단위는 mocoEnergyMetric)
 %       .mocoEffortTarget : mocoEnergyTarget이 없을 때 effort 지표의 E0 (이전 이름)
+%       .mocoLumbarControlBound : lumbarAct control 범위 [lower, upper] [N*m]
+%                            (default = []: 모델의 control 범위를 그대로 쓴다)
 %       .mocoPropulsionMetric : min/maxSpeedStateFixed에서 J가 고정하는 지표
 %                            'impulse' (default): 한 보행주기 gated Iplus [N*s]
 %                            'meanForce': 평균 추진력 Iplus / Tplus [N]
@@ -448,6 +450,10 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     problem.setStateInfo('/jointset/ankle_l/ankle_angle_l/value',    [-40*pi/180, 30*pi/180]);
     problem.setStateInfo('/jointset/ankle_r/ankle_angle_r/value',    [-40*pi/180, 30*pi/180]);
     problem.setStateInfo('/jointset/lumbar/lumbar/value',            [-20*pi/180, 20*pi/180]);
+    lumbarControlBound = getOpt(opts, 'mocoLumbarControlBound', []);
+    if ~isempty(lumbarControlBound)
+        problem.setControlInfo('/lumbarAct', lumbarControlBound);
+    end
     %--------------------------------------------------------------
     % 4. Solver 설정
     %--------------------------------------------------------------
