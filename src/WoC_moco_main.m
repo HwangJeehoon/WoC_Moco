@@ -70,6 +70,13 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %                         P_gate / Tplus, Tplus = int [g(F_r) + g(F_l)] dt
 %                         (meanPropPerVel의 MeanPropulsiveForce, 반주기와 한 주기가 같다).
 %     .mocoPropulsionMetric : 'impulse' (default, J = P_gate) | 'meanForce' (J = 평균 추진력)
+%     .mocoPropulsionConstraintMode : J 제약 형태 (min/maxSpeedStateFixed)
+%         'equality' (default) : J_actual = mocoPropulsionTarget (scalar)
+%         'range'              : lower <= J_actual <= upper, mocoPropulsionBounds = [lower, upper]
+%                                (닫힌 구간, 0 <= lower < upper, 단위는 mocoPropulsionTarget과 같음:
+%                                 impulse는 한 보행주기 양발 합 N*s, meanForce는 N). range에서는
+%                                 mocoPropulsionTarget을 지정하지 않는다 (구간 중심을 target으로 쓰지 않음).
+%     .mocoPropulsionBounds : range 전용 [lower, upper]
 %     .mocoPropulsionGateSigma     : 'minSpeedStateFixed' gate 폭 sigma [N] (default = 1)
 %     .mocoPropulsionGateThreshold : 'minSpeedStateFixed' gate 중심 F0 [N] (default = 5)
 %                         (mocoPropulsionSmoothing은 weighted 모드 propulsion 비용항의
@@ -247,17 +254,49 @@ if ~ismember(mocoPropulsionMetric, {'impulse', 'meanForce'})
 end
 propulsionUnit = 'N*s';
 if strcmp(mocoPropulsionMetric, 'meanForce'), propulsionUnit = 'N'; end
+% J 제약 모드: 'equality' (default, J_actual = mocoPropulsionTarget) |
+% 'range' (mocoPropulsionBounds(1) <= J_actual <= mocoPropulsionBounds(2), 닫힌 구간).
+% range에서는 scalar target을 쓰지 않으며 구간 중심을 target으로 고정하지 않는다.
+mocoPropulsionConstraintMode = char(getOpt(opts, 'mocoPropulsionConstraintMode', 'equality'));
+mocoPropulsionBounds = getOpt(opts, 'mocoPropulsionBounds', []);
+if ~ismember(mocoPropulsionConstraintMode, {'equality', 'range'})
+    error('opts.mocoPropulsionConstraintMode 는 ''equality'' 또는 ''range'' 여야 합니다 (입력: %s).', ...
+        mocoPropulsionConstraintMode);
+end
 if isStateFixed
     if ~isscalar(mocoEnergyTarget) || ~isnumeric(mocoEnergyTarget) || ...
             ~isfinite(mocoEnergyTarget) || mocoEnergyTarget <= 0
         error('opts.mocoEnergyTarget (E0, %s [%s]) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.', ...
             mocoEnergyMetric, energyUnit);
     end
-    if ~isscalar(mocoPropulsionTarget) || ~isnumeric(mocoPropulsionTarget) || ...
-            ~isfinite(mocoPropulsionTarget) || mocoPropulsionTarget <= 0
-        error('opts.mocoPropulsionTarget (J, %s) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.', ...
-            propulsionUnit);
+    if strcmp(mocoPropulsionConstraintMode, 'equality')
+        if ~isempty(mocoPropulsionBounds)
+            error(['opts.mocoPropulsionConstraintMode = ''equality'' 에서는 opts.mocoPropulsionBounds 를 ', ...
+                   '지정하지 마세요 (equality: mocoPropulsionTarget, range: mocoPropulsionBounds).']);
+        end
+        if ~isscalar(mocoPropulsionTarget) || ~isnumeric(mocoPropulsionTarget) || ...
+                ~isfinite(mocoPropulsionTarget) || mocoPropulsionTarget <= 0
+            error('opts.mocoPropulsionTarget (J, %s) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.', ...
+                propulsionUnit);
+        end
+        mocoPropulsionBounds = [mocoPropulsionTarget, mocoPropulsionTarget];   % 공통 판정용 정규화
+    else
+        if ~isempty(mocoPropulsionTarget)
+            error(['opts.mocoPropulsionConstraintMode = ''range'' 에서는 opts.mocoPropulsionTarget 을 ', ...
+                   '지정하지 마세요 (scalar target 없이 mocoPropulsionBounds = [lower, upper]만 씁니다).']);
+        end
+        if ~isnumeric(mocoPropulsionBounds) || ~isreal(mocoPropulsionBounds) || ...
+                numel(mocoPropulsionBounds) ~= 2 || ~isvector(mocoPropulsionBounds) || ...
+                any(~isfinite(mocoPropulsionBounds)) || mocoPropulsionBounds(1) < 0 || ...
+                mocoPropulsionBounds(1) >= mocoPropulsionBounds(2)
+            error(['opts.mocoPropulsionBounds (%s) 는 유한한 실수 [lower, upper], 0 <= lower < upper ', ...
+                   '여야 합니다 (입력: %s).'], propulsionUnit, mat2str(mocoPropulsionBounds));
+        end
+        mocoPropulsionBounds = double(mocoPropulsionBounds(:)');
     end
+elseif ~strcmp(mocoPropulsionConstraintMode, 'equality') || ~isempty(mocoPropulsionBounds)
+    error(['opts.mocoPropulsionConstraintMode = ''range'' / opts.mocoPropulsionBounds 는 ', ...
+           'min/maxSpeedStateFixed 모드에서만 씁니다.']);
 elseif strcmp(mocoPropulsionMetric, 'meanForce')
     error('opts.mocoPropulsionMetric = ''meanForce'' 는 min/maxSpeedStateFixed 모드에서만 씁니다.');
 elseif strcmp(mocoEnergyMetric, 'metabolicCoT')
@@ -458,11 +497,16 @@ if isStateFixed
         fprintf('  lumbarAct control bound: %s N*m\n', mat2str(mocoLumbarControlBound));
     end
     if strcmp(mocoPropulsionMetric, 'meanForce')
-        fprintf('  mocoPropulsionTarget J: %.6g N (mean propulsive force, gated Iplus / Tplus)\n', ...
-            mocoPropulsionTarget);
+        jText = 'N (mean propulsive force, gated Iplus / Tplus)';
     else
-        fprintf('  mocoPropulsionTarget J: %.6g N*s (full stride, both feet, gated Iplus)\n', ...
-            mocoPropulsionTarget);
+        jText = 'N*s (full stride, both feet, gated Iplus)';
+    end
+    if strcmp(mocoPropulsionConstraintMode, 'range')
+        fprintf('  propulsion constraint: range %.6g <= J <= %.6g %s (no scalar target)\n', ...
+            mocoPropulsionBounds(1), mocoPropulsionBounds(2), jText);
+    else
+        fprintf('  propulsion constraint: equality, mocoPropulsionTarget J: %.6g %s\n', ...
+            mocoPropulsionTarget, jText);
     end
     fprintf('  propulsion gate: sigma %.4g N, F0 %.4g N\n', ...
         mocoPropulsionGateSigma, mocoPropulsionGateThreshold);
@@ -523,7 +567,9 @@ MocoOpts.mocoEffortTarget = mocoEffortTarget;   % effort 지표일 때만 (이�
 MocoOpts.mocoEnergyMetric = mocoEnergyMetric;
 MocoOpts.mocoEnergyTarget = mocoEnergyTarget;
 MocoOpts.mocoLumbarControlBound = mocoLumbarControlBound;
-MocoOpts.mocoPropulsionTarget = mocoPropulsionTarget;
+MocoOpts.mocoPropulsionTarget = mocoPropulsionTarget;   % equality 전용 (range는 [])
+MocoOpts.mocoPropulsionConstraintMode = mocoPropulsionConstraintMode;
+MocoOpts.mocoPropulsionBounds = mocoPropulsionBounds;   % stateFixed: [lower, upper] (equality는 [J, J])
 MocoOpts.mocoPropulsionMetric = mocoPropulsionMetric;
 MocoOpts.mocoPropulsionGateSigma = mocoPropulsionGateSigma;
 MocoOpts.mocoPropulsionGateThreshold = mocoPropulsionGateThreshold;
@@ -577,6 +623,10 @@ if isStateFixed
         runParams(end+1, :) = {'propulsion_definition', ...
             'gate_Iplus: P = impulse_scale * int [F_r g(F_r) + F_l g(F_l)] dt, g = 1/(1+exp(-(F-F0)/sigma))'};
     end
+    % J 제약 형태. 이 항목이 없는 이전 결과는 equality (lower = upper = mocoPropulsionTarget)로 읽는다.
+    runParams = [runParams; {'propulsion_constraint_mode', mocoPropulsionConstraintMode; ...
+        'propulsion_lower', mocoPropulsionBounds(1); 'propulsion_upper', mocoPropulsionBounds(2); ...
+        'propulsion_unit', propulsionUnit}];
 end
 if mocoPropulsionWeight > 0 && isempty(mocoPropulsionReferenceDuration)
     runParams(end+1, :) = {'effective_mocoPropulsionReferenceDuration_s', ...

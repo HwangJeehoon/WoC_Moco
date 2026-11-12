@@ -6,6 +6,8 @@
 %   maximize (cfg.objectiveMode = 'maxSpeedStateFixed')
 %               w_v * v_avg,  v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)
 %   subject to  E = E0, J 지표 = J_k, 기존 동역학/주기성/대칭성/상태·제어 bounds
+%   cfg.propulsionConstraintMode = 'range'이면 J 지표 = J_k 대신 lower_k <= J 지표 <= upper_k
+%   (cfg.J_bounds의 각 행이 한 case, 닫힌 구간, 구간 중심 target 없음)이며 나머지는 같다.
 %
 %   E (cfg.energyMetric):
 %     'effort'       : weighted 모드 effort goal의 weight 곱하기 전 값 [-]
@@ -56,9 +58,16 @@ E0_CoT = [3.0, 3.25, 3.5];          % metabolic CoT target들 [J/kg/m]:
 
 % State Fixed 설정 - Target J
 % cfg.propulsionMetric = 'meanForce';   % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
-% J_targets = [50, 65, 80];       % [J1, J2, J3]
+% cfg.J_targets = [50, 65, 80];       % [J1, J2, J3]
 cfg.propulsionMetric = 'impulse';   % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
-J_targets = [30, 40, 50];       % [J1, J2, J3]
+% J 제약 형태 (propulsionMetric 단위: impulse N*s 한 보행주기 양발 합, meanForce N)
+%   'equality' : J_actual = J_k. cfg.J_targets의 각 값이 독립 case (cfg.J_bounds = [])
+%   'range'    : lower_k <= J_actual <= upper_k. cfg.J_bounds의 각 행 [lower, upper]가 독립 case
+%                (cfg.J_targets = []). 닫힌 구간이며 구간 중심을 target으로 쓰지 않는다.
+%                예) cfg.J_bounds = [25, 35; 35, 45];   (사용법 예시, 실제 값은 직접 입력)
+cfg.propulsionConstraintMode = 'equality';
+cfg.J_targets = [30, 40, 50];   % equality 전용 [J1, J2, J3]
+cfg.J_bounds = [];              % range 전용 n x 2
 
 % Bound 및 Initial guess 설정
 if strcmp(cfg.objectiveMode, 'maxSpeedStateFixed')
@@ -73,7 +82,9 @@ else
         'distBound', {[0.20, 1.0]});
 end
 stateFixedGuess = fullfile(thisScriptDir, '..', 'inputs', 'guess_init_stateFixed.sto');
-guessFor = @(E0, setName) repmat({stateFixedGuess}, 1, numel(J_targets));
+% propulsion 입력을 실행 전에 검사하고 case 목록을 만든다 (equality: J_targets 값, range: J_bounds 행)
+propCases = WoC_moco_propulsionCases(cfg);
+guessFor = @(E0, setName) repmat({stateFixedGuess}, 1, numel(propCases));
 
 % 기타 설정
 
@@ -87,8 +98,9 @@ cfg.meshIntervals = 300;
 cfg.convergenceTolerance = 5e-5;
 cfg.constraintTolerance = 5e-5;
 cfg.maxIterations = 5000;
-cfg.propulsionTol = 1e-2; % |J 지표 - J| 검증 허용오차
-if strcmp(cfg.propulsionMetric, 'meanForce'), cfg.propulsionTol = 0.1; end % |J 지표 - J| 검증 허용오차
+cfg.propulsionTol = 1e-2; % propulsion 위반량 max(lower - J, J - upper, 0) 검증 허용오차 (equality: |J 지표 - J|)
+if strcmp(cfg.propulsionMetric, 'meanForce'), cfg.propulsionTol = 0.1; end % (같은 의미, N)
+cfg.propulsionBoundTol = cfg.propulsionTol;   % lower/upper(또는 target) 접촉 표시 허용오차 (판정과 별개)
 if strcmp(cfg.energyMetric, 'metabolicCoT')
     E0_list = E0_CoT;
     cfg.energyTol = 1e-5;           % |CoT - E0| 검증 허용오차 [J/kg/m]
@@ -101,7 +113,6 @@ cfg.resultsDir = fullfile(thisScriptDir, '..', 'results');   % 실제 저장 루
 cfg.Index = Index;
 cfg.continuation = false;       % true: case k가 직전 수렴 case의 해에서 시작 (CSV Guess 열에 기록)
 cfg.runOptimizations = true;    % false: 같은 runTag의 기존 결과만 요약
-cfg.J_targets = J_targets;
 cfg.targetSource = 'experiment (user input)';
 
 %% ===== 공통 initial guess의 에너지 지표 (target 규모 확인) =====
@@ -136,6 +147,7 @@ end
 %% ===== E0 x bound 세트별 실행 =====
 metricTag = '';
 if strcmp(cfg.propulsionMetric, 'meanForce'), metricTag = '_mpf'; end
+if strcmp(propCases(1).mode, 'range'), metricTag = [metricTag '_jrange']; end
 energyTag = '';
 if strcmp(cfg.energyMetric, 'metabolicCoT'), energyTag = '_cot'; end
 baseTag = sprintf('stateFixed_%s%s%s_%s', erase(cfg.objectiveMode, 'SpeedStateFixed'), metricTag, ...
@@ -154,9 +166,10 @@ for e = 1:numel(E0_list)
         fprintf('\n##### %s E0 = %g (%s), bound set %s: time %s s, dist %s m (v range %.3f-%.3f m/s) #####\n', ...
             cfg.objectiveMode, cfg.E0, cfg.energyMetric, boundSets(b).name, mat2str(cfg.timeBound), ...
             mat2str(cfg.distBound), vFloor, vCeil);
-        for k = 1:numel(J_targets)
+        for k = 1:numel(propCases)
             [~, guessName, guessExt] = fileparts(cfg.guessSto{k});
-            fprintf('  J%d = %g (%s): guess %s\n', k, J_targets(k), cfg.propulsionMetric, [guessName guessExt]);
+            fprintf('  case %d: %s (%s): guess %s\n', k, propCases(k).label, cfg.propulsionMetric, ...
+                [guessName guessExt]);
         end
         try
             s = WoC_moco_runStateFixedCases(cfg);
@@ -178,7 +191,8 @@ if isempty(summaries)
 else
     allSummary = vertcat(summaries{:});
     writetable(allSummary, fullfile(cfg.resultsDir, [baseTag '_bounds_summary.csv']));
-    disp(allSummary(:, {'EnergyMetric', 'E_target', 'E_actual', 'BoundSet', 'Case', 'Verdict', 'RunPropulsionTarget', ...
-        'P_gate_actual', 'MeanPropulsiveForce_N', 'v_avg_mps', 'VFloor_mps', 'VCeil_mps', ...
-        'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}));
+    disp(allSummary(:, {'EnergyMetric', 'E_target', 'E_actual', 'BoundSet', 'Case', 'Verdict', ...
+        'PropulsionConstraintMode', 'PropulsionLower', 'PropulsionUpper', 'PropulsionActual', ...
+        'PropulsionPass', 'PropulsionBoundHits', 'P_gate_actual', 'MeanPropulsiveForce_N', ...
+        'v_avg_mps', 'VFloor_mps', 'VCeil_mps', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}));
 end
