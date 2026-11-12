@@ -8,6 +8,8 @@
 %               (Moco cost = -speedWeight * v_avg, 유일한 cost)
 %   subject to  metabolic CoT = E0      (endpoint equality, J/kg/m)
 %               P_gate = J_k            (endpoint equality, N*s, 한 주기 양발 합)
+%               또는 cfg.propulsionConstraintMode = 'range'이면
+%               lower_k <= P_gate <= upper_k (endpoint bounds, cfg.J_bounds 행마다 한 case)
 %               동역학, 슬개골 coupler, modeAsym 주기성, 상태·제어 bounds,
 %               발 사이·팔-몸통 MocoFrameDistanceConstraint (path constraint)
 %
@@ -48,7 +50,13 @@ cfg.objectiveMode = 'maxSpeedStateFixed';
 cfg.energyMetric = 'metabolicCoT';
 E0_CoT = [5.6];                      % metabolic CoT target [J/kg/m]
 cfg.propulsionMetric = 'impulse';
-J_targets = [32, 36, 40];            % 한 주기 양발 합산 gated propulsive impulse [N*s]
+% J 제약 형태 (impulse: 한 주기 양발 합산 gated propulsive impulse [N*s])
+%   'equality' : P_gate = J_k, cfg.J_targets의 각 값이 독립 case (cfg.J_bounds = [])
+%   'range'    : lower_k <= P_gate <= upper_k, cfg.J_bounds의 각 행이 독립 case (cfg.J_targets = [])
+%                예) cfg.J_bounds = [30, 34; 34, 38];   (사용법 예시, 실제 값은 직접 입력)
+cfg.propulsionConstraintMode = 'equality';
+cfg.J_targets = [32, 36, 40];
+cfg.J_bounds = [];
 cfg.gaitMode = 'modeAsym';           % Rajagopal profile은 modeAsym만 지원
 cfg.optMode = 'modeOff';             % AFO = 0 (Rajagopal profile은 modeOff만 지원)
 
@@ -71,25 +79,31 @@ cfg.convergenceTolerance = 5e-5;
 cfg.constraintTolerance = 5e-5;
 cfg.maxIterations = 5000;
 cfg.energyTol = 1e-5;                % |CoT - E0| 결과 검증 허용오차 [J/kg/m] (제약 폭이 아님)
-cfg.propulsionTol = 1e-2;            % |P_gate - J| 결과 검증 허용오차 [N*s] (제약 폭이 아님)
+cfg.propulsionTol = 1e-2;            % propulsion 위반량 max(lower - J, J - upper, 0) 결과 검증 허용오차 [N*s]
+                                     % (equality: |P_gate - J|; solver tolerance·구간 폭과 별개)
+cfg.propulsionBoundTol = 1e-2;       % 결과가 lower/upper(또는 target)에 붙었다고 표시하는 허용오차 [N*s]
 cfg.continuation = false;            % false: 모든 case가 같은 정렬 초기값에서 시작
 cfg.runOptimizations = true;         % false: 같은 runTag의 기존 결과만 요약 (baseTagOverride 지정)
 baseTagOverride = '';                % 재요약 시 기존 baseTag (예: 'stateFixed_max_cot_rajagopalAFO_off_20261111_190000')
 cfg.skipSolve = false;               % true: 문제 구성·검사·후처리만 점검 (solve 없음, Verdict "Setup check")
 cfg.resultsDir = fullfile(repoRoot, 'results');
 cfg.Index = Index;
-cfg.J_targets = J_targets;
-cfg.caseNameUsesTargetValue = true;  % case 이름에 J 값 (..._asym_J32)
+cfg.caseNameUsesTargetValue = true;  % case 이름에 J 값 (equality ..._asym_J32, range는 항상 ..._asym_JR30to34)
 cfg.targetSource = 'user input (rajagopal_AFO maxSpeed CoT sweep)';
 % (cfg.lumbarControlBound는 2D /lumbarAct 전용이므로 설정하지 않는다)
 
 E0_list = E0_CoT;
 profile = moco_WoC_modelProfile(cfg.model);
 modelPath = fullfile(repoRoot, 'models', cfg.model);
+% propulsion 입력을 실행 전에 검사하고 case 목록을 만든다 (equality: J_targets 값, range: J_bounds 행)
+propCases = WoC_moco_propulsionCases(cfg);
+propUnit = 'N*s';
+if strcmp(cfg.propulsionMetric, 'meanForce'), propUnit = 'N'; end
 
 %% ===== 실행 태그와 작업용 초기값 사본 =====
 metricTag = '';
 if strcmp(cfg.propulsionMetric, 'meanForce'), metricTag = '_mpf'; end
+if strcmp(propCases(1).mode, 'range'), metricTag = [metricTag '_jrange']; end
 energyTag = '';
 if strcmp(cfg.energyMetric, 'metabolicCoT'), energyTag = '_cot'; end
 if isempty(baseTagOverride)
@@ -115,7 +129,7 @@ end
 fprintf(['\n정렬한 초기값 사본: %s\n  pelvis_tx offset %.6g m, pelvis_tz offset %.6g m 제거 ', ...
          '(GRF CoP x/z 동일 이동), t = %.4g-%.4g s, %d points\n'], align.kinematicsPath, ...
          align.offsetX, align.offsetZ, align.time, align.numTimes);
-cfg.guessSto = repmat({align.kinematicsPath}, 1, numel(J_targets));
+cfg.guessSto = repmat({align.kinematicsPath}, 1, numel(propCases));
 
 %% ===== 초기값 지표 (target 규모 확인, 실패로 처리하지 않음) =====
 % 실행과 같은 대사 모델·접촉력 목록으로 정렬된 초기값의 CoT와 P_gate를 계산하고,
@@ -133,8 +147,15 @@ fprintf(['\n초기값 (%s, model %s):\n  T = %.4g s, pelvis_tx 변위 = %.4g m, 
     guessMetrics.mass_kg, guessMetrics.com_displacement, guessMetrics.basal_rate_W, ...
     guessMetrics.n_metabolic_muscles, guessMetrics.P_gate_simpson, guessMetrics.P_gate_trapz, ...
     grfIndep.P_gate, guessMetrics.P_physical_trapz, guessMetrics.Tplus_simpson);
-fprintf('  target residual (초기값 - target): CoT %s J/kg/m, P_gate %s N*s\n', ...
-    mat2str(guessMetrics.CoT_simpson - E0_list, 5), mat2str(guessMetrics.P_gate_simpson - J_targets, 5));
+guessJ = guessMetrics.P_gate_simpson;
+if strcmp(cfg.propulsionMetric, 'meanForce'), guessJ = guessMetrics.mean_propulsive_force; end
+guessCheck = WoC_moco_propulsionCheck(guessJ * ones(1, numel(propCases)), [propCases.lower], ...
+    [propCases.upper], cfg.propulsionTol, cfg.propulsionBoundTol);
+fprintf('  target residual (초기값 - target): CoT %s J/kg/m\n', mat2str(guessMetrics.CoT_simpson - E0_list, 5));
+for k = 1:numel(propCases)
+    fprintf('  propulsion case %d (%s %s): 초기값 J %.6g, 위반량 %.4g %s\n', k, propCases(k).label, ...
+        propUnit, guessJ, guessCheck.violation(k), propUnit);
+end
 
 % basal 항만으로도 CoT >= basal / (mass * v_avg) 이므로 속도 상한에서의 이 값보다
 % 작은 target은 풀 수 없다.
@@ -169,9 +190,9 @@ for e = 1:numel(E0_list)
             cfg.model, cfg.objectiveMode, cfg.E0, boundSets(b).name, mat2str(cfg.timeBound), ...
             mat2str(cfg.distBound), mat2str(cfg.timeBound * boundScale), ...
             mat2str(cfg.distBound * boundScale), vFloor, vCeil);
-        for k = 1:numel(J_targets)
-            fprintf('  J = %g N*s (%s, %s, %s): guess %s\n', J_targets(k), cfg.propulsionMetric, ...
-                cfg.gaitMode, cfg.optMode, align.kinematicsPath);
+        for k = 1:numel(propCases)
+            fprintf('  case %d: %s %s (%s, %s, %s): guess %s\n', k, propCases(k).label, propUnit, ...
+                cfg.propulsionMetric, cfg.gaitMode, cfg.optMode, align.kinematicsPath);
         end
         try
             s = WoC_moco_runStateFixedCases(cfg);
@@ -194,7 +215,8 @@ else
     allSummary = vertcat(summaries{:});
     writetable(allSummary, fullfile(cfg.resultsDir, [baseTag '_bounds_summary.csv']));
     disp(allSummary(:, {'Model', 'EnergyMetric', 'E_target', 'E_actual', 'BoundSet', 'Case', ...
-        'Verdict', 'P_gate_target', 'P_gate_actual', 'v_avg_mps', 'TimeBoundInput_s', ...
+        'Verdict', 'PropulsionConstraintMode', 'PropulsionLower', 'PropulsionUpper', ...
+        'PropulsionActual', 'PropulsionPass', 'PropulsionBoundHits', 'v_avg_mps', 'TimeBoundInput_s', ...
         'TimeBound_s', 'DistBoundInput_m', 'DistBound_m', 'PhaseDuration_s', 'PhaseDistance_m', ...
         'BoundHits'}));
 end
@@ -226,8 +248,10 @@ function writeRunConfig(path, cfg, E0_list, boundSets, align, gm, grfIndep, prof
     fprintf(fid, 'model: %s (profile %s)\n', cfg.model, profile.name);
     fprintf(fid, 'objective: %s (cost -%g * v_avg only), optMode %s, gaitMode %s\n', ...
         cfg.objectiveMode, cfg.speedWeight, cfg.optMode, cfg.gaitMode);
-    fprintf(fid, 'energy: %s, E0 = %s J/kg/m (endpoint equality); propulsion: %s, J = %s N*s (endpoint equality)\n', ...
-        cfg.energyMetric, mat2str(E0_list), cfg.propulsionMetric, mat2str(cfg.J_targets));
+    propCases = WoC_moco_propulsionCases(cfg);
+    fprintf(fid, 'energy: %s, E0 = %s J/kg/m (endpoint equality); propulsion: %s, %s constraint, cases: %s\n', ...
+        cfg.energyMetric, mat2str(E0_list), cfg.propulsionMetric, propCases(1).mode, ...
+        strjoin({propCases.label}, '; '));
     for b = 1:numel(boundSets)
         fprintf(fid, ['bound set %s: input time %s s, dist %s m -> applied final time %s s, ', ...
                       'pelvis_tx(tf) %s m, t0 = 0\n'], boundSets(b).name, mat2str(boundSets(b).timeBound), ...
@@ -238,7 +262,8 @@ function writeRunConfig(path, cfg, E0_list, boundSets, align, gm, grfIndep, prof
         cfg.gateThreshold, profile.contactDescription);
     fprintf(fid, 'solver: mesh %d, convergence tol %g, constraint tol %g, max iterations %d\n', ...
         cfg.meshIntervals, cfg.convergenceTolerance, cfg.constraintTolerance, cfg.maxIterations);
-    fprintf(fid, 'verification tolerances: energy %g J/kg/m, propulsion %g N*s\n', cfg.energyTol, cfg.propulsionTol);
+    fprintf(fid, ['verification tolerances: energy %g J/kg/m, propulsion violation %g N*s; ', ...
+                  'propulsion bound-hit tolerance %g N*s\n'], cfg.energyTol, cfg.propulsionTol, cfg.propulsionBoundTol);
     fprintf(fid, 'initial guess (aligned copy): %s\n  source %s, offsets x %.17g m, z %.17g m\n', ...
         align.kinematicsPath, align.sourceGuess, align.offsetX, align.offsetZ);
     fprintf(fid, ['initial guess metrics: T %.6g s, distance %.6g m, v_avg %.6g m/s, CoT %.6g J/kg/m, ', ...

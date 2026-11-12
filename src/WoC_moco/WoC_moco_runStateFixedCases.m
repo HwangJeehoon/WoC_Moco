@@ -14,9 +14,19 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 %   실패 case에서 target·bound·제약을 바꿔 다시 풀지 않는다. 한 case의 실행이
 %   수렴하지 않거나 실패해도 기록만 하고 다음 case를 계속 푼다.
 %
+%   propulsion 제약은 cfg.propulsionConstraintMode로 고른다 (WoC_moco_propulsionCases):
+%     'equality' (기본값, 기존 방식): J_targets의 각 값 J_k가 독립 case, J_actual = J_k
+%     'range'    : J_bounds의 각 행 [lower, upper]가 독립 case, lower <= J_actual <= upper
+%                  (닫힌 구간, 구간 중심을 target으로 쓰지 않는다)
+%   판정은 두 모드 모두 violation = max([lower - J, J - upper, 0]) <= propulsionTol
+%   (equality는 lower = upper = J_k)이며, 경계 접촉은 propulsionBoundTol로 따로 표시한다.
+%
 %   cfg 필드:
-%     E0, J_targets      : energy target, propulsion target 벡터 (지표는 energyMetric,
-%                          propulsionMetric)
+%     E0                 : energy target (지표는 energyMetric)
+%     propulsionConstraintMode, J_targets (equality), J_bounds (range, n x 2)
+%                        : propulsion 제약 (지표는 propulsionMetric). 실행 전에 검사한다.
+%     propulsionBoundTol : 결과가 lower/upper(또는 equality target)에 붙었다고 표시하는
+%                          허용오차 (없으면 propulsionTol). 판정 허용오차와 별개다.
 %     energyMetric       : 'effort' (없으면 이 값, E = (1/d_COM) int sum_c u_c^2 dt [-])
 %                          | 'metabolicCoT' (E = int P_met dt / (mass * d_COM) [J/kg/m],
 %                          P_met = Bhargava2004 total_metabolic_rate, basal 포함)
@@ -49,7 +59,13 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 %
 %   반환: summary table (summary.csv와 같은 내용)
 
-    validateTargets(cfg.E0, cfg.J_targets);
+    validateEnergyTarget(cfg.E0);
+    % propulsion 제약 입력 검사와 case 목록 (equality: J_targets, range: J_bounds의 행)
+    cfg.propCases = WoC_moco_propulsionCases(cfg);
+    cfg.propulsionConstraintMode = cfg.propCases(1).mode;
+    if ~isfield(cfg, 'propulsionBoundTol') || isempty(cfg.propulsionBoundTol)
+        cfg.propulsionBoundTol = cfg.propulsionTol;
+    end
     cfg.modelProfile = moco_WoC_modelProfile(cfg.model);
     if ~isfield(cfg, 'speedWeight'), cfg.speedWeight = 1; end
     if ~isfield(cfg, 'objectiveMode'), cfg.objectiveMode = 'minSpeedStateFixed'; end
@@ -76,9 +92,9 @@ function summary = WoC_moco_runStateFixedCases(cfg)
         warning('WoC_moco_runStateFixedCases:EffortTolIgnored', ...
             'cfg.effortTol은 effort 지표용이므로 metabolicCoT 판정에는 cfg.energyTol만 씁니다.');
     end
-    if iscell(cfg.guessSto) && numel(cfg.guessSto) ~= numel(cfg.J_targets)
-        error('guessSto가 cell이면 J_targets와 길이가 같아야 합니다 (%d vs %d).', ...
-            numel(cfg.guessSto), numel(cfg.J_targets));
+    if iscell(cfg.guessSto) && numel(cfg.guessSto) ~= numel(cfg.propCases)
+        error('guessSto가 cell이면 propulsion case 수와 길이가 같아야 합니다 (%d vs %d).', ...
+            numel(cfg.guessSto), numel(cfg.propCases));
     end
     if ~isfield(cfg, 'Index'), cfg.Index = ''; end
     if ~((ischar(cfg.Index) && (isrow(cfg.Index) || isempty(cfg.Index))) || ...
@@ -97,13 +113,15 @@ function summary = WoC_moco_runStateFixedCases(cfg)
     impulseScale = 1 + isSym;     % modeSym 반주기 적분 -> 한 보행주기
     boundScale = 1 + ~isSym;      % WoC_moco_main/moco_WoC_loop의 modeAsym bound 규칙
     [~, modelName] = fileparts(cfg.model);
-    nCase = numel(cfg.J_targets);
-    if isfield(cfg, 'caseNameUsesTargetValue') && cfg.caseNameUsesTargetValue
+    nCase = numel(cfg.propCases);
+    if strcmp(cfg.propulsionConstraintMode, 'range')
+        % range case 이름은 항상 구간을 쓴다 (예: JR25to35, 32.5 -> 32p5)
+        jTags = {cfg.propCases.valueTag};
+    elseif isfield(cfg, 'caseNameUsesTargetValue') && cfg.caseNameUsesTargetValue
         % case 이름에 J 값 자체를 쓴다 (예: J32, 32.5 -> J32p5)
-        jTags = arrayfun(@(J) ['J' strrep(sprintf('%g', J), '.', 'p')], cfg.J_targets, ...
-            'UniformOutput', false);
+        jTags = {cfg.propCases.valueTag};
     else
-        jTags = arrayfun(@(k) sprintf('J%d', k), 1:nCase, 'UniformOutput', false);
+        jTags = {cfg.propCases.indexTag};   % 기존 규칙 J1, J2, ...
     end
     caseNames = cellfun(@(j) sprintf('%s_%s_%s', cfg.runTag, modeTag, j), jTags, ...
         'UniformOutput', false);
@@ -133,7 +151,13 @@ function summary = WoC_moco_runStateFixedCases(cfg)
             if isfield(cfg, 'lumbarControlBound')
                 opts.mocoLumbarControlBound = cfg.lumbarControlBound;
             end
-            opts.mocoPropulsionTarget = cfg.J_targets(k);
+            pc = cfg.propCases(k);
+            opts.mocoPropulsionConstraintMode = pc.mode;
+            if strcmp(pc.mode, 'range')
+                opts.mocoPropulsionBounds = [pc.lower, pc.upper];   % scalar target 없음
+            else
+                opts.mocoPropulsionTarget = pc.target;
+            end
             opts.mocoPropulsionMetric = cfg.propulsionMetric;
             opts.mocoPropulsionGateSigma = cfg.gateSigma;
             opts.mocoPropulsionGateThreshold = cfg.gateThreshold;
@@ -149,9 +173,9 @@ function summary = WoC_moco_runStateFixedCases(cfg)
             if isfield(cfg, 'skipSolve') && cfg.skipSolve
                 opts.mocoSkipSolve = true;   % 설정 점검 (solve 없음)
             end
-            fprintf('\n===== %s case %d/%d: E0=%.6g %s (%s), J=%.6g %s (%s) =====\n', ...
+            fprintf('\n===== %s case %d/%d: E0=%.6g %s (%s), propulsion %s %s (%s) =====\n', ...
                 cfg.objectiveMode, k, nCase, cfg.E0, energyUnitOf(cfg.energyMetric), ...
-                cfg.energyMetric, cfg.J_targets(k), unit, cfg.propulsionMetric);
+                cfg.energyMetric, pc.label, unit, cfg.propulsionMetric);
             try
                 WoC_moco_main(cfg.model, 1, cfg.optMode, caseNames{k}, opts);
                 runMessages(k) = "completed";
@@ -191,14 +215,14 @@ function summary = WoC_moco_runStateFixedCases(cfg)
     writeDefinitions(fullfile(summaryDir, 'definitions.txt'), cfg, impulseScale, boundScale);
 
     fprintf('\n===== %s summary (%s) =====\n', cfg.objectiveMode, summaryDir);
-    if strcmp(cfg.propulsionMetric, 'meanForce')
-        propulsionColumns = {'MPF_target', 'MeanPropulsiveForce_N', 'MPF_residual', 'P_gate_actual'};
-    else
-        propulsionColumns = {'P_gate_target', 'P_gate_actual', 'P_gate_residual', 'P_physical'};
-    end
+    % propulsion은 모드와 상관없이 허용 구간 [lower, upper]와 실제 값으로 보인다
+    % (equality는 lower = upper = target).
+    propulsionColumns = {'PropulsionConstraintMode', 'PropulsionLower', 'PropulsionUpper', ...
+        'PropulsionActual', 'PropulsionConstraintValue', 'PropulsionViolation', 'PropulsionPass', ...
+        'PropulsionBoundHits'};
     disp(summary(:, [{'Case', 'EnergyMetric', 'PropulsionDefinition', 'Verdict', 'SolverStatus', ...
-        'E_target', 'E_actual', 'E_residual', 'E_constraint_value'}, propulsionColumns, ...
-        {'v_avg_mps', 'BoundHits'}]));
+        'Converged', 'E_target', 'E_actual', 'E_residual', 'E_pass', 'E_constraint_value'}, ...
+        propulsionColumns, {'v_avg_mps', 'BoundHits'}]));
 
     try
         plotCases(summary, summaryDir, cfg.modelProfile);
@@ -240,17 +264,14 @@ function caseNames = indexedCaseNames(resultsRoot, caseNames, indexPrefix, runOp
 end
 
 
-function validateTargets(E0, J)
+function validateEnergyTarget(E0)
 % 실험 target은 사용자가 직접 넣는다. 비어 있거나 잘못된 값으로 실행하지 않는다.
-    if isempty(E0) || isempty(J)
-        error(['E0 또는 J_targets가 입력되지 않았습니다. 실행 스크립트 상단의 ', ...
-               'E0, J_targets에 실제 target 값을 입력하세요.']);
+% (propulsion 입력은 WoC_moco_propulsionCases가 검사한다.)
+    if isempty(E0)
+        error('E0가 입력되지 않았습니다. 실행 스크립트 상단의 E0에 실제 target 값을 입력하세요.');
     end
     if ~isscalar(E0) || ~isnumeric(E0) || ~isfinite(E0) || E0 <= 0
         error('E0는 양의 유한 scalar여야 합니다.');
-    end
-    if ~isnumeric(J) || ~isvector(J) || any(~isfinite(J)) || any(J <= 0)
-        error('J_targets는 양의 유한 값의 벡터여야 합니다.');
     end
 end
 
@@ -285,6 +306,12 @@ function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
         'P_physical', NaN, 'P_gate_minus_physical', NaN, 'Tplus_s', NaN, ...
         'MeanPropulsiveForce_N', NaN, 'MPF_target', jTarget(cfg, k, 'meanForce'), 'MPF_residual', NaN, ...
         'MPF_pass', false, 'MPF_constraint_value', NaN, 'RunPropulsionTarget', NaN, ...
+        'PropulsionConstraintMode', string(cfg.propCases(k).mode), ...
+        'PropulsionUnit', string(propulsionUnitOf(cfg.propulsionMetric)), ...
+        'PropulsionLower', cfg.propCases(k).lower, 'PropulsionUpper', cfg.propCases(k).upper, ...
+        'PropulsionActual', NaN, 'PropulsionConstraintValue', NaN, 'PropulsionViolation', NaN, ...
+        'PropulsionConstraintViolation', NaN, 'PropulsionPass', false, 'PropulsionBoundHits', "", ...
+        'PropulsionBoundTol', cfg.propulsionBoundTol, 'PropulsionMetadataIssue', "", ...
         'v_avg_mps', NaN, 'PhaseDistance_m', NaN, 'PhaseDuration_s', NaN, ...
         'StrideLength_m', NaN, 'StrideTime_s', NaN, 'BoundHits', "", ...
         'Effort_simpson', NaN, 'Effort_trapz', NaN, 'Effort_constraint_value', NaN, ...
@@ -314,9 +341,15 @@ end
 
 
 function value = jTarget(cfg, k, metric)
-% J_k가 metric의 target이면 그 값, 아니면 NaN (실행 전 기본 행).
+% case k의 equality target이 metric의 target이면 그 값, 아니면 NaN (실행 전 기본 행).
+% range case는 단일 target이 없으므로 NaN이다.
     value = NaN;
-    if strcmp(cfg.propulsionMetric, metric), value = cfg.J_targets(k); end
+    if strcmp(cfg.propulsionMetric, metric), value = cfg.propCases(k).target; end
+end
+
+
+function unit = propulsionUnitOf(metric)
+    if strcmp(metric, 'meanForce'), unit = 'N'; else, unit = 'N*s'; end
 end
 
 
@@ -383,6 +416,27 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
         row.MPF_target = NaN;
     else
         row.PropulsionDefinition = "unknown";
+        row.P_gate_target = NaN;
+        row.MPF_target = NaN;
+    end
+    % J 제약 형태와 허용 구간은 현재 cfg가 아니라 실행 당시 parameters로 정한다.
+    % 이 항목이 없는 이전 결과는 equality (lower = upper = mocoPropulsionTarget).
+    % 정보가 없거나 판정에 쓸 수 없으면 PropulsionMetadataIssue에 이유를 남기고
+    % 판정하지 않는다 (PropulsionPass false, Verdict "Propulsion metadata ...").
+    [runMode, row.PropulsionLower, row.PropulsionUpper, metaIssue] = runPropulsionInterval(params);
+    row.PropulsionConstraintMode = string(runMode);
+    row.PropulsionUnit = string(propulsionUnitOf(char(row.PropulsionMetric)));
+    if ~isGateRun
+        % softplus 등 이전 정의의 target을 gate 지표 구간으로 판정하지 않는다
+        % (Verdict "Not a gate run"이 먼저 정해지므로 메타데이터 검사도 하지 않는다).
+        row.PropulsionLower = NaN;
+        row.PropulsionUpper = NaN;
+        metaIssue = "";
+    end
+    row.PropulsionMetadataIssue = string(metaIssue);
+    if strcmp(runMode, 'range')
+        % range에는 단일 target이 없다 (구간 중심을 target으로 쓰지 않는다).
+        row.RunPropulsionTarget = NaN;
         row.P_gate_target = NaN;
         row.MPF_target = NaN;
     end
@@ -475,6 +529,33 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     end
     if ~isempty(zP), row.P_gate_constraint_value = impulseScale * zP(end); end
     if ~isempty(zM), row.MPF_constraint_value = zM(1); end
+
+    % propulsion 제약 판정 (equality/range 공통): 저장된 control·접촉력으로 다시 계산한
+    % 실행 당시 지표 J_actual (impulse: P_gate, meanForce: 평균 추진력)를 허용 구간으로 판정한다.
+    % solver 적분 상태의 제약값(modeSym impulse는 반주기 해의 z_P(tf)에 scale 적용)도 함께 둔다.
+    if row.PropulsionMetric == "meanForce"
+        row.PropulsionActual = m.mean_propulsive_force;
+        row.PropulsionConstraintValue = row.MPF_constraint_value;
+    else
+        row.PropulsionActual = m.P_gate_simpson;
+        row.PropulsionConstraintValue = row.P_gate_constraint_value;
+    end
+    pcheck = WoC_moco_propulsionCheck(row.PropulsionActual, row.PropulsionLower, ...
+        row.PropulsionUpper, cfg.propulsionTol, cfg.propulsionBoundTol);
+    row.PropulsionViolation = pcheck.violation;
+    row.PropulsionPass = pcheck.pass;
+    row.PropulsionBoundHits = pcheck.hits;
+    ccheck = WoC_moco_propulsionCheck(row.PropulsionConstraintValue, row.PropulsionLower, ...
+        row.PropulsionUpper, cfg.propulsionTol, cfg.propulsionBoundTol);
+    row.PropulsionConstraintViolation = ccheck.violation;
+    if row.PropulsionMetadataIssue ~= ""
+        % 구간이 유한하고 순서가 맞아도 모드와 맞지 않으면(예: equality인데 lower ~= upper)
+        % 실행 당시 제약을 알 수 없으므로 판정하지 않는다.
+        row.PropulsionViolation = NaN;
+        row.PropulsionConstraintViolation = NaN;
+        row.PropulsionPass = false;
+        row.PropulsionBoundHits = "";
+    end
     % getResult이 한 보행주기 궤적으로 계산한 CoT (이 header 항목이 없는 이전 파일은 NaN).
     metFile = regexprep(solFile, '_kinematics(_half)?\.sto$', '_metabolic.sto');
     if isfile(metFile)
@@ -531,12 +612,21 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
         end
     end
 
-    % 판정에 쓰는 propulsion equality: 실행 당시 지표 (P_gate 또는 평균 추진력).
-    propulsionPass = row.P_gate_pass;
-    if row.PropulsionMetric == "meanForce", propulsionPass = row.MPF_pass; end
+    % 판정에 쓰는 propulsion 제약: 실행 당시 지표와 구간 (equality는 lower = upper = J로
+    % 기존 |J_actual - J| <= propulsionTol 판정과 같다). solver 수렴(Converged), 에너지
+    % equality(E_pass), propulsion 제약(PropulsionPass), time/dist bound 접촉(BoundHits),
+    % propulsion 경계 접촉(PropulsionBoundHits)은 각각 열로 따로 남는다.
+    % 실행 당시 제약 정보가 없거나 맞지 않으면(PropulsionMetadataIssue) 수렴·tolerance
+    % 판정보다 먼저 그 사실을 Verdict로 남긴다 ("out of tol"과 섞이지 않게).
+    propulsionPass = row.PropulsionPass;
+    isRange = row.PropulsionConstraintMode == "range";
+    hasMetaIssue = row.PropulsionMetadataIssue ~= "";
     if isSetupCheck
         % solve하지 않은 설정 점검 결과는 최적화 결과로 판정하지 않는다.
         row.Verdict = "Setup check (no solve)";
+        if isGateRun && hasMetaIssue
+            row.Verdict = row.Verdict + "; propulsion metadata " + row.PropulsionMetadataIssue;
+        end
     elseif row.EnergyMetric ~= string(cfg.energyMetric)
         % 다른 에너지 지표의 결과를 이 지표의 target과 tolerance로 판정하지 않는다.
         row.E_pass = false;
@@ -544,16 +634,100 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
             ", cfg " + cfg.energyMetric + ")";
     elseif ~isGateRun
         row.Verdict = "Not a gate run (" + row.PropulsionDefinition + ")";
+    elseif hasMetaIssue
+        row.Verdict = "Propulsion metadata " + row.PropulsionMetadataIssue;
     elseif ~row.Converged
-        if row.E_pass && propulsionPass
+        if row.E_pass && propulsionPass && isRange
+            row.Verdict = "Not converged (constraints within tol)";
+        elseif row.E_pass && propulsionPass
             row.Verdict = "Not converged (equalities within tol)";
         else
             row.Verdict = "Not converged";
         end
     elseif row.E_pass && propulsionPass
         row.Verdict = "OK";
+    elseif isRange
+        failed = strings(0);
+        if ~row.E_pass, failed(end+1) = "energy equality"; end
+        if ~propulsionPass, failed(end+1) = "propulsion range"; end
+        row.Verdict = "Converged, " + strjoin(failed, " and ") + " out of tol";
     else
         row.Verdict = "Converged, equality out of tol";
+    end
+end
+
+
+function [mode, lower, upper, issue] = runPropulsionInterval(params)
+% 실행 당시 parameters에서 J 제약 형태와 허용 구간을 읽고, 판정에 쓸 수 있는지 검사한다.
+%   - propulsion_lower/upper가 없는 이전 equality 결과: lower = upper = mocoPropulsionTarget
+%   - 정보가 없으면 issue = "missing: ...", 있지만 판정에 쓸 수 없으면 "invalid: ...".
+%     issue가 있으면 lower/upper는 읽은 값 그대로 (없으면 NaN) 두고 판정하지 않는다.
+%   규칙은 실행 전 입력 검사 (WoC_moco_main, WoC_moco_propulsionCases)와 같다:
+%     equality : lower = upper = target, 유한한 양수 (mocoPropulsionTarget이 있으면 같은 값)
+%     range    : 유한, 0 <= lower < upper, scalar target 없음
+%   WoC_moco_saveParameters가 target과 lower/upper를 같은 형식(num2str(v, 10))으로 쓰므로
+%   equality 일치는 상대 1e-9로 본다.
+    issue = "";
+    mode = 'equality';
+    if isfield(params, 'propulsion_constraint_mode') && ~isempty(strtrim(params.propulsion_constraint_mode))
+        mode = strtrim(params.propulsion_constraint_mode);
+    end
+    [hasLower, lower, rawLower] = numericParam(params, 'propulsion_lower');
+    [hasUpper, upper, rawUpper] = numericParam(params, 'propulsion_upper');
+    [hasTarget, target, rawTarget] = numericParam(params, 'mocoPropulsionTarget');
+
+    if ~ismember(mode, {'equality', 'range'})
+        issue = "invalid: unknown propulsion_constraint_mode '" + mode + "'";
+        return;
+    end
+    if hasLower ~= hasUpper
+        issue = "invalid: only one of propulsion_lower/propulsion_upper saved";
+        return;
+    end
+    if ~hasLower
+        if strcmp(mode, 'range')
+            issue = "missing: range run without propulsion_lower/propulsion_upper";
+            return;
+        end
+        if ~hasTarget
+            issue = "missing: no propulsion_lower/propulsion_upper or mocoPropulsionTarget";
+            return;
+        end
+        lower = target; upper = target;
+        rawLower = rawTarget; rawUpper = rawTarget;
+    end
+    if ~isfinite(lower) || ~isfinite(upper)
+        issue = "invalid: propulsion interval is not finite [" + rawLower + ", " + rawUpper + "]";
+        return;
+    end
+    if strcmp(mode, 'equality')
+        if lower ~= upper
+            issue = sprintf("invalid: equality run with lower ~= upper [%.10g, %.10g]", lower, upper);
+        elseif lower <= 0
+            issue = sprintf("invalid: equality target must be > 0 (%.10g)", lower);
+        elseif hasTarget && ~(abs(target - lower) <= 1e-9 * max(1, abs(lower)))
+            issue = string(sprintf(['invalid: mocoPropulsionTarget %s differs from ', ...
+                'propulsion_lower/upper %.10g'], rawTarget, lower));
+        end
+    else
+        if hasTarget
+            issue = "invalid: range run with mocoPropulsionTarget " + rawTarget + ...
+                " (range has no scalar target)";
+        elseif lower < 0 || lower >= upper
+            issue = sprintf("invalid: range needs 0 <= lower < upper ([%.10g, %.10g])", lower, upper);
+        end
+    end
+end
+
+
+function [has, value, raw] = numericParam(params, name)
+% parameters 항목 name이 비어 있지 않으면 has = true, value = str2double (숫자가 아니면 NaN).
+    has = isfield(params, name) && ~isempty(strtrim(params.(name)));
+    raw = "";
+    value = NaN;
+    if has
+        raw = string(strtrim(params.(name)));
+        value = str2double(raw);
     end
 end
 
@@ -635,35 +809,68 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
         stateLine = 'Constraint implementation: states z_E'' = sum_c u_c^2, z_P'' = F_r g(F_r) + F_l g(F_l), z(t0) = 0';
     end
     energyUnit = energyUnitOf(cfg.energyMetric);
+    isRange = strcmp(cfg.propulsionConstraintMode, 'range');
+    if isRange
+        jRel = 'lower_k <= %s <= upper_k';
+        caseText = strjoin(arrayfun(@(c) sprintf('[%g, %g]', c.lower, c.upper), cfg.propCases, ...
+            'UniformOutput', false), ', ');
+        modeLine = sprintf(['propulsion constraint mode: range (closed interval, one case per J_bounds row: %s; ', ...
+            'no scalar target, the interval center is not used)'], caseText);
+    else
+        jRel = '%s = J_k';
+        caseText = strjoin(arrayfun(@(c) sprintf('%g', c.target), cfg.propCases, 'UniformOutput', false), ', ');
+        modeLine = sprintf('propulsion constraint mode: equality (one case per J_targets value: %s)', caseText);
+    end
     if strcmp(cfg.propulsionMetric, 'meanForce')
         metricLines = {
-            sprintf('%s: %s v_avg s.t. %s = E0 (endpoint equality), mean propulsive force = J_k [N]', ...
-                cfg.objectiveMode, speedVerb, energyName)
+            sprintf(['%s: %s v_avg s.t. %s = E0 (endpoint equality), ' jRel ' [N]'], ...
+                cfg.objectiveMode, speedVerb, energyName, 'mean propulsive force')
             sprintf('target source: %s', cfg.targetSource)
+            modeLine
             'propulsion_definition: gate_mean_force (meanPropPerVel MeanPropulsiveForce m = Iplus / Tplus)'};
+        mLine = '    and m(t0) = J (MPF_constraint_value). m is the same for the half and the full stride.';
+        if isRange
+            mLine = ['    and lower_k <= m(t0) <= upper_k (initial bounds of m; MPF_constraint_value). ', ...
+                     'm is free inside the interval and the same for the half and the full stride.'];
+        end
         constraintLines = {
             [stateLine ';']
             energyLine
             '    mean propulsive force (as MeanPropulsiveForce): states m'' = 0 and'
             '    r'' = g(F_r) (F_r - m) + g(F_l) (F_l - m) with bounds r(t0) = r(tf) = 0 (Iplus = m * Tplus)'
-            '    and m(t0) = J (MPF_constraint_value). m is the same for the half and the full stride.'
+            mLine
             '    P_gate is not constrained (z_P is reported only).'};
-        tolLine = sprintf('verification tolerances: |%s - E0| <= %g %s, |mean propulsive force - J| <= %g N', ...
-            energyName, cfg.energyTol, energyUnit, cfg.propulsionTol);
+        unitJ = 'N';
     else
         metricLines = {
-            sprintf('%s: %s v_avg s.t. %s = E0, P_gate = J_k (endpoint equality constraints)', ...
-                cfg.objectiveMode, speedVerb, energyName)
+            sprintf(['%s: %s v_avg s.t. %s = E0, ' jRel ' (endpoint constraints)'], ...
+                cfg.objectiveMode, speedVerb, energyName, 'P_gate')
             sprintf('target source: %s', cfg.targetSource)
+            modeLine
             'propulsion_definition: gate_Iplus (meanPropPerVel MeanPropulsiveForce numerator)'};
+        pLine = sprintf('    %d * z_P(tf) = J (P_gate_constraint_value)', impulseScale);
+        if isRange
+            pLine = sprintf(['    lower_k <= %d * z_P(tf) <= upper_k (propulsion_constraint endpoint bounds ', ...
+                             'MocoBounds(lower, upper); P_gate_constraint_value)'], impulseScale);
+        end
         constraintLines = {
             [stateLine ';']
             '    MocoFinalOutputGoal endpoint constraints (Stage::Time outputs):'
             energyLine
-            sprintf('    %d * z_P(tf) = J (P_gate_constraint_value)', impulseScale)};
-        tolLine = sprintf('verification tolerances: |%s - E0| <= %g %s, |P_gate - J| <= %g N*s', ...
-            energyName, cfg.energyTol, energyUnit, cfg.propulsionTol);
+            pLine};
+        unitJ = 'N*s';
     end
+    tolLine = {
+        sprintf(['verification: |%s - E0| <= %g %s (E_pass); propulsion violation = max(lower - J, ', ...
+                 'J - upper, 0) <= %g %s (PropulsionPass; equality: lower = upper = J_k)'], ...
+            energyName, cfg.energyTol, energyUnit, cfg.propulsionTol, unitJ)
+        sprintf(['PropulsionBoundHits: lower/upper (range) or target (equality) when |J - bound| <= %g %s ', ...
+                 '(propulsionBoundTol; reported only, a value on a bound inside the interval passes)'], ...
+            cfg.propulsionBoundTol, unitJ)
+        sprintf(['solver tolerance (constraint %g, convergence %g), verification tolerance and the ', ...
+                 'user interval width are separate settings'], cfg.constraintTolerance, cfg.convergenceTolerance)
+        ['PropulsionActual: recomputed from saved controls/contact forces (Simpson); ', ...
+         'PropulsionConstraintValue: solver integral state (modeSym impulse: half-stride z_P(tf) x 2)']};
     if isCoT
         [~, metInfo] = moco_WoC_addMetabolics([]);
         energyLines = {
@@ -714,13 +921,24 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
         'Runs without energy_metric in *_parameters.csv are effort runs.'
         'Targets and gate parameters of each case are read from its *_parameters.csv; runs without'
         '    propulsion_definition (earlier softplus version) are marked softplus_legacy, not gate.'
+        '    The propulsion constraint mode and interval come from propulsion_constraint_mode,'
+        '    propulsion_lower/upper of the run; runs without them are equality runs (lower = upper ='
+        '    mocoPropulsionTarget).'
+        ['    If that information is missing (no interval and no target) or unusable (non-finite, ', ...
+         'lower > upper,']
+        ['    equality with lower ~= upper or target <= 0, range with lower >= upper, lower < 0 or a ', ...
+         'scalar target,']
+        ['    unknown mode), the case is not judged: PropulsionMetadataIssue gives the reason, ', ...
+         'PropulsionPass = false,']
+        '    PropulsionViolation = NaN and Verdict = "Propulsion metadata missing/invalid: ...".'
         sprintf(['bounds: input (half stride) time %s s, dist %s m -> applied (solved phase, x%d once) ', ...
                  'final time %s s, final pelvis_tx %s m, t0 = 0, pelvis_tx(t0) = 0; BoundHits tolerance 1e-4'], ...
             mat2str(cfg.timeBound), mat2str(cfg.distBound), boundScale, ...
             mat2str(cfg.timeBound * boundScale), mat2str(cfg.distBound * boundScale))
         sprintf('COM for Indep_Effort_noAFO: %s', profile.comDescription)
-        tolLine
-        'Verdict: solver convergence and equality satisfaction are judged separately;'
+        }; tolLine; {
+        ['Verdict: solver convergence (Converged), energy equality (E_pass), propulsion constraint ', ...
+         '(PropulsionPass) and time/dist bound hits (BoundHits) are judged separately;']
         '         a case that did not converge is not reported as infeasible.'
         }];
     fprintf(fid, '%s\n', lines{:});
@@ -768,28 +986,60 @@ function plotCases(summary, outDir, profile)
     caseColor = @(k) colors(mod(k-1, size(colors, 1)) + 1, :);
     ok = summary.Verdict == "OK";
     shortVerdict = replace(summary.Verdict, ["Converged, equality out of tol", ...
-        "Not converged (equalities within tol)"], ["eq. out of tol", "not converged, eq. ok"]);
+        "Not converged (equalities within tol)", "Not converged (constraints within tol)", ...
+        "Converged, energy equality out of tol", "Converged, propulsion range out of tol", ...
+        "Converged, energy equality and propulsion range out of tol"], ...
+        ["eq. out of tol", "not converged, eq. ok", "not converged, constraints ok", ...
+         "E out of tol", "J out of range", "E and J out of tol"]);
+    shortVerdict = regexprep(shortVerdict, '^Propulsion metadata (missing|invalid):.*$', 'J metadata $1');
+    % propulsion 제약: equality는 lower = upper = target, range는 허용 구간 [lower, upper].
+    % range를 단일 target처럼 그리지 않는다 (구간은 선/띠, 실제 값은 원).
+    lower = summary.PropulsionLower;
+    upper = summary.PropulsionUpper;
+    isRangeRow = summary.PropulsionConstraintMode == "range";
+    actualJ = summary.PropulsionActual;
     isMeanForce = summary.PropulsionMetric(1) == "meanForce";
     if isMeanForce
-        targetLabel = 'Propulsion target J (mean propulsive force, N)';
         targetUnit = 'N';
+        jName = 'mean propulsive force';
         propulsionSpec = {'MPF_target', 'MeanPropulsiveForce_N', [], 'Mean propulsive force (N)'};
-        propulsionTitle = 'Mean propulsive force: target (bar), actual (circle)';
+        extraText = '';
     else
-        targetLabel = 'Propulsion target J (P_{gate}, N\cdots, one stride)';
         targetUnit = 'N\cdots';
+        jName = 'P_{gate}, one stride';
         propulsionSpec = {'P_gate_target', 'P_gate_actual', 'P_physical', 'Propulsion (N\cdots, one stride)'};
-        propulsionTitle = 'P_{gate}: target (bar), actual (circle); max(F,0) (diamond)';
+        extraText = '; max(F,0) (diamond)';
     end
-    target = summary.(propulsionSpec{1});
+    if any(isRangeRow)
+        targetLabel = sprintf('Propulsion J (%s, %s): allowed interval (line), actual (circle)', jName, targetUnit);
+        propulsionTitle = ['J: allowed interval (band) or target (bar), actual (circle)' extraText];
+    else
+        targetLabel = sprintf('Propulsion target J (%s, %s)', jName, targetUnit);
+        propulsionTitle = ['J: target (bar), actual (circle)' extraText];
+    end
+    % 그림 1의 x 위치: equality는 target (기존), range는 실제 값 (구간은 가로선)
+    target = lower;
+    target(isRangeRow) = actualJ(isRangeRow);
     target(~isfinite(target)) = summary.RunPropulsionTarget(~isfinite(target));
+    jLabel = strings(n, 1);
+    for k = 1:n
+        if isRangeRow(k)
+            jLabel(k) = sprintf('J%d \\in [%.3g, %.3g] %s', k, lower(k), upper(k), targetUnit);
+        else
+            jLabel(k) = sprintf('J%d = %.3g %s', k, target(k), targetUnit);
+        end
+    end
 
-    % 1. propulsion target에 따른 평균속도
+    % 1. propulsion 제약에 따른 평균속도
     fig = newFigure([640 420]);
     ax = axes(fig); hold(ax, 'on'); styleAxes(ax, ink);
     for k = 1:n
         face = caseColor(k);
         if ~ok(k), face = 'w'; end
+        if isRangeRow(k)
+            plot(ax, [lower(k), upper(k)], summary.v_avg_mps(k) * [1 1], '-', 'Color', caseColor(k), ...
+                'LineWidth', 4, 'HandleVisibility', 'off');
+        end
         plot(ax, target(k), summary.v_avg_mps(k), 'o', 'MarkerSize', 9, ...
             'LineWidth', 2, 'MarkerEdgeColor', caseColor(k), 'MarkerFaceColor', face);
         text(ax, target(k), summary.v_avg_mps(k), ...
@@ -801,18 +1051,26 @@ function plotCases(summary, outDir, profile)
     if summary.ObjectiveMode(1) == "maxSpeedStateFixed", speedLabel = 'Maximum'; end
     title(ax, sprintf(['%s average speed at ' energyTargetText], speedLabel, summary.E_target(1)), ...
         'Color', ink(1, :));
-    padLimits(ax, target, summary.v_avg_mps);
+    padLimits(ax, [target; lower(isRangeRow); upper(isRangeRow)], summary.v_avg_mps);
     saveFigure(fig, fullfile(outDir, 'speed_vs_propulsion_target.png'));
 
-    % 2. energy / propulsion target vs actual (small multiples, 각자 축)
+    % 2. energy / propulsion target(또는 허용 구간) vs actual (small multiples, 각자 축)
     fig = newFigure([900 380]);
     tl = tiledlayout(fig, 1, 2, 'TileSpacing', 'compact');
     specs = [{'E_target', 'E_actual', [], energyAxis}; propulsionSpec];
     for p = 1:2
         ax = nexttile(tl); hold(ax, 'on'); styleAxes(ax, ink);
         for k = 1:n
-            plot(ax, k + [-0.3 0.3], summary.(specs{p, 1})(k) * [1 1], '-', ...
-                'Color', ink(2, :), 'LineWidth', 2);
+            if p == 2 && isRangeRow(k)
+                % 허용 구간 [lower, upper]를 띠로 그린다 (단일 target 막대 없음)
+                patch(ax, k + [-0.3 0.3 0.3 -0.3], [lower(k) lower(k) upper(k) upper(k)], ...
+                    caseColor(k), 'FaceAlpha', 0.15, 'EdgeColor', ink(2, :), 'LineWidth', 1);
+            elseif p == 2
+                plot(ax, k + [-0.3 0.3], lower(k) * [1 1], '-', 'Color', ink(2, :), 'LineWidth', 2);
+            else
+                plot(ax, k + [-0.3 0.3], summary.(specs{p, 1})(k) * [1 1], '-', ...
+                    'Color', ink(2, :), 'LineWidth', 2);
+            end
             face = caseColor(k);
             if ~ok(k), face = 'w'; end
             plot(ax, k, summary.(specs{p, 2})(k), 'o', 'MarkerSize', 9, 'LineWidth', 2, ...
@@ -823,7 +1081,11 @@ function plotCases(summary, outDir, profile)
             end
         end
         % 축이 아주 작은 residual로 확대되지 않도록 값 평균의 ±5% 이상을 보인다.
-        vals = [summary.(specs{p, 1}); summary.(specs{p, 2})];
+        if p == 2
+            vals = [lower; upper; summary.(specs{p, 2})];
+        else
+            vals = [summary.(specs{p, 1}); summary.(specs{p, 2})];
+        end
         if ~isempty(specs{p, 3}), vals = [vals; summary.(specs{p, 3})]; end %#ok<AGROW>
         vals = vals(isfinite(vals));
         if ~isempty(vals)
@@ -852,7 +1114,7 @@ function plotCases(summary, outDir, profile)
             if isempty(grf), continue; end
             plot(ax, cyclePct(grf(:, 1)), grf(:, strcmp(labels, ['ground_force_' sides{p, 1} '_vx'])), ...
                 'Color', caseColor(k), 'LineWidth', 2, 'LineStyle', lineStyle(ok(k)), ...
-                'DisplayName', sprintf('J%d = %.3g %s (%s)', k, target(k), targetUnit, shortVerdict(k)));
+                'DisplayName', sprintf('%s (%s)', jLabel(k), shortVerdict(k)));
         end
         yline(ax, 0, 'Color', ink(2, :), 'HandleVisibility', 'off');
         xlabel(ax, 'Stride (%) from t_0 of the solved trajectory');

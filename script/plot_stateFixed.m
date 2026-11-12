@@ -49,7 +49,8 @@ for g = 1:numel(runGroups)
     end
     writetable(data, fullfile(outDir, [names{1} '_data.csv']));
     fprintf('\n##### 묶음 %d (%s): %s #####\n', g, figTag, strjoin(runGroups{g}, ', '));
-    disp(data(:, {'EnergyMetric', 'E0', 'J', 'Verdict', 'v_avg_mps', 'E_actual', 'P_gate_actual', ...
+    disp(data(:, {'EnergyMetric', 'E0', 'PropulsionConstraintMode', 'PropulsionLower', 'PropulsionUpper', ...
+        'Verdict', 'v_avg_mps', 'E_actual', 'P_gate_actual', ...
         'MeanPropulsiveForce_N', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}));
 end
 fprintf('저장: %s\n', outDir);
@@ -61,7 +62,7 @@ function data = readRuns(resultsDir, runTags, boundSet)
         'E_target', 'RunPropulsionTarget', 'v_avg_mps', 'E_actual', 'P_gate_actual', ...
         'MeanPropulsiveForce_N', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'};
     textCols = {'Case', 'ObjectiveMode', 'PropulsionDefinition', 'GaitMode', 'Verdict', 'BoundSet', 'BoundHits', ...
-        'EnergyMetric'};
+        'EnergyMetric', 'PropulsionConstraintMode', 'PropulsionBoundHits'};
     parts = cell(numel(runTags), 1);
     for r = 1:numel(runTags)
         f = fullfile(resultsDir, [runTags{r} '_bounds_summary.csv']);
@@ -82,7 +83,18 @@ function data = readRuns(resultsDir, runTags, boundSet)
         else
             t.EnergyMetric = repmat("effort", height(t), 1);
         end
-        parts{r} = t(:, [cols, {'EnergyMetric'}]);
+        % propulsion 제약 형태. 이 열이 없는 이전 요약은 equality (lower = upper = RunPropulsionTarget).
+        if ismember('PropulsionConstraintMode', t.Properties.VariableNames)
+            t.PropulsionConstraintMode = fillmissing(string(t.PropulsionConstraintMode), 'constant', "equality");
+            t.PropulsionConstraintMode(t.PropulsionConstraintMode == "") = "equality";
+        else
+            t.PropulsionConstraintMode = repmat("equality", height(t), 1);
+        end
+        if ~all(ismember({'PropulsionLower', 'PropulsionUpper'}, t.Properties.VariableNames))
+            t.PropulsionLower = t.RunPropulsionTarget;
+            t.PropulsionUpper = t.RunPropulsionTarget;
+        end
+        parts{r} = t(:, [cols, {'EnergyMetric', 'PropulsionConstraintMode', 'PropulsionLower', 'PropulsionUpper'}]);
     end
     data = vertcat(parts{:});
     data.BoundHits = fillmissing(data.BoundHits, 'constant', "");
@@ -91,9 +103,23 @@ function data = readRuns(resultsDir, runTags, boundSet)
         error('plot_stateFixed:NoRows', '%s에 bound 세트 %s의 case가 없습니다.', strjoin(runTags, ', '), boundSet);
     end
 
-    % 같은 (E0, J)가 두 번 나오면 어느 해를 그릴지 정할 수 없으므로 멈춘다.
+    % J 수준: equality는 target 값, range는 허용 구간 [lower, upper] (구간 순번을 정렬·색 key로만
+    % 쓰고 단일 target 값으로 표시하지 않는다). 두 형태가 섞인 묶음은 그리지 않는다.
+    modes = unique(data.PropulsionConstraintMode);
+    if numel(modes) > 1
+        error('plot_stateFixed:MixedConstraintMode', ...
+            'equality 결과와 range 결과가 한 묶음에 섞여 있습니다. runGroups를 나누세요.');
+    end
     data.E0 = round(data.E_target, 10);
-    data.J = data.RunPropulsionTarget;
+    if modes == "range"
+        [~, ~, idx] = unique([data.PropulsionLower, data.PropulsionUpper], 'rows');
+        data.J = idx;
+        data.JText = compose("\\in [%g, %g]", data.PropulsionLower, data.PropulsionUpper);
+    else
+        data.J = data.RunPropulsionTarget;
+        data.JText = compose("= %g", data.J);
+    end
+    % 같은 (E0, J)가 두 번 나오면 어느 해를 그릴지 정할 수 없으므로 멈춘다.
     [~, firstIdx, grp] = unique([data.E0, data.J], 'rows');
     if numel(firstIdx) < height(data)
         dup = data(ismember(grp, find(accumarray(grp, 1) > 1)), :);
@@ -138,6 +164,9 @@ function spec = metricSpec(data)
     end
     spec.modeTag = char(erase(objectiveMode, 'SpeedStateFixed'));
     spec.targetText = sprintf('Target(J) : %s', spec.jName);   % 예: 'Target(J) : Propulsion'
+    if all(data.PropulsionConstraintMode == "range")
+        spec.targetText = sprintf('Range(J) : %s', spec.jName);   % 허용 구간 제약 (단일 target 아님)
+    end
 end
 
 
@@ -174,9 +203,14 @@ function fig = plotSpeed(data, spec, connectBy)
     hJ = gobjects(nJ, 1);
     for j = 1:nJ
         rows = data.J == J_levels(j);
-        hJ(j) = plot(ax, data.v_avg_mps(rows & ok), data.E0(rows & ok), 'o', 'MarkerSize', 10, ...
+        % 범례 handle은 NaN 점으로 항상 만든다 (이 J 수준에 Verdict OK인 case가 없어도
+        % plot이 빈 값을 돌려주지 않게 한다).
+        hJ(j) = plot(ax, NaN, NaN, 'o', 'MarkerSize', 10, ...
             'LineWidth', 1.5, 'MarkerEdgeColor', 'w', 'MarkerFaceColor', jColor(j, :), ...
-            'DisplayName', sprintf('J%d = %g %s', j, J_levels(j), spec.jUnit));
+            'DisplayName', sprintf('J%d %s %s', j, data.JText(find(rows, 1)), spec.jUnit));
+        plot(ax, data.v_avg_mps(rows & ok), data.E0(rows & ok), 'o', 'MarkerSize', 10, ...
+            'LineWidth', 1.5, 'MarkerEdgeColor', 'w', 'MarkerFaceColor', jColor(j, :), ...
+            'HandleVisibility', 'off');
         plot(ax, data.v_avg_mps(rows & ~ok), data.E0(rows & ~ok), 'o', 'MarkerSize', 9, ...
             'LineWidth', 1.5, 'MarkerEdgeColor', jColor(j, :), 'MarkerFaceColor', 'w', ...
             'HandleVisibility', 'off');
@@ -226,8 +260,8 @@ function fig = plotApGrf(data, spec, resultsDir)
             style = '-'; note = '';
             if ~ok(row), style = '--'; note = sprintf(' (%s)', data.Verdict(row)); end
             plot(axs(e), grf(:, 1), grf(:, strcmp(labels, 'ground_force_r_vx')), 'Color', jColor(j, :), ...
-                'LineWidth', 2, 'LineStyle', style, 'DisplayName', sprintf('J%d = %g %s - %.3f m/s%s', ...
-                j, J_levels(j), spec.jUnit, data.v_avg_mps(row), note));
+                'LineWidth', 2, 'LineStyle', style, 'DisplayName', sprintf('J%d %s %s - %.3f m/s%s', ...
+                j, data.JText(row), spec.jUnit, data.v_avg_mps(row), note));
             tRange = [min(tRange(1), grf(1, 1)), max(tRange(2), grf(end, 1))];
         end
         title(axs(e), sprintf(spec.energyRowText, E0_levels(e)), 'Color', ink(1, :), 'FontWeight', 'normal');

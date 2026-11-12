@@ -45,7 +45,12 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
 %       .mocoPropulsionMetric : min/maxSpeedStateFixed에서 J가 고정하는 지표
 %                            'impulse' (default): 한 보행주기 gated Iplus [N*s]
 %                            'meanForce': 평균 추진력 Iplus / Tplus [N]
-%       .mocoPropulsionTarget : 'minSpeedStateFixed'의 J (단위는 mocoPropulsionMetric)
+%       .mocoPropulsionTarget : 'minSpeedStateFixed'의 J (단위는 mocoPropulsionMetric, equality 전용)
+%       .mocoPropulsionConstraintMode : 'equality' (default, J_actual = mocoPropulsionTarget) |
+%                            'range' (lower <= J_actual <= upper, mocoPropulsionBounds)
+%                            impulse: propulsion_constraint endpoint bounds [J, J] 또는
+%                            [lower, upper]. meanForce: m(t0) bounds [J, J] 또는 [lower, upper].
+%       .mocoPropulsionBounds : range 전용 [lower, upper] (equality는 비우거나 [J, J])
 %       .mocoPropulsionGateSigma / .mocoPropulsionGateThreshold :
 %                            'minSpeedStateFixed' gate g(F) = 1/(1+exp(-(F-F0)/sigma))의
 %                            sigma, F0 [N] (default = 1, 5)
@@ -93,6 +98,12 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
     mocoTimeBound    = opts.mocoTimeBound;
     mocoDistBound    = opts.mocoDistBound;
     skipSolve        = getOpt(opts, 'mocoSkipSolve', false);
+    % J 제약: equality (default, opts.mocoPropulsionTarget) 또는 range
+    % (opts.mocoPropulsionBounds = [lower, upper]). 둘 다 [lower, upper]로 정규화한다.
+    propSpec = [];
+    if useStateFixed
+        propSpec = propulsionSpec(opts, propulsionMetric);
+    end
     setup = struct();
 
     profile = moco_WoC_modelProfile(modelPath);
@@ -401,20 +412,19 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
             speedWeight = -speedWeight;
         end
         addStateFixedGoals(problem, integratorPath, energyMetric, energyTarget, ...
-            opts.mocoPropulsionTarget, speedWeight, useMeanForce, profile.pelvisCoordinatePath);
+            propSpec, speedWeight, useMeanForce, profile.pelvisCoordinatePath);
         energyText = sprintf('E0=%.6g (effort)', energyTarget);
         if useCoT, energyText = sprintf('E0=%.6g J/kg/m (metabolic CoT)', energyTarget); end
         if useMeanForce
-            fprintf(['Moco %s: speed goal weight=%.4g, %s, J=%.6g N ', ...
+            fprintf(['Moco %s: speed goal weight=%.4g, %s, %s ', ...
                      '(mean propulsive force, gate sigma %.4g N, F0 %.4g N)\n'], objectiveMode, ...
-                     speedWeight, energyText, opts.mocoPropulsionTarget, ...
-                     gateSigma, gateThreshold);
+                     speedWeight, energyText, propSpec.text, gateSigma, gateThreshold);
         else
-            fprintf(['Moco %s: speed goal weight=%.4g, %s, J=%.6g N*s ', ...
+            fprintf(['Moco %s: speed goal weight=%.4g, %s, %s ', ...
                      '(impulse scale %d, gate sigma %.4g N, F0 %.4g N)\n'], objectiveMode, ...
-                     speedWeight, energyText, opts.mocoPropulsionTarget, ...
-                     impulseScale, gateSigma, gateThreshold);
+                     speedWeight, energyText, propSpec.text, impulseScale, gateSigma, gateThreshold);
         end
+        setup.propulsion = propSpec;
     else
         % Effort goal (공통)
         effortGoal = MocoControlGoal('effort', weight_effort);
@@ -538,18 +548,22 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
     end
 
     guessTraj = MocoTrajectory(guessStoPath);
-    meanForceTarget = [];
-    if useMeanForce, meanForceTarget = opts.mocoPropulsionTarget; end
+    meanForceSpec = [];
+    if useMeanForce, meanForceSpec = propSpec; end
     [guessTraj, guessMetrics] = matchIntegratorGuess(guessTraj, model, problem, integratorPath, ...
-        useStateFixed, injectedOsimPath, guessStoPath, meanForceTarget, useCoT, solver);
+        useStateFixed, injectedOsimPath, guessStoPath, meanForceSpec, useCoT, solver);
     solver.setGuess(guessTraj);
+    if useMeanForce
+        setup.propulsion.guessMeanForce = guessMetrics.guess_mean_force;
+        setup.propulsion.initialMeanForce = guessMetrics.initial_mean_force;
+    end
 
     %--------------------------------------------------------------
     % 5. 문제 풀기
     %--------------------------------------------------------------
     if useStateFixed
-        checkStateFixedGoals(problem, integratorPath, meanForceTarget, energyMetric, ...
-            energyTarget, metabolicRatePath);
+        setup.propulsionChecks = checkStateFixedGoals(problem, integratorPath, propSpec, ...
+            useMeanForce, energyMetric, energyTarget, metabolicRatePath);
         setup.guessOutputs = checkConstraintOutputsOnGuess(study, problem, model, guessTraj, ...
             integratorPath, energyMetric, useMeanForce, impulseScale, guessMetrics, metabolicRatePath);
     end
@@ -634,11 +648,17 @@ end
 
 
 function addStateFixedGoals(problem, componentPath, energyMetric, energyTarget, ...
-        propulsionTarget, speedWeight, useMeanForce, coordinatePath)
+        propSpec, speedWeight, useMeanForce, coordinatePath)
 % Add the v_avg cost (weight speedWeight, negative to maximize), the energy
 % endpoint equality constraint (E = effort or metabolic CoT, energyMetric)
-% and either the P endpoint equality constraint or (useMeanForce) the
-% bounds that fix the mean propulsive force.
+% and the propulsion constraint of propSpec (propulsionSpec):
+%   impulse   : MocoFinalOutputGoal propulsion_constraint on
+%               scaled_propulsive_impulse with endpoint bounds
+%               equality [J, J] (MocoBounds(J), as before) or range
+%               [lower, upper] (MocoBounds(lower, upper));
+%   meanForce : initial bounds of the constant state m: equality m(t0) = J,
+%               range lower <= m(t0) <= upper (m' = 0, r(t0) = r(tf) = 0).
+% No penalty, center-tracking or slack cost is added.
     import org.opensim.modeling.*
 
     speedGoal = MocoGoal.safeDownCast( ...
@@ -667,19 +687,27 @@ function addStateFixedGoals(problem, componentPath, energyMetric, energyTarget, 
 
     if useMeanForce
         % Mean propulsive force: r(t0) = r(tf) = 0 gives Iplus = m * Tplus,
-        % and m(t0) = J (m' = 0 carries it over the phase). Only the
-        % initial value of m is bounded so that no defect constraint row
-        % has fixed variables only.
+        % and m(t0) = J (equality) or lower <= m(t0) <= upper (range); m' = 0
+        % carries it over the phase, so the range bounds the mean
+        % propulsive force itself and the optimizer chooses m inside it.
+        % Only the initial value of m is bounded so that no defect
+        % constraint row has fixed variables only.
+        if propSpec.isRange
+            mInitial = [propSpec.lower, propSpec.upper];
+        else
+            mInitial = propSpec.target;
+        end
         problem.setStateInfo([componentPath '/mean_propulsive_force'], ...
-            [-Inf, Inf], propulsionTarget);
+            [-Inf, Inf], mInitial);
         problem.setStateInfo([componentPath '/mean_force_residual'], ...
             [-Inf, Inf], 0, 0);
     else
-        % P_gate = impulse_scale * z_P(tf) [N*s, one stride].
+        % P_gate = impulse_scale * z_P(tf) [N*s, one stride]; impulse_scale (2
+        % for modeSym) is applied once, inside scaled_propulsive_impulse.
         propulsionGoal = MocoFinalOutputGoal('propulsion_constraint');
         propulsionGoal.setOutputPath([componentPath '|scaled_propulsive_impulse']);
         propulsionGoal.setMode('endpoint_constraint');
-        propulsionGoal.setEndpointConstraintBounds(equalityBounds(propulsionTarget));
+        propulsionGoal.setEndpointConstraintBounds(propulsionBounds(propSpec));
         problem.addGoal(propulsionGoal);
     end
 
@@ -707,16 +735,71 @@ function bounds = equalityBounds(value)
 end
 
 
+function bounds = propulsionBounds(propSpec)
+% Endpoint constraint bounds of propulsion_constraint: equality MocoBounds(J)
+% (unchanged), range MocoBounds(lower, upper).
+    import org.opensim.modeling.*
+    if propSpec.isRange
+        bounds = StdVectorMocoBounds();
+        bounds.add(MocoBounds(propSpec.lower, propSpec.upper));
+    else
+        bounds = equalityBounds(propSpec.target);
+    end
+end
+
+
+function spec = propulsionSpec(opts, propulsionMetric)
+% Normalize the propulsion constraint options (also for direct callers of
+% moco_WoC_loop): equality (default) uses opts.mocoPropulsionTarget, range
+% uses opts.mocoPropulsionBounds = [lower, upper] with 0 <= lower < upper.
+    mode = char(getOpt(opts, 'mocoPropulsionConstraintMode', 'equality'));
+    unit = 'N*s';
+    if strcmp(propulsionMetric, 'meanForce'), unit = 'N'; end
+    target = getOpt(opts, 'mocoPropulsionTarget', []);
+    switch mode
+        case 'equality'
+            if ~isscalar(target) || ~isnumeric(target) || ~isfinite(target) || target <= 0
+                error('moco_WoC_loop: equality 모드의 mocoPropulsionTarget이 양의 유한 scalar가 아닙니다.');
+            end
+            b = getOpt(opts, 'mocoPropulsionBounds', []);
+            if ~isempty(b) && ~isequal(double(b(:)'), [target, target])
+                error('moco_WoC_loop: equality 모드인데 mocoPropulsionBounds(%s)가 [J, J]가 아닙니다.', mat2str(b));
+            end
+            spec = struct('mode', mode, 'isRange', false, 'target', target, ...
+                'lower', target, 'upper', target);
+            spec.text = sprintf('J = %.6g %s (equality)', target, unit);
+        case 'range'
+            if ~isempty(target)
+                error('moco_WoC_loop: range 모드에서는 mocoPropulsionTarget을 쓰지 않습니다.');
+            end
+            b = getOpt(opts, 'mocoPropulsionBounds', []);
+            if ~isnumeric(b) || numel(b) ~= 2 || any(~isfinite(b)) || b(1) < 0 || b(1) >= b(2)
+                error('moco_WoC_loop: range 모드의 mocoPropulsionBounds가 [lower, upper] (0 <= lower < upper)가 아닙니다: %s', ...
+                    mat2str(b));
+            end
+            spec = struct('mode', mode, 'isRange', true, 'target', NaN, ...
+                'lower', double(b(1)), 'upper', double(b(2)));
+            spec.text = sprintf('%.6g <= J <= %.6g %s (range)', spec.lower, spec.upper, unit);
+        otherwise
+            error('moco_WoC_loop: mocoPropulsionConstraintMode 는 ''equality'' 또는 ''range'' 입니다 (입력: %s).', mode);
+    end
+    spec.metric = propulsionMetric;
+    spec.unit = unit;
+end
+
+
 function [guessTraj, m] = matchIntegratorGuess(guessTraj, model, problem, ...
-        componentPath, useIntegrator, modelPath, guessPath, meanForceTarget, useCoT, solver)
+        componentPath, useIntegrator, modelPath, guessPath, meanForceSpec, useCoT, solver)
 % Make the guess match the integral states of the problem. Integral states
 % already in the guess (from a min/maxSpeedStateFixed solution with either
 % energy metric, including the earlier softplus version) are dropped; when
 % the mode is used, the states the problem has are rebuilt as running
-% integrals along the guess itself. With a mean force target J (not
-% empty), m = J and r is the running integral of sum g(F) (F - J): the
-% guess then satisfies the dynamics of m and r, and r(tf) = Iplus - J *
-% Tplus of the guess is the only violated bound. With useCoT, z_met is the
+% integrals along the guess itself. With a mean force spec (not empty), m
+% is J (equality) or, for a range, the guess's own mean force projected
+% onto [lower, upper] (an initial guess only, not a fixed value), and r is
+% the running integral of sum g(F) (F - m): the guess then satisfies the
+% dynamics of m and r, and r(tf) = Iplus - m * Tplus of the guess is the
+% only violated bound. With useCoT, z_met is the
 % running integral of the guess's own metabolic rate (moco_WoC_evalGaitMetrics,
 % same metabolics as the problem). m returns the guess metrics ([] when the
 % integrator is not used).
@@ -760,14 +843,23 @@ function [guessTraj, m] = matchIntegratorGuess(guessTraj, model, problem, ...
         statePaths = {[componentPath '/effort_integral'], [componentPath '/propulsive_impulse']};
         values = [cumtrapz(m.time, m.effort_rate), ...
                   cumtrapz(m.time, m.gate_impulse_rate)];
-        if ~isempty(meanForceTarget)
+        m.guess_mean_force = trapz(m.time, m.gate_impulse_rate) / trapz(m.time, m.gate_time_rate);
+        m.initial_mean_force = NaN;
+        if ~isempty(meanForceSpec)
+            if meanForceSpec.isRange
+                % guess 자신의 평균 추진력을 구간에 projection한 시작값 (고정값 아님)
+                mInit = min(max(m.guess_mean_force, meanForceSpec.lower), meanForceSpec.upper);
+            else
+                mInit = meanForceSpec.target;
+            end
+            m.initial_mean_force = mInit;
             statePaths = [statePaths, {[componentPath '/mean_propulsive_force'], ...
                                        [componentPath '/mean_force_residual']}];
-            values = [values, repmat(meanForceTarget, numel(m.time), 1), ...
-                      cumtrapz(m.time, m.gate_impulse_rate - meanForceTarget * m.gate_time_rate)];
-            fprintf(['Mean force guess: m = %.6g N, r(tf) = Iplus - J*Tplus = %.4g N*s ', ...
-                     '(guess mean force %.6g N)\n'], meanForceTarget, values(end, end), ...
-                     trapz(m.time, m.gate_impulse_rate) / trapz(m.time, m.gate_time_rate));
+            values = [values, repmat(mInit, numel(m.time), 1), ...
+                      cumtrapz(m.time, m.gate_impulse_rate - mInit * m.gate_time_rate)];
+            fprintf(['Mean force guess (%s): m = %.6g N, r(tf) = Iplus - m*Tplus = %.4g N*s ', ...
+                     '(guess mean force %.6g N)\n'], meanForceSpec.text, mInit, values(end, end), ...
+                     m.guess_mean_force);
         end
         if useCoT
             statePaths = [statePaths, {[componentPath '/metabolic_energy']}];
@@ -808,7 +900,7 @@ function [guessTraj, m] = matchIntegratorGuess(guessTraj, model, problem, ...
 end
 
 
-function checkStateFixedGoals(problem, componentPath, meanForceTarget, ...
+function checks = checkStateFixedGoals(problem, componentPath, propSpec, useMeanForce, ...
         energyMetric, energyTarget, metabolicRatePath)
 % Check on the problem Moco solves that v_avg is the only cost, that the
 % energy (effort E or metabolic CoT) and P are endpoint constraints
@@ -816,11 +908,15 @@ function checkStateFixedGoals(problem, componentPath, meanForceTarget, ...
 % mode would also throw here) and that both read the optimizer's states:
 % MocoCasADiSolver copies them into the SimTK::State only for goals that
 % depend on Stage::Time or later.
-% With a mean force target J, the energy is the only endpoint constraint
-% and the state bounds must be m(t0) = J and r(t0) = r(tf) = 0.
+% The propulsion constraint must have exactly the requested bounds
+% (propSpec): impulse -> propulsion_constraint endpoint bounds [J, J]
+% (equality) or [lower, upper] (range, lower < upper, so a range turned
+% into an equality is caught); meanForce -> no propulsion_constraint, m(t0)
+% bounds [J, J] or [lower, upper], m(tf) free, r(t0) = r(tf) = 0.
 % The energy constraint must read the metric's output with the metric's
 % normalization and bounds [E0, E0], the other energy constraint must be
-% absent, and no periodicity pair may contain an integral state. With the
+% absent, the integral states must start at 0 with free final values, and
+% no periodicity pair may contain an integral state. With the
 % metabolic CoT, every Muscle of the Moco model must be registered in its
 % metabolics, whose total_metabolic_rate drives the integrator.
     import org.opensim.modeling.*
@@ -833,14 +929,17 @@ function checkStateFixedGoals(problem, componentPath, meanForceTarget, ...
     energyName = energyConstraintName(energyMetric);
     otherEnergyName = setdiff({'effort_constraint', 'metabolic_cot_constraint'}, energyName);
     expected = {energyName, 'propulsion_constraint'};
-    if ~isempty(meanForceTarget)
+    if useMeanForce
         expected = {energyName};
     end
     if ~isequal(costs, {'average_speed'}) || ~all(ismember(expected, constraints)) || ...
             any(ismember(otherEnergyName, constraints)) || ...
-            (~isempty(meanForceTarget) && ismember('propulsion_constraint', constraints))
+            (useMeanForce && ismember('propulsion_constraint', constraints))
         error('moco_WoC_loop: min/maxSpeedStateFixed 문제의 cost/endpoint constraint 구성이 예상과 다릅니다.');
     end
+    checks = struct('costs', {costs}, 'endpointConstraints', {constraints}, ...
+        'speedWeight', rep.getCost('average_speed').getWeight(), ...
+        'propulsionMode', propSpec.mode, 'requestedBounds', [propSpec.lower, propSpec.upper]);
 
     % Energy constraint definition on the problem Moco solves.
     goal = MocoFinalOutputGoal.safeDownCast(rep.getEndpointConstraint(energyName));
@@ -859,12 +958,15 @@ function checkStateFixedGoals(problem, componentPath, meanForceTarget, ...
         error('moco_WoC_loop: %s 의 output/정규화/bound가 %s 정의와 다릅니다.', ...
             energyName, energyMetric);
     end
-    energyState = [componentPath '/effort_integral'];
-    if isCoT, energyState = [componentPath '/metabolic_energy']; end
-    initial = rep.getStateInfo(energyState).getInitialBounds();
-    final = rep.getStateInfo(energyState).getFinalBounds();
-    if initial.getLower() ~= 0 || initial.getUpper() ~= 0 || final.isSet()
-        error('moco_WoC_loop: %s 는 t0에서 0이고 tf에서 자유여야 합니다.', energyState);
+    checks.energyBounds = bounds;
+    integralStates = {[componentPath '/effort_integral'], [componentPath '/propulsive_impulse']};
+    if isCoT, integralStates{end+1} = [componentPath '/metabolic_energy']; end
+    for k = 1:numel(integralStates)
+        initial = rep.getStateInfo(integralStates{k}).getInitialBounds();
+        final = rep.getStateInfo(integralStates{k}).getFinalBounds();
+        if initial.getLower() ~= 0 || initial.getUpper() ~= 0 || final.isSet()
+            error('moco_WoC_loop: %s 는 t0에서 0이고 tf에서 자유여야 합니다.', integralStates{k});
+        end
     end
     for k = 1:numel(constraints)
         periodic = MocoPeriodicityGoal.safeDownCast(rep.getEndpointConstraint(constraints{k}));
@@ -892,17 +994,43 @@ function checkStateFixedGoals(problem, componentPath, meanForceTarget, ...
                 metabolicRatePath, connectee);
         end
     end
-    if ~isempty(meanForceTarget)
-        % m(t0) = J and r(t0) = r(tf) = 0 on the problem Moco solves.
-        mInit = rep.getStateInfo([componentPath '/mean_propulsive_force']).getInitialBounds();
+    requested = [propSpec.lower, propSpec.upper];
+    if useMeanForce
+        % m(t0) in [J, J] or [lower, upper], m(tf) free, r(t0) = r(tf) = 0
+        % on the problem Moco solves.
+        mInfo = rep.getStateInfo([componentPath '/mean_propulsive_force']);
+        mInit = [mInfo.getInitialBounds().getLower(), mInfo.getInitialBounds().getUpper()];
         rInfo = rep.getStateInfo([componentPath '/mean_force_residual']);
         rBounds = [rInfo.getInitialBounds().getLower(), rInfo.getInitialBounds().getUpper(), ...
                    rInfo.getFinalBounds().getLower(), rInfo.getFinalBounds().getUpper()];
-        fprintf('  mean_propulsive_force initial bounds: [%g, %g] N | mean_force_residual t0/tf bounds: %s\n', ...
-            mInit.getLower(), mInit.getUpper(), mat2str(rBounds));
-        if mInit.getLower() ~= meanForceTarget || mInit.getUpper() ~= meanForceTarget || any(rBounds ~= 0)
-            error('moco_WoC_loop: 평균 추진력 상태의 bound가 m(t0) = J, r(t0) = r(tf) = 0 이 아닙니다.');
+        fprintf(['  mean_propulsive_force initial bounds: %s N (requested %s, %s) | ', ...
+                 'mean_force_residual t0/tf bounds: %s\n'], mat2str(mInit), mat2str(requested), ...
+                 propSpec.mode, mat2str(rBounds));
+        if ~isequal(mInit, requested) || mInfo.getFinalBounds().isSet() || any(rBounds ~= 0) || ...
+                (propSpec.isRange && ~(mInit(1) < mInit(2)))
+            error(['moco_WoC_loop: 평균 추진력 상태의 bound가 요청(%s %s)과 다릅니다 ', ...
+                   '(m(t0) %s, m(tf) 설정 %d, r %s).'], propSpec.mode, mat2str(requested), ...
+                   mat2str(mInit), mInfo.getFinalBounds().isSet(), mat2str(rBounds));
         end
+        checks.propulsionBounds = mInit;
+        checks.propulsionBoundSource = 'mean_propulsive_force initial bounds';
+    else
+        % impulse: endpoint bounds of propulsion_constraint on scaled_propulsive_impulse
+        % (impulse_scale is applied once inside the output; no normalization).
+        goal = MocoFinalOutputGoal.safeDownCast(rep.getEndpointConstraint('propulsion_constraint'));
+        pBounds = constraintBounds(goal);
+        fprintf('  propulsion_constraint: output %s, endpoint constraint %d, bounds %s (requested %s, %s)\n', ...
+            char(goal.getOutputPath()), goal.getModeIsEndpointConstraint(), mat2str(pBounds), ...
+            mat2str(requested), propSpec.mode);
+        if ~strcmp(char(goal.getOutputPath()), [componentPath '|scaled_propulsive_impulse']) || ...
+                ~goal.getModeIsEndpointConstraint() || goal.getDivideByMass() || ...
+                goal.getDivideByDisplacement() || goal.getDivideByDuration() || ...
+                ~isequal(pBounds, requested) || (propSpec.isRange && ~(pBounds(1) < pBounds(2)))
+            error('moco_WoC_loop: propulsion_constraint의 output/정규화/bound(%s)가 요청(%s %s)과 다릅니다.', ...
+                mat2str(pBounds), propSpec.mode, mat2str(requested));
+        end
+        checks.propulsionBounds = pBounds;
+        checks.propulsionBoundSource = 'propulsion_constraint endpoint bounds';
     end
     stageNames = {'Topology', 'Model (or lower)', 'Instance', 'Time', 'Position', 'Velocity', ...
                   'Dynamics', 'Acceleration', 'Report'};
