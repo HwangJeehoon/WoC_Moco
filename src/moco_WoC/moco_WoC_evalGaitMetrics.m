@@ -6,9 +6,14 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
 %   적분하며(Moco goal, 플러그인 코드, 궤적의 적분 상태 열을 쓰지 않음), 적분
 %   상태 열은 무시한다.
 %
+%   모델별 접촉력 목록, 전진 좌표 경로, lumbar 구동기는 moco_WoC_modelProfile(modelPath)
+%   에서 읽는다 (최적화 적분기와 같은 목록).
+%
 %   E = (1/d) * int sum_c u_c^2 dt
-%       c: AFO_r/AFO_l을 제외한 모델 control (근육 excitation 18개, lumbarAct).
-%       E_afo_simpson은 제외된 AFO control의 진단값이며 E에 합산하지 않는다.
+%       c: AFO_r/AFO_l을 제외한 모델 control (2D: 근육 excitation 18개, lumbarAct;
+%       Rajagopal: 근육 80개, 토크 구동기 13개). 근육/토크 구동기는 component class로
+%       구분한다(moco_WoC_controlGroups). E_afo_simpson은 제외된 AFO control의 진단값이며
+%       E에 합산하지 않는다. E_torque_simpson은 lumbar를 뺀 이상적 토크 구동기 몫.
 %       d: 질량중심 변위 |r_com(tf) - r_com(t0)| (MocoGoal divide_by_displacement)
 %   CoT = int P_met dt / (mass * d)   [J/kg/m]
 %       P_met: moco_WoC_addMetabolics의 Bhargava2004SmoothedMuscleMetabolics
@@ -19,7 +24,8 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
 %       모든 점의 P_met이 basal 값과 같으면(근육 미등록) error.
 %   P_gate = impulseScale * int [F_r g(F_r) + F_l g(F_l)] dt          [N*s]
 %   Tplus  = impulseScale * int [g(F_r) + g(F_l)] dt                    [s]
-%       F_foot = contactHeel x-force + contactFront x-force (발에 작용하는 힘)
+%       F_foot = 그 발의 profile 접촉력 x-force 합 (2D: contactHeel + contactFront,
+%       Rajagopal: 6개 sphere). 발마다 먼저 합산한 뒤 gate를 적용한다.
 %       g(F) = 1 / (1 + exp(-(F - F0) / sigma))  (meanPropPerVel의 MeanPropulsiveForce)
 %       mean_propulsive_force = P_gate / Tplus  (impulseScale은 약분됨)
 %   P_physical = impulseScale * int sum_foot max(F_foot, 0) dt (비교용)
@@ -42,6 +48,7 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
     import org.opensim.modeling.*
     if nargin < 6 || isempty(opts), opts = struct(); end
     computeMetabolics = ~isfield(opts, 'metabolics') || opts.metabolics;
+    profile = moco_WoC_modelProfile(modelPath);
 
     model = Model(modelPath);
     if computeMetabolics
@@ -54,12 +61,9 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
 
     % 모델 control 순서로 궤적 control을 이름으로 배치하고, 궤적에 없는 control
     % (PrescribedController가 정하는 AFO)은 모델에서 계산한다.
-    modelNames = opensimSimulation.createControlNamesFromModel(model);
-    nCtrl = modelNames.size();
-    ctrlNames = cell(nCtrl, 1);
-    for k = 0:nCtrl-1
-        ctrlNames{k+1} = char(modelNames.get(k));
-    end
+    groupsInfo = moco_WoC_controlGroups(model, profile);
+    ctrlNames = groupsInfo.names;
+    nCtrl = numel(ctrlNames);
     trajNames = traj.getControlNames();
     trajCtrl = traj.getControlsTrajectoryMat();
     inTraj = false(nCtrl, 1);
@@ -73,7 +77,7 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
         U(:, idx) = trajCtrl(:, k+1);
         inTraj(idx) = true;
     end
-    notPrescribed = setdiff(ctrlNames(~inTraj), controlledActuatorPaths(model));
+    notPrescribed = setdiff(ctrlNames(~inTraj), ctrlNames(groupsInfo.isPrescribed));
     if ~isempty(notPrescribed)
         error(['moco_WoC_evalGaitMetrics: 궤적에 없고 controller도 정하지 않는 control이 ', ...
                '있습니다: %s'], strjoin(notPrescribed, ', '));
@@ -81,9 +85,16 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
 
     statesTraj = StatesTrajectory.createFromStatesTable(model, ...
         traj.exportToStatesTable(), false, true);
-    contacts = {'/contactHeel_r', '/contactFront_r'; '/contactHeel_l', '/contactFront_l'};
-    forceComps = cellfun(@(p) SmoothSphereHalfSpaceForce.safeDownCast( ...
-        model.getComponent(p)), contacts, 'UniformOutput', false);
+    contacts = {profile.contactPaths.r, profile.contactPaths.l};   % {right, left}
+    forceComps = cell(1, 2);
+    for foot = 1:2
+        forceComps{foot} = cellfun(@(p) SmoothSphereHalfSpaceForce.safeDownCast( ...
+            model.getComponent(p)), contacts{foot}, 'UniformOutput', false);
+        if any(cellfun(@isempty, forceComps{foot}))
+            error('moco_WoC_evalGaitMetrics: SmoothSphereHalfSpaceForce가 아닌 접촉력 경로가 있습니다: %s', ...
+                strjoin(contacts{foot}, ', '));
+        end
+    end
     F = zeros(n, 2);       % [right, left] foot AP force [N]
     com = zeros(n, 3);
     P = NaN(n, 1);         % total metabolic rate [W]
@@ -101,9 +112,9 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
             U(k+1, c) = modelCtrl.get(c-1);
         end
         for foot = 1:2
-            for j = 1:2
+            for j = 1:numel(forceComps{foot})
                 F(k+1, foot) = F(k+1, foot) + ...
-                    forceComps{foot, j}.getSphereForce(s).get(1).get(0);
+                    forceComps{foot}{j}.getSphereForce(s).get(1).get(0);
             end
         end
         r = model.calcMassCenterPosition(s);
@@ -127,16 +138,16 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
     end
 
     G = gate(F, gateSigma, gateThreshold);
-    actuatorNames = regexprep(ctrlNames, '^.*/', '');
-    isAfo = ismember(actuatorNames, {'AFO_r', 'AFO_l'});
-    isMuscle = endsWith(actuatorNames, {'_r', '_l'}) & ~isAfo;
-    groups = struct('muscle', isMuscle, 'lumbar', strcmp(actuatorNames, 'lumbarAct'), ...
-                    'afo', isAfo);
+    isAfo = groupsInfo.isAfo;
+    groups = struct('muscle', groupsInfo.isMuscle, 'lumbar', groupsInfo.isLumbar, ...
+                    'torque', groupsInfo.isTorque & ~groupsInfo.isLumbar, 'afo', isAfo);
 
     w = simpsonWeights(t);
+    m.model_profile = profile.name;
+    m.contact_paths = contacts;
     m.n_points = n;
     m.duration = t(end) - t(1);
-    pelvisTx = traj.getStateMat('/jointset/groundPelvis/pelvis_tx/value');
+    pelvisTx = traj.getStateMat([profile.pelvisCoordinatePath '/value']);
     m.distance = pelvisTx(end) - pelvisTx(1);
     m.v_avg = m.distance / m.duration;
     m.com_displacement = norm(com(end, :) - com(1, :));
@@ -187,26 +198,6 @@ function m = moco_WoC_evalGaitMetrics(modelPath, trajPath, impulseScale, gateSig
             error(['moco_WoC_evalGaitMetrics: 대사율이 모든 점에서 basal 값(%.6g W)과 같습니다. ', ...
                    '근육이 대사 모델에 기여하지 않습니다.'], m.basal_rate_W);
         end
-    end
-end
-
-
-function paths = controlledActuatorPaths(model)
-% 모델의 controller(PrescribedController 등)가 control을 정하는 actuator 경로.
-    import org.opensim.modeling.*
-    paths = {};
-    list = model.getComponentsList();
-    it = list.begin();
-    while ~it.equals(list.end())
-        controller = Controller.safeDownCast(it.deref());
-        if ~isempty(controller)
-            socket = controller.getSocket('actuators');
-            for i = 0:socket.getNumConnectees()-1
-                paths{end+1} = char(Component.safeDownCast( ...
-                    socket.getConnecteeAsObject(i)).getAbsolutePathString()); %#ok<AGROW>
-            end
-        end
-        it.next();
     end
 end
 

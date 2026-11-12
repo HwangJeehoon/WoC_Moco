@@ -123,6 +123,13 @@ if ~ismember(modeType, validModes)
     error('Unknown optMode: ''%s''. Valid options: modeWoC, modeOff, modeSpline, modeTorqAmp.', modeType);
 end
 
+% 모델별 설정 (경로, 접촉력, 분석 setup, 지원 mode). 2D 계열은 기존 동작 그대로다.
+modelProfile = moco_WoC_modelProfile(model);
+if ~ismember(modeType, modelProfile.supportedOptModes)
+    error('WoC_moco_main: %s profile(%s)은 optMode %s 를 지원하지 않습니다 (지원: %s).', ...
+        modelProfile.name, model, modeType, strjoin(modelProfile.supportedOptModes, ', '));
+end
+
 % modeSpline 필수 필드 검증 (루프 진입 전에 미리 확인)
 if strcmpi(modeType, 'modeSpline')
     splineFields = {'trigger', 'rise', 'flat', 'fall', 'maxVal'};
@@ -227,7 +234,7 @@ if strcmp(mocoEnergyMetric, 'effort')
     end
     mocoEffortTarget = mocoEnergyTarget;
     energyUnit = '-';
-    energyDefinition = 'effort: int sum_c u_c^2 dt / d_COM; excludes AFO_r and AFO_l; includes lumbarAct';
+    energyDefinition = ['effort: ' modelProfile.effortDefinition];
 else
     % effort 목표값을 CoT 목표값으로 쓰지 않는다.
     if ~isempty(mocoEffortTarget)
@@ -282,6 +289,10 @@ if ~isscalar(mocoSpeedWeight) || ~isnumeric(mocoSpeedWeight) || ...
     error('opts.mocoSpeedWeight 는 양의 유한 scalar여야 합니다.');
 end
 mocoLumbarControlBound = getOpt(opts, 'mocoLumbarControlBound', []);
+if ~isempty(mocoLumbarControlBound) && ~strcmp(modelProfile.name, '2D')
+    error(['opts.mocoLumbarControlBound 는 2D 모델의 /lumbarAct 전용입니다. %s profile의 ', ...
+           '토크 구동기 bound는 moco_WoC_modelProfile의 torqueLimits로 정합니다.'], modelProfile.name);
+end
 if ~isempty(mocoLumbarControlBound) && (~isnumeric(mocoLumbarControlBound) || ...
         numel(mocoLumbarControlBound) ~= 2 || any(~isfinite(mocoLumbarControlBound)) || ...
         mocoLumbarControlBound(1) >= mocoLumbarControlBound(2))
@@ -347,6 +358,10 @@ end
 if ~ismember(gaitMode, {'modeSym', 'modeAsym'})
     error('opts.gaitMode 는 ''modeSym'' 또는 ''modeAsym'' 이어야 합니다.');
 end
+if ~ismember(gaitMode, modelProfile.supportedGaitModes)
+    error('WoC_moco_main: %s profile(%s)은 gaitMode %s 를 지원하지 않습니다 (지원: %s).', ...
+        modelProfile.name, model, gaitMode, strjoin(modelProfile.supportedGaitModes, ', '));
+end
 
 if ~isfield(opts, 'mocoTimeBound') || isempty(opts.mocoTimeBound)
     mocoTimeBound = [0.4, 0.8];
@@ -389,6 +404,10 @@ if ~isscalar(mocoMaxIterations) || ~isnumeric(mocoMaxIterations) || ...
         mocoMaxIterations ~= round(mocoMaxIterations)
     error('opts.mocoMaxIterations 는 1 이상의 정수 scalar여야 합니다.');
 end
+% 설정 점검용: true면 Moco 문제/guess를 만들고 검사한 뒤 solve 대신 이름 기준으로
+% 재구성한 initial guess를 결과 파일로 저장하고 후처리(GRF, 분석, ID)를 그대로 돌린다.
+% parameters.csv의 mocoSkipSolve = 1로 남고 summary는 최적화 결과로 판정하지 않는다.
+mocoSkipSolve = logical(getOpt(opts, 'mocoSkipSolve', false));
 
 %% --------------------------------------------------
 %  0. baseFolder = 이 파일이 있는 폴더
@@ -468,8 +487,12 @@ if isStateFixed
         mocoPropulsionGateSigma, mocoPropulsionGateThreshold);
 end
 fprintf('  gaitMode     : %s\n',   gaitMode);
-fprintf('  mocoTimeBound: %s\n',   mat2str(mocoTimeBound));
-fprintf('  mocoDistBound: %s\n',   mat2str(mocoDistBound));
+fprintf('  model profile: %s (forward coordinate %s, %d+%d contact forces)\n', modelProfile.name, ...
+    modelProfile.pelvisCoordinatePath, numel(modelProfile.contactPaths.r), numel(modelProfile.contactPaths.l));
+fprintf('  mocoTimeBound: %s (input, half stride) -> applied final time %s s\n', ...
+    mat2str(mocoTimeBound), mat2str(mocoTimeBound * boundScale));
+fprintf('  mocoDistBound: %s (input, half stride) -> applied final pelvis_tx %s m\n', ...
+    mat2str(mocoDistBound), mat2str(mocoDistBound * boundScale));
 fprintf('  mocoMeshIntervals: %d, convergence tol: %.3g, constraint tol: %.3g, max iterations: %d\n', ...
     mocoMeshIntervals, mocoConvergenceTolerance, mocoConstraintTolerance, mocoMaxIterations);
 fprintf('================================\n');
@@ -535,6 +558,9 @@ MocoOpts.mocoMeshIntervals = mocoMeshIntervals;
 MocoOpts.mocoConvergenceTolerance = mocoConvergenceTolerance;
 MocoOpts.mocoConstraintTolerance  = mocoConstraintTolerance;
 MocoOpts.mocoMaxIterations = mocoMaxIterations;
+if mocoSkipSolve
+    MocoOpts.mocoSkipSolve = true;   % 2D 기본 실행의 parameter 목록은 바꾸지 않는다
+end
 
 % result_i/moco_result/*_parameters.csv 로 기록할 parameter
 % (iteration별 항목은 메인 루프에서 추가한다).
@@ -553,11 +579,19 @@ for f = fieldnames(MocoOpts)'
     runParams(end+1, :) = {f{1}, MocoOpts.(f{1})}; %#ok<AGROW>
 end
 % boundScale / effPropulsionReferenceDuration 은 파라미터 출력 전에 계산함.
+% mocoTimeBound / mocoDistBound (위 MocoOpts 항목)는 반주기 기준 입력값이고,
+% effective_* 는 moco_WoC_loop가 실제로 적용하는 값이다 (modeAsym x2, 한 번만).
 runParams = [runParams; ...
-    {'effective_final_time_bound_s', mocoTimeBound * boundScale; ...
+    {'model_profile', modelProfile.name; ...
+     'input_time_bound_half_stride_s', mocoTimeBound; ...
+     'input_pelvis_tx_bound_half_stride_m', mocoDistBound; ...
+     'effective_final_time_bound_s', mocoTimeBound * boundScale; ...
      'effective_final_pelvis_tx_bound_m', mocoDistBound * boundScale; ...
+     'forward_coordinate', modelProfile.pelvisCoordinatePath; ...
+     'contact_forces_right', strjoin(modelProfile.contactPaths.r, ' '); ...
+     'contact_forces_left', strjoin(modelProfile.contactPaths.l, ' '); ...
      'results_root', resultsRoot; ...
-     'effort_definition', 'int sum_c u_c^2 dt / d_COM; excludes AFO_r and AFO_l; includes lumbarAct'}];
+     'effort_definition', modelProfile.effortDefinition}];
 if isStateFixed
     % E0가 고정한 에너지 지표. 이 항목이 없는 이전 결과는 effort 지표로 읽는다.
     runParams = [runParams; {'energy_metric', mocoEnergyMetric; 'energy_unit', energyUnit; ...
@@ -602,7 +636,12 @@ else
     heightSuffix = '';
 end
 
-if strcmpi(gaitMode, 'modeAsym')
+if ~isempty(modelProfile.defaultGuessFile)
+    % profile 전용 기본 guess/GRF (예: rajagopal_AFO). stateFixed 실행은 opts.guessInitSto로
+    % 정렬된 작업용 사본을 넘긴다.
+    guessInitSto = fullfile(inputPath, modelProfile.defaultGuessFile);
+    grfInitSto   = fullfile(inputPath, modelProfile.defaultGrfFile);
+elseif strcmpi(gaitMode, 'modeAsym')
     guessInitSto = fullfile(inputPath, ['guess_init_full' heightSuffix '.sto']);
     grfInitSto   = fullfile(inputPath, 'GRF_init_full.sto');
 else  % modeSym
@@ -611,7 +650,10 @@ else  % modeSym
 end
 
 [~, guessInitName, guessInitExt] = fileparts(guessInitSto);
-AnalySetupPath = fullfile(inputPath, 'analysis_setup.xml');
+% 분석 setup과 출력 파일 접두어 (2D: analysis_setup.xml / 2D_gait_AFO_pc_*,
+% Rajagopal: analysis_setup_rajagopal.xml / rajagopal_AFO_*, 전체 모델 COM)
+AnalySetupPath = fullfile(inputPath, modelProfile.analysisSetupFile);
+analysisPrefix = modelProfile.analysisPrefix;
 modelPath      = fullfile(baseFolder, '..','models');
 
 %% --------------------------------------------------
@@ -773,8 +815,8 @@ for i = startIter:endIter
             % (analysis 결과는 prevAnalyDir에서 읽음 — 이전 iter 결과)
             %--------------------------------------------
 
-            CoMPath   = fullfile(prevAnalyDir, '2D_gait_AFO_pc_PointKinematics_CoM_pos.sto');
-            CoP_RPath = fullfile(prevAnalyDir, '2D_gait_AFO_pc_PointKinematics_CoP_R_pos.sto');
+            CoMPath   = fullfile(prevAnalyDir, [analysisPrefix '_PointKinematics_CoM_pos.sto']);
+            CoP_RPath = fullfile(prevAnalyDir, [analysisPrefix '_PointKinematics_CoP_R_pos.sto']);
 
             % 3-3. GRF에서 오른발 stance time 추출
             [stanceTimeR_101, fullTime] = WoC_moco_detectStance(prevGrfPath);
@@ -785,9 +827,9 @@ for i = startIter:endIter
             optsCalQP.CoP_RFields = {'state_0','state_1','state_2'};
             optsCalQP.apAxis   = 'x';
             optsCalQP.vertAxis = 'y';
-            optsCalQP.wPath  = fullfile(prevAnalyDir, '2D_gait_AFO_pc_Kinematics_u.sto');
+            optsCalQP.wPath  = fullfile(prevAnalyDir, [analysisPrefix '_Kinematics_u.sto']);
             optsCalQP.wField = 'ankle_angle_r';
-            optsCalQP.vPath  = fullfile(prevAnalyDir, '2D_gait_AFO_pc_Kinematics_u.sto');
+            optsCalQP.vPath  = fullfile(prevAnalyDir, [analysisPrefix '_Kinematics_u.sto']);
             optsCalQP.vField = 'pelvis_tx';
 
             [etaR_101, wR_101, v_101, dt] = WoC_moco_cal_QP_input( ...
@@ -980,14 +1022,20 @@ for i = startIter:endIter
                      'control_sto', controlRefStoPath; ...
                      'saved_at', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'))}]);
 
-    sol = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, baseOsimPath, MocoOpts);
+    [sol, loopSetup] = moco_WoC_loop(controlRefStoPath, guessStoPath, i, AnalyResultDir, baseOsimPath, MocoOpts);
+    if mocoSkipSolve
+        % 설정 점검: solve하지 않고 문제 순서로 재구성한 initial guess로 후처리를 점검한다.
+        warning('WoC_moco_main:SkipSolve', ...
+            '[Iter %d] mocoSkipSolve: solve 생략, initial guess를 결과 파일로 저장합니다 (설정 점검용).', i);
+        sol = loopSetup.guess;
+    end
 
     %------------------------------------------------
     % 3-8b. Sealed 검사: solver 실패(미수렴/max iter) 시
     %        unseal 후 _unseal 접미사로 저장하고 루프 종료.
     %        수렴하지 않은 궤적을 이후 analysis / ID에 넘기지 않는다.
     %------------------------------------------------
-    if sol.isSealed()
+    if ~mocoSkipSolve && sol.isSealed()   % (설정 점검의 guess는 MocoSolution이 아니다)
         warning('[Iter %d] Solver did not converge (solution sealed). Saving partial result and stopping.', i);
         sol.unseal();
         resOpts_unseal           = struct();
@@ -1031,7 +1079,7 @@ for i = startIter:endIter
     %------------------------------------------------
 
     idXmlPath      = fullfile(inputPath, 'id_setup.xml');
-    kinQStoPath    = fullfile(AnalyResultDir, '2D_gait_AFO_pc_Kinematics_q.sto');
+    kinQStoPath    = fullfile(AnalyResultDir, [analysisPrefix '_Kinematics_q.sto']);
     % GRF_setup_id.xml이 analy_result/에 저장되므로 moco_result/는 상대경로 ../moco_result/
     currGrfStoPath = sprintf('../moco_result/moco_WoC_Solution_iter%02d_GRF.sto', i);
 
@@ -1048,6 +1096,7 @@ for i = startIter:endIter
     idTool.setExternalLoadsFileName(tempGrfXml);
     idTool.setResultsDir(AnalyResultDir);
     idTool.setOutputGenForceFileName('id_withAssist.sto');
+    applyIdExcludedForces(idTool, modelProfile, idXmlPath);
     idTool.run();
 
     % without assist (origin model)
@@ -1057,6 +1106,7 @@ for i = startIter:endIter
     idTool2.setExternalLoadsFileName(tempGrfXml);
     idTool2.setResultsDir(AnalyResultDir);
     idTool2.setOutputGenForceFileName('id_withoutAssist.sto');
+    applyIdExcludedForces(idTool2, modelProfile, idXmlPath);
     idTool2.run();
 
     fprintf('Iteration %d done.\n', i);
@@ -1071,6 +1121,27 @@ end
 fprintf('All iterations finished.\n');
 end
 
+
+%% ---- ID 제외 force ----
+function applyIdExcludedForces(idTool, modelProfile, idXmlPath)
+% id_setup.xml의 forces_to_exclude(Muscles)에 profile의 접촉력을 더한다. GRF 파일이
+% 같은 접촉력에서 만든 외력이므로, 모델 접촉력을 함께 적용하면 이중으로 들어간다.
+% (2D profile은 추가 항목이 없어 기존 동작과 같다.)
+    import org.opensim.modeling.*
+    if isempty(modelProfile.idExtraExcludedForces), return; end
+    doc = xmlread(idXmlPath);
+    node = doc.getElementsByTagName('forces_to_exclude');
+    existing = {};
+    if node.getLength() > 0
+        existing = strsplit(strtrim(char(node.item(0).getTextContent())));
+        existing = existing(~cellfun(@isempty, existing));
+    end
+    names = ArrayStr();
+    for name = [existing, modelProfile.idExtraExcludedForces]
+        names.append(name{1});
+    end
+    idTool.setExcludedForces(names);
+end
 
 %% ---- 옵션 읽기용 헬퍼 ----
 function val = getOpt(s, field, defaultVal)

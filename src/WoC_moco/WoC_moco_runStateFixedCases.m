@@ -30,7 +30,10 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 %     gateSigma, gateThreshold : propulsion gate sigma, F0 [N]
 %     model, optMode, gaitMode, guessSto ('' 이면 WoC_moco_main 기본 guess,
 %                          J_targets와 길이가 같은 cell이면 case k가 guessSto{k}에서 시작)
-%     timeBound, distBound : 반 걸음 기준 bound (modeAsym은 WoC_moco_main이 x2)
+%     timeBound, distBound : 반 걸음 기준 bound (modeAsym은 moco_WoC_loop가 한 번 x2).
+%                          summary에는 입력값(TimeBoundInput_s, DistBoundInput_m)과
+%                          실제 적용값(TimeBound_s, DistBound_m)을 함께 기록한다.
+%     (모델별 경로·접촉력·COM 파일은 moco_WoC_modelProfile(cfg.model))
 %     meshIntervals, convergenceTolerance, constraintTolerance, maxIterations
 %     energyTol, propulsionTol : equality 검증 허용오차 (|E-E0| [energyMetric 단위],
 %                          |J 지표 - J| [N*s 또는 N]). energyTol이 없으면 이전 이름
@@ -47,6 +50,7 @@ function summary = WoC_moco_runStateFixedCases(cfg)
 %   반환: summary table (summary.csv와 같은 내용)
 
     validateTargets(cfg.E0, cfg.J_targets);
+    cfg.modelProfile = moco_WoC_modelProfile(cfg.model);
     if ~isfield(cfg, 'speedWeight'), cfg.speedWeight = 1; end
     if ~isfield(cfg, 'objectiveMode'), cfg.objectiveMode = 'minSpeedStateFixed'; end
     if ~ismember(cfg.objectiveMode, {'minSpeedStateFixed', 'maxSpeedStateFixed'})
@@ -94,8 +98,15 @@ function summary = WoC_moco_runStateFixedCases(cfg)
     boundScale = 1 + ~isSym;      % WoC_moco_main/moco_WoC_loop의 modeAsym bound 규칙
     [~, modelName] = fileparts(cfg.model);
     nCase = numel(cfg.J_targets);
-    caseNames = arrayfun(@(k) sprintf('%s_%s_J%d', cfg.runTag, modeTag, k), ...
-        1:nCase, 'UniformOutput', false);
+    if isfield(cfg, 'caseNameUsesTargetValue') && cfg.caseNameUsesTargetValue
+        % case 이름에 J 값 자체를 쓴다 (예: J32, 32.5 -> J32p5)
+        jTags = arrayfun(@(J) ['J' strrep(sprintf('%g', J), '.', 'p')], cfg.J_targets, ...
+            'UniformOutput', false);
+    else
+        jTags = arrayfun(@(k) sprintf('J%d', k), 1:nCase, 'UniformOutput', false);
+    end
+    caseNames = cellfun(@(j) sprintf('%s_%s_%s', cfg.runTag, modeTag, j), jTags, ...
+        'UniformOutput', false);
     caseNames = indexedCaseNames(resultsRoot, caseNames, indexPrefix, cfg.runOptimizations);
     caseDirs = fullfile(resultsRoot, caseNames);
 
@@ -135,6 +146,9 @@ function summary = WoC_moco_runStateFixedCases(cfg)
             opts.mocoMaxIterations = cfg.maxIterations;
             if iscell(guess), opts.guessInitSto = guess{k}; else, opts.guessInitSto = guess; end
             opts.resultsDir = resultsRoot;
+            if isfield(cfg, 'skipSolve') && cfg.skipSolve
+                opts.mocoSkipSolve = true;   % 설정 점검 (solve 없음)
+            end
             fprintf('\n===== %s case %d/%d: E0=%.6g %s (%s), J=%.6g %s (%s) =====\n', ...
                 cfg.objectiveMode, k, nCase, cfg.E0, energyUnitOf(cfg.energyMetric), ...
                 cfg.energyMetric, cfg.J_targets(k), unit, cfg.propulsionMetric);
@@ -187,7 +201,7 @@ function summary = WoC_moco_runStateFixedCases(cfg)
         {'v_avg_mps', 'BoundHits'}]));
 
     try
-        plotCases(summary, summaryDir);
+        plotCases(summary, summaryDir, cfg.modelProfile);
     catch ME
         warning('WoC_moco_runStateFixedCases:PlotFailed', '그림 저장 실패: %s', ME.message);
     end
@@ -259,7 +273,7 @@ function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
         'ObjectiveMode', string(cfg.objectiveMode), ...
         'EnergyMetric', string(cfg.energyMetric), ...
         'EnergyUnit', string(energyUnitOf(cfg.energyMetric)), ...
-        'EnergyDefinition', string(energyDefinitionOf(cfg.energyMetric)), ...
+        'EnergyDefinition', string(energyDefinitionOf(cfg.energyMetric, cfg.modelProfile)), ...
         'PropulsionMetric', string(cfg.propulsionMetric), 'PropulsionDefinition', "", ...
         'Verdict', "", 'SolverStatus', "missing", 'Converged', false, ...
         'Iterations', NaN, 'SolverTime_s', NaN, 'Objective', NaN, ...
@@ -274,7 +288,7 @@ function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
         'v_avg_mps', NaN, 'PhaseDistance_m', NaN, 'PhaseDuration_s', NaN, ...
         'StrideLength_m', NaN, 'StrideTime_s', NaN, 'BoundHits', "", ...
         'Effort_simpson', NaN, 'Effort_trapz', NaN, 'Effort_constraint_value', NaN, ...
-        'Effort_muscle', NaN, 'Effort_lumbar', NaN, 'Effort_afo', NaN, ...
+        'Effort_muscle', NaN, 'Effort_lumbar', NaN, 'Effort_torque', NaN, 'Effort_afo', NaN, ...
         'MetabolicEnergy_J', NaN, 'MetabolicEnergy_trapz_J', NaN, 'MetabolicEnergy_state_J', NaN, ...
         'Mass_kg', NaN, 'COMDisplacement_m', NaN, 'CoT_simpson', NaN, 'CoT_trapz', NaN, ...
         'CoT_constraint_value', NaN, 'CoT_fullStride', NaN, 'BasalRate_W', NaN, ...
@@ -284,10 +298,14 @@ function row = emptyRow(cfg, resultDir, caseName, k, impulseScale, boundScale)
         'Indep_P_physical', NaN, 'Indep_Effort_noAFO', NaN, ...
         'GateSigma_N', cfg.gateSigma, 'GateThreshold_N', cfg.gateThreshold, ...
         'ImpulseScale', impulseScale, 'SpeedWeight', cfg.speedWeight, ...
-        'Model', string(cfg.model), 'OptMode', string(cfg.optMode), ...
+        'Model', string(cfg.model), 'ModelProfile', string(cfg.modelProfile.name), ...
+        'ContactForcesPerFoot', numel(cfg.modelProfile.contactPaths.r), ...
+        'OptMode', string(cfg.optMode), ...
         'GaitMode', string(cfg.gaitMode), 'Guess', "", ...
         'MeshIntervals', cfg.meshIntervals, 'ConvergenceTol', cfg.convergenceTolerance, ...
         'ConstraintTol', cfg.constraintTolerance, 'MaxIterations', cfg.maxIterations, ...
+        'TimeBoundInput_s', string(mat2str(cfg.timeBound)), ...
+        'DistBoundInput_m', string(mat2str(cfg.distBound)), ...
         'TimeBound_s', string(mat2str(cfg.timeBound * boundScale)), ...
         'DistBound_m', string(mat2str(cfg.distBound * boundScale)), ...
         'EnergyTol', cfg.energyTol, 'PropulsionTol', cfg.propulsionTol, ...
@@ -327,7 +345,7 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     end
     row.EnergyMetric = string(runEnergyMetric);
     row.EnergyUnit = string(energyUnitOf(runEnergyMetric));
-    row.EnergyDefinition = string(energyDefinitionOf(runEnergyMetric));
+    row.EnergyDefinition = string(energyDefinitionOf(runEnergyMetric, cfg.modelProfile));
     if isfield(params, 'mocoEnergyTarget') && ~isempty(params.mocoEnergyTarget)
         row.E_target = str2double(params.mocoEnergyTarget);
     elseif isfield(params, 'mocoEffortTarget') && strcmp(runEnergyMetric, 'effort')
@@ -374,11 +392,15 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     end
 
     hdr = readStoHeader(solFile);
-    row.SolverStatus = string(hdr.status);
-    row.Converged = ~unseal && strcmp(hdr.success, 'true');
-    row.Iterations = str2double(hdr.num_iterations);
-    row.SolverTime_s = str2double(hdr.solver_duration);
-    row.Objective = str2double(hdr.objective);
+    isSetupCheck = isfield(params, 'mocoSkipSolve') && strcmp(params.mocoSkipSolve, '1');
+    row.SolverStatus = string(headerValue(hdr, 'status', 'missing'));
+    row.Converged = ~isSetupCheck && ~unseal && strcmp(headerValue(hdr, 'success', ''), 'true');
+    row.Iterations = str2double(headerValue(hdr, 'num_iterations', 'NaN'));
+    row.SolverTime_s = str2double(headerValue(hdr, 'solver_duration', 'NaN'));
+    row.Objective = str2double(headerValue(hdr, 'objective', 'NaN'));
+    if isSetupCheck
+        row.SolverStatus = "not solved (mocoSkipSolve setup check)";
+    end
     termNames = fieldnames(hdr);
     termNames = termNames(startsWith(termNames, 'objective_'));
     row.ObjectiveTerms = strjoin(erase(termNames, 'objective_'), ';');
@@ -406,6 +428,7 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     row.Effort_trapz = m.E_trapz;
     row.Effort_muscle = m.E_muscle_simpson;
     row.Effort_lumbar = m.E_lumbar_simpson;
+    row.Effort_torque = m.E_torque_simpson;
     row.Effort_afo = m.E_afo_simpson;
     row.MetabolicEnergy_J = m.metabolic_energy_simpson;
     row.MetabolicEnergy_trapz_J = m.metabolic_energy_trapz;
@@ -474,10 +497,12 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     prefix = 'moco_WoC_Solution_iter01';
     if unseal, prefix = [prefix '_unseal']; end
     mocoDir = fullfile(resultDir, 'result_1', 'moco_result');
-    [kin, kinLabels] = readSto(fullfile(mocoDir, [prefix '_kinematics.sto']));
+    kinPath = fullfile(mocoDir, [prefix '_kinematics.sto']);
+    [kin, kinLabels] = readSto(kinPath);
     [grf, grfLabels] = readSto(fullfile(mocoDir, [prefix '_GRF.sto']));
     t = kin(:, 1);
-    tx = kin(:, strcmp(kinLabels, '/jointset/groundPelvis/pelvis_tx/value'));
+    profile = cfg.modelProfile;
+    tx = kin(:, strcmp(kinLabels, [profile.pelvisCoordinatePath '/value']));
     row.Indep_v_avg_mps = (tx(end) - tx(1)) / (t(end) - t(1));
     fap = [grf(:, strcmp(grfLabels, 'ground_force_r_vx')), ...
            grf(:, strcmp(grfLabels, 'ground_force_l_vx'))];
@@ -485,22 +510,34 @@ function row = summarizeCase(cfg, resultDir, caseName, k, isSym, impulseScale, .
     row.Indep_P_gate = sum(trapz(grf(:, 1), fap .* g));
     row.Indep_Tplus_s = sum(trapz(grf(:, 1), g));
     row.Indep_P_physical = sum(trapz(grf(:, 1), max(fap, 0)));
+    % COM 변위: profile의 분석 출력 (2D: pelvis 고정점 "CoM", Rajagopal: 전체 모델
+    % 질량중심 BodyKinematics center_of_mass).
     comFile = fullfile(resultDir, 'result_1', 'analy_result', ...
-        '2D_gait_AFO_pc_PointKinematics_CoM_pos.sto');
+        [profile.analysisPrefix profile.comFileSuffix]);
     if isfile(comFile)
-        % 궤적에 저장된 control(근육, lumbarAct). AFO 열이 있어도 명시적으로 제외한다.
-        com = readSto(comFile);
-        isControl = ~startsWith(kinLabels, {'/jointset', '/effortPropulsion'}) & ...
-            ~endsWith(kinLabels, '/activation') & ~strcmp(kinLabels, 'time') & ...
-            ~ismember(regexprep(kinLabels, '^.*/', ''), {'AFO_r', 'AFO_l'});
-        row.Indep_Effort_noAFO = trapz(t, sum(kin(:, isControl).^2, 2)) / ...
-            norm(com(end, 2:4) - com(1, 2:4));
+        % 궤적에 저장된 control: .sto header의 num_states/num_controls로 열 범위를 정한다
+        % (상태·multiplier·slack 열을 control로 세지 않는다). AFO 열은 명시적으로 제외.
+        [com, comLabels] = readSto(comFile);
+        comXYZ = com(:, ismember(comLabels, profile.comColumns));
+        kinHdr = readStoHeader(kinPath);
+        nStates = str2double(kinHdr.num_states);
+        nControls = str2double(kinHdr.num_controls);
+        isControl = false(size(kinLabels));
+        isControl(1 + nStates + (1:nControls)) = true;
+        isControl = isControl & ~ismember(regexprep(kinLabels, '^.*/', ''), {'AFO_r', 'AFO_l'});
+        if size(comXYZ, 2) == 3
+            row.Indep_Effort_noAFO = trapz(t, sum(kin(:, isControl).^2, 2)) / ...
+                norm(comXYZ(end, :) - comXYZ(1, :));
+        end
     end
 
     % 판정에 쓰는 propulsion equality: 실행 당시 지표 (P_gate 또는 평균 추진력).
     propulsionPass = row.P_gate_pass;
     if row.PropulsionMetric == "meanForce", propulsionPass = row.MPF_pass; end
-    if row.EnergyMetric ~= string(cfg.energyMetric)
+    if isSetupCheck
+        % solve하지 않은 설정 점검 결과는 최적화 결과로 판정하지 않는다.
+        row.Verdict = "Setup check (no solve)";
+    elseif row.EnergyMetric ~= string(cfg.energyMetric)
         % 다른 에너지 지표의 결과를 이 지표의 target과 tolerance로 판정하지 않는다.
         row.E_pass = false;
         row.Verdict = "Energy metric mismatch (run " + row.EnergyMetric + ...
@@ -542,6 +579,11 @@ function params = readParams(path)
 end
 
 
+function v = headerValue(hdr, key, defaultValue)
+    if isfield(hdr, key), v = hdr.(key); else, v = defaultValue; end
+end
+
+
 function hdr = readStoHeader(path)
     hdr = struct();
     fid = fopen(path);
@@ -578,6 +620,7 @@ end
 function writeDefinitions(path, cfg, impulseScale, boundScale)
     fid = fopen(path, 'w');
     cleaner = onCleanup(@() fclose(fid));
+    profile = cfg.modelProfile;
     isMax = strcmp(cfg.objectiveMode, 'maxSpeedStateFixed');
     speedVerb = 'minimize';
     if isMax, speedVerb = 'maximize'; end
@@ -635,17 +678,19 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
     else
         energyLines = {
             'E = (1/d_COM) * int sum_c u_c^2 dt (energy_metric effort)'
-            '    c = model controls excluding AFO_r/AFO_l, weight 1: 18 muscle excitations and'
-            '        lumbarAct (CoordinateActuator, optimal force 1, control = N*m). No reserve actuators.'
+            ['    c = model controls excluding AFO_r/AFO_l, weight 1: ' profile.effortControlsText '.']
+            '        No reserve actuators.'
             '    AFO controls are explicitly excluded in both the integrator and weighted effort goal.'
             '    d_COM = |r_COM(tf) - r_COM(t0)|; identical to the weighted-mode effort goal before weight.'};
     end
     lines = [metricLines; {
+        sprintf('model: %s (profile %s), forward coordinate %s, optMode %s, gaitMode %s', ...
+            cfg.model, profile.name, profile.pelvisCoordinatePath, cfg.optMode, cfg.gaitMode)
         ''
         sprintf(['v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)  [m/s] ', ...
                  '(only Moco cost, weight %g)'], (1 - 2*isMax) * cfg.speedWeight)}; energyLines; {
         sprintf('P_gate = %d * int_phase [F_r g(F_r) + F_l g(F_l)] dt  [N*s] (one stride, both feet)', impulseScale)
-        '    F_foot = contactHeel x-force + contactFront x-force on the foot (summed per foot, then gated)'
+        ['    F_foot = x-force on the foot of ' profile.contactDescription ' (summed per foot, then gated)']
         sprintf('    g(F) = 1 / (1 + exp(-(F - F0)/sigma)), sigma = %.4g N, F0 = %.4g N', cfg.gateSigma, cfg.gateThreshold)
         '    modeSym solves a half stride: the full stride P_gate is 2x the half-stride integral; modeAsym: 1x.'
         '    Not divided by Tplus, stride time, speed, distance, BW or a reference duration.'
@@ -669,8 +714,11 @@ function writeDefinitions(path, cfg, impulseScale, boundScale)
         'Runs without energy_metric in *_parameters.csv are effort runs.'
         'Targets and gate parameters of each case are read from its *_parameters.csv; runs without'
         '    propulsion_definition (earlier softplus version) are marked softplus_legacy, not gate.'
-        sprintf('bounds (phase): time %s s, pelvis_tx %s m; BoundHits tolerance 1e-4', ...
+        sprintf(['bounds: input (half stride) time %s s, dist %s m -> applied (solved phase, x%d once) ', ...
+                 'final time %s s, final pelvis_tx %s m, t0 = 0, pelvis_tx(t0) = 0; BoundHits tolerance 1e-4'], ...
+            mat2str(cfg.timeBound), mat2str(cfg.distBound), boundScale, ...
             mat2str(cfg.timeBound * boundScale), mat2str(cfg.distBound * boundScale))
+        sprintf('COM for Indep_Effort_noAFO: %s', profile.comDescription)
         tolLine
         'Verdict: solver convergence and equality satisfaction are judged separately;'
         '         a case that did not converge is not reported as infeasible.'
@@ -684,17 +732,17 @@ function unit = energyUnitOf(energyMetric)
 end
 
 
-function text = energyDefinitionOf(energyMetric)
+function text = energyDefinitionOf(energyMetric, profile)
     if strcmp(energyMetric, 'metabolicCoT')
         text = ['int total_metabolic_rate dt / (mass * d_COM); Bhargava2004 smoothed, ', ...
                 'basal included; solved phase'];
     else
-        text = 'int sum_c u_c^2 dt / d_COM; excludes AFO_r/AFO_l; includes lumbarAct';
+        text = profile.effortDefinitionShort;
     end
 end
 
 
-function plotCases(summary, outDir)
+function plotCases(summary, outDir, profile)
 % Case 색은 J 순서(entity)로 고정한다. 성공/실패는 마커 채움과 라벨로 표시한다.
     % 에너지 축은 한 지표만 그린다 (effort와 CoT 결과를 한 축에 섞지 않는다).
     if numel(unique(summary.EnergyMetric)) ~= 1
@@ -809,7 +857,8 @@ function plotCases(summary, outDir)
         yline(ax, 0, 'Color', ink(2, :), 'HandleVisibility', 'off');
         xlabel(ax, 'Stride (%) from t_0 of the solved trajectory');
         ylabel(ax, 'AP-GRF on foot (N)');
-        title(ax, sprintf('%s foot AP-GRF (heel + front)', sides{p, 2}), 'Color', ink(1, :));
+        title(ax, sprintf('%s foot AP-GRF (%d contact forces)', sides{p, 2}, ...
+            numel(profile.contactPaths.(sides{p, 1}))), 'Color', ink(1, :));
         if p == 1, legend(ax, 'Location', 'best', 'Box', 'off'); end
     end
     saveFigure(fig, fullfile(outDir, 'ap_grf.png'));
@@ -819,7 +868,7 @@ function plotCases(summary, outDir)
     for k = 1:n
         [kin, labels] = caseFile(summary(k, :), 'kinematics');
         if isempty(kin), continue; end
-        plot(ax, cyclePct(kin(:, 1)), kin(:, strcmp(labels, '/jointset/groundPelvis/pelvis_tx/speed')), ...
+        plot(ax, cyclePct(kin(:, 1)), kin(:, strcmp(labels, [profile.pelvisCoordinatePath '/speed'])), ...
             'Color', caseColor(k), 'LineWidth', 2, 'LineStyle', lineStyle(ok(k)), ...
             'DisplayName', sprintf('J%d: v_{avg} = %.3f m/s (%s)', k, summary.v_avg_mps(k), shortVerdict(k)));
     end

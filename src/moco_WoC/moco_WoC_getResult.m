@@ -77,12 +77,13 @@ function moco_WoC_getResult(moco_WoC_Solution, outputDir, opts)
     model = Model(modelPath);
     model.initSystem();
 
+    % 발마다 profile의 접촉력 전체(2D: heel + front, Rajagopal: 6개)를 합산한
+    % GRF와 접촉력 기반 CoP (최적화 적분기와 같은 목록).
+    profile = moco_WoC_modelProfile(modelPath);
     contact_r = StdVectorString();
     contact_l = StdVectorString();
-    contact_r.add('contactHeel_r');
-    contact_r.add('contactFront_r');
-    contact_l.add('contactHeel_l');
-    contact_l.add('contactFront_l');
+    for k = 1:numel(profile.contactPaths.r), contact_r.add(profile.contactPaths.r{k}); end
+    for k = 1:numel(profile.contactPaths.l), contact_l.add(profile.contactPaths.l{k}); end
 
     % minSpeedStateFixed 적분 상태처럼 modelPath 모델에 없는 상태 열은 무시한다
     % (MocoTrajectory 버전은 추가 열이 있으면 예외). 누락 열은 허용하지 않는다.

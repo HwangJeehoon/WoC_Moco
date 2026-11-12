@@ -1,9 +1,19 @@
-function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, resultsDir, modelPath, opts)
+function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessStoPath, i, resultsDir, modelPath, opts)
 % moco_WoC_loop
 %
 %   AFO reference control(.sto)와 initial guess(.sto)를 받아
 %   moco_WoC gait prediction 문제를 세팅하고 solve한 뒤
 %   MocoTrajectory를 반환하는 함수.
+%
+%   모델별 설정은 moco_WoC_modelProfile(modelPath)에서 읽는다.
+%     '2D'        : 기존 동작 (groundPelvis, heel/front 접촉, lumbarAct, 2D bound)
+%     'rajagopal' : modeAsym만. ground_pelvis, 발당 접촉력 6개, 관절각/토크 구동기
+%                   bound, 발 사이·팔-몸통 MocoFrameDistanceConstraint, 종속 슬개골
+%                   좌표를 뺀 주기성, 모든 optimization control 주기성, 슬개골 coupler용
+%                   solver 설정, 이름 기준 initial guess (multiplier/slack 포함).
+%   두 번째 출력 setup (struct)에는 study, problem, solver, guess, profile 등이 들어 있다.
+%   opts.mocoSkipSolve = true 이면 문제/guess 구성과 검사까지만 하고 solve하지 않는다
+%   (moco_WoC_Solution = []).
 %
 %   입력:
 %     controlInitStoPath : AFO reference control .sto 경로
@@ -82,6 +92,24 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     impulseScale = 1 + strcmpi(gaitMode, 'modeSym');
     mocoTimeBound    = opts.mocoTimeBound;
     mocoDistBound    = opts.mocoDistBound;
+    skipSolve        = getOpt(opts, 'mocoSkipSolve', false);
+    setup = struct();
+
+    profile = moco_WoC_modelProfile(modelPath);
+    pelvisTxValue = [profile.pelvisCoordinatePath '/value'];
+    if ~ismember(gaitMode, profile.supportedGaitModes)
+        error('moco_WoC_loop: %s profile은 gaitMode %s 를 지원하지 않습니다 (지원: %s).', ...
+            profile.name, gaitMode, strjoin(profile.supportedGaitModes, ', '));
+    end
+    if ~strcmp(profile.name, '2D')
+        % 2D 전용 설정이 다른 모델에 조용히 적용되지 않게 막는다.
+        if ~isempty(getOpt(opts, 'mocoLumbarControlBound', []))
+            error('moco_WoC_loop: mocoLumbarControlBound(/lumbarAct)는 2D profile 전용입니다.');
+        end
+        if weight_propulsion > 0
+            error('moco_WoC_loop: weighted propulsion goal(heel/front 2개 접촉력)은 2D profile 전용입니다.');
+        end
+    end
 
     %--------------------------------------------------------------
     % 1. MocoStudy 및 문제 정의
@@ -217,10 +245,11 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
             metabolicRatePath = metabolicsInfo.outputPath;
         end
         addEffortPropulsionIntegrator(model, integratorPath, ...
-            gateSigma, gateThreshold, impulseScale, useMeanForce, metabolicRatePath);
+            gateSigma, gateThreshold, impulseScale, useMeanForce, metabolicRatePath, profile);
         problem.setModelProcessor(ModelProcessor(model));
     end
     modelState = model.initSystem();
+    checkProfileOnModel(model, profile);
     if useCoT
         checkMetabolicEnergyRate(model, modelState, integratorPath, metabolicsInfo);
     end
@@ -283,20 +312,38 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
         periodicGoal = MocoPeriodicityGoal('periodicGoal');
         problem.addGoal(periodicGoal);
 
+        % CoordinateCouplerConstraint의 종속 좌표(슬개골 knee_angle_*_beta)는 독립
+        % 좌표의 주기성으로 정해지므로 중복 pair를 만들지 않는다 (2D에는 없다).
+        dependentStates = {};
+        if profile.excludeDependentCoordinatesFromPeriodicity
+            dependentStates = dependentCoordinateStates(model);
+        end
         for i = 0:numStates-1
             currentStateName = char(stateNames.get(i));
             sName = string(currentStateName);
-            if contains(sName, 'pelvis_tx/value')
+            if sName == pelvisTxValue
                 continue;
             end
             % 적분 상태는 0에서 시작해 증가하므로 주기성을 걸지 않는다.
             if startsWith(sName, [integratorPath '/'])
                 continue;
             end
+            if ismember(currentStateName, dependentStates)
+                continue;
+            end
             periodicGoal.addStatePair(MocoPeriodicityGoalPair(currentStateName));
         end
 
-        periodicGoal.addControlPair(MocoPeriodicityGoalPair('/lumbarAct'));
+        if strcmp(profile.periodicControlMode, 'all')
+            % 모든 optimization control (PrescribedController가 정하는 AFO 제외).
+            controlGroups = moco_WoC_controlGroups(model, profile);
+            for k = 1:numel(controlGroups.optimizationControls)
+                periodicGoal.addControlPair(MocoPeriodicityGoalPair( ...
+                    controlGroups.optimizationControls{k}));
+            end
+        else
+            periodicGoal.addControlPair(MocoPeriodicityGoalPair('/lumbarAct'));
+        end
 
     else
         error('moco_WoC_loop: 알 수 없는 gaitMode = ''%s''. modeSym 또는 modeAsym 이어야 합니다.', gaitMode);
@@ -354,7 +401,7 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
             speedWeight = -speedWeight;
         end
         addStateFixedGoals(problem, integratorPath, energyMetric, energyTarget, ...
-            opts.mocoPropulsionTarget, speedWeight, useMeanForce);
+            opts.mocoPropulsionTarget, speedWeight, useMeanForce, profile.pelvisCoordinatePath);
         energyText = sprintf('E0=%.6g (effort)', energyTarget);
         if useCoT, energyText = sprintf('E0=%.6g J/kg/m (metabolic CoT)', energyTarget); end
         if useMeanForce
@@ -419,40 +466,59 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     %--------------------------------------------------------------
     % 3. Bounds 설정
     %--------------------------------------------------------------
+    % opts.mocoTimeBound / mocoDistBound는 반주기 기준 입력이다. modeAsym은 한 주기를
+    % 풀므로 여기서만 한 번 2배를 적용한다 (호출자는 2배 하지 않는다).
     if strcmpi(gaitMode, 'modeSym')
         % 반 걸음 bounds
-        problem.setTimeBounds(0, mocoTimeBound);
-        problem.setStateInfo('/jointset/groundPelvis/pelvis_tx/value', [0, 10], 0.0, mocoDistBound);
+        effectiveTimeBound = mocoTimeBound;
+        effectiveDistBound = mocoDistBound;
+        problem.setTimeBounds(0, effectiveTimeBound);
+        problem.setStateInfo(pelvisTxValue, [0, 10], 0.0, effectiveDistBound);
 
     elseif strcmpi(gaitMode, 'modeAsym')
         % 한 걸음 bounds (modeSym 대비 시간 및 이동 거리 ~2배)
-        problem.setTimeBounds(0, mocoTimeBound*2);
-        problem.setStateInfo('/jointset/groundPelvis/pelvis_tx/value', [0, 20], 0.0, mocoDistBound*2);
+        effectiveTimeBound = mocoTimeBound*2;
+        effectiveDistBound = mocoDistBound*2;
+        problem.setTimeBounds(0, effectiveTimeBound);
+        problem.setStateInfo(pelvisTxValue, [0, 20], 0.0, effectiveDistBound);
     end
+    fprintf(['Moco phase bounds (%s): input time %s s, dist %s m -> applied final time %s s, ', ...
+             'final %s %s m (t0 = 0, %s(t0) = 0)\n'], gaitMode, mat2str(mocoTimeBound), ...
+             mat2str(mocoDistBound), mat2str(effectiveTimeBound), pelvisTxValue, ...
+             mat2str(effectiveDistBound), pelvisTxValue);
+    setup.inputTimeBound = mocoTimeBound;
+    setup.inputDistBound = mocoDistBound;
+    setup.effectiveTimeBound = effectiveTimeBound;
+    setup.effectiveDistBound = effectiveDistBound;
 
-    % 나머지 bounds (공통)
-    % problem.setStateInfo('/jointset/groundPelvis/pelvis_tilt/value', [-20*pi/180, -10*pi/180]);
-    % problem.setStateInfo('/jointset/groundPelvis/pelvis_ty/value',   [0.75, 1.25]);
-    % problem.setStateInfo('/jointset/hip_l/hip_flexion_l/value',      [-10*pi/180, 60*pi/180]);
-    % problem.setStateInfo('/jointset/hip_r/hip_flexion_r/value',      [-10*pi/180, 60*pi/180]);
-    % problem.setStateInfo('/jointset/knee_l/knee_angle_l/value',      [-50*pi/180, 0]);
-    % problem.setStateInfo('/jointset/knee_r/knee_angle_r/value',      [-50*pi/180, 0]);
-    % problem.setStateInfo('/jointset/ankle_l/ankle_angle_l/value',    [-15*pi/180, 25*pi/180]);
-    % problem.setStateInfo('/jointset/ankle_r/ankle_angle_r/value',    [-15*pi/180, 25*pi/180]);
-    % problem.setStateInfo('/jointset/lumbar/lumbar/value',            [0, 20*pi/180]);
+    if ~strcmp(profile.name, '2D')
+        % 관절각, 토크 구동기 control/activation, 발·팔 간격 path constraint
+        setup.bounds = applyProfileBounds(problem, model, profile);
+    else
+        % 나머지 bounds (2D 공통, 기존 값)
+        % problem.setStateInfo('/jointset/groundPelvis/pelvis_tilt/value', [-20*pi/180, -10*pi/180]);
+        % problem.setStateInfo('/jointset/groundPelvis/pelvis_ty/value',   [0.75, 1.25]);
+        % problem.setStateInfo('/jointset/hip_l/hip_flexion_l/value',      [-10*pi/180, 60*pi/180]);
+        % problem.setStateInfo('/jointset/hip_r/hip_flexion_r/value',      [-10*pi/180, 60*pi/180]);
+        % problem.setStateInfo('/jointset/knee_l/knee_angle_l/value',      [-50*pi/180, 0]);
+        % problem.setStateInfo('/jointset/knee_r/knee_angle_r/value',      [-50*pi/180, 0]);
+        % problem.setStateInfo('/jointset/ankle_l/ankle_angle_l/value',    [-15*pi/180, 25*pi/180]);
+        % problem.setStateInfo('/jointset/ankle_r/ankle_angle_r/value',    [-15*pi/180, 25*pi/180]);
+        % problem.setStateInfo('/jointset/lumbar/lumbar/value',            [0, 20*pi/180]);
 
-    problem.setStateInfo('/jointset/groundPelvis/pelvis_tilt/value', [-20*pi/180, 10*pi/180]);
-    problem.setStateInfo('/jointset/groundPelvis/pelvis_ty/value',   [0.75, 1.25]);
-    problem.setStateInfo('/jointset/hip_l/hip_flexion_l/value',      [-35*pi/180, 75*pi/180]);
-    problem.setStateInfo('/jointset/hip_r/hip_flexion_r/value',      [-35*pi/180, 75*pi/180]);
-    problem.setStateInfo('/jointset/knee_l/knee_angle_l/value',      [-90*pi/180, 10*pi/180]);
-    problem.setStateInfo('/jointset/knee_r/knee_angle_r/value',      [-90*pi/180, 10*pi/180]);
-    problem.setStateInfo('/jointset/ankle_l/ankle_angle_l/value',    [-40*pi/180, 30*pi/180]);
-    problem.setStateInfo('/jointset/ankle_r/ankle_angle_r/value',    [-40*pi/180, 30*pi/180]);
-    problem.setStateInfo('/jointset/lumbar/lumbar/value',            [-20*pi/180, 20*pi/180]);
-    lumbarControlBound = getOpt(opts, 'mocoLumbarControlBound', []);
-    if ~isempty(lumbarControlBound)
-        problem.setControlInfo('/lumbarAct', lumbarControlBound);
+        problem.setStateInfo('/jointset/groundPelvis/pelvis_tilt/value', [-20*pi/180, 10*pi/180]);
+        problem.setStateInfo('/jointset/groundPelvis/pelvis_ty/value',   [0.75, 1.25]);
+        problem.setStateInfo('/jointset/hip_l/hip_flexion_l/value',      [-35*pi/180, 75*pi/180]);
+        problem.setStateInfo('/jointset/hip_r/hip_flexion_r/value',      [-35*pi/180, 75*pi/180]);
+        problem.setStateInfo('/jointset/knee_l/knee_angle_l/value',      [-90*pi/180, 10*pi/180]);
+        problem.setStateInfo('/jointset/knee_r/knee_angle_r/value',      [-90*pi/180, 10*pi/180]);
+        problem.setStateInfo('/jointset/ankle_l/ankle_angle_l/value',    [-40*pi/180, 30*pi/180]);
+        problem.setStateInfo('/jointset/ankle_r/ankle_angle_r/value',    [-40*pi/180, 30*pi/180]);
+        problem.setStateInfo('/jointset/lumbar/lumbar/value',            [-20*pi/180, 20*pi/180]);
+        lumbarControlBound = getOpt(opts, 'mocoLumbarControlBound', []);
+        if ~isempty(lumbarControlBound)
+            problem.setControlInfo('/lumbarAct', lumbarControlBound);
+        end
     end
     %--------------------------------------------------------------
     % 4. Solver 설정
@@ -464,12 +530,18 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     solver.set_optim_convergence_tolerance(getOpt(opts, 'mocoConvergenceTolerance', 1e-3));
     solver.set_optim_constraint_tolerance(getOpt(opts, 'mocoConstraintTolerance', 1e-3));
     solver.set_optim_max_iterations(getOpt(opts, 'mocoMaxIterations', 1000));
+    if ~isempty(profile.solver.enforceConstraintDerivatives)
+        % 운동학적 제약(슬개골 coupler): 초기값의 lambda/gamma와 같은 Posa2016 설정.
+        % multiplier 최소화 cost는 추가하지 않는다 (minimize_lagrange_multipliers 기본 false).
+        solver.set_enforce_constraint_derivatives(profile.solver.enforceConstraintDerivatives);
+        solver.set_kinematic_constraint_method(profile.solver.kinematicConstraintMethod);
+    end
 
     guessTraj = MocoTrajectory(guessStoPath);
     meanForceTarget = [];
     if useMeanForce, meanForceTarget = opts.mocoPropulsionTarget; end
     [guessTraj, guessMetrics] = matchIntegratorGuess(guessTraj, model, problem, integratorPath, ...
-        useStateFixed, injectedOsimPath, guessStoPath, meanForceTarget, useCoT);
+        useStateFixed, injectedOsimPath, guessStoPath, meanForceTarget, useCoT, solver);
     solver.setGuess(guessTraj);
 
     %--------------------------------------------------------------
@@ -478,8 +550,24 @@ function moco_WoC_Solution = moco_WoC_loop(controlInitStoPath, guessStoPath, i, 
     if useStateFixed
         checkStateFixedGoals(problem, integratorPath, meanForceTarget, energyMetric, ...
             energyTarget, metabolicRatePath);
-        checkConstraintOutputsOnGuess(study, problem, model, guessTraj, integratorPath, ...
-            energyMetric, useMeanForce, impulseScale, guessMetrics, metabolicRatePath);
+        setup.guessOutputs = checkConstraintOutputsOnGuess(study, problem, model, guessTraj, ...
+            integratorPath, energyMetric, useMeanForce, impulseScale, guessMetrics, metabolicRatePath);
+    end
+    if ~strcmp(profile.name, '2D')
+        setup.profileChecks = checkProfileProblem(problem, model, profile, pelvisTxValue, integratorPath);
+        setup.guessBounds = reportGuessBounds(problem, guessTraj);
+    end
+    setup.study = study;
+    setup.problem = problem;
+    setup.solver = solver;
+    setup.guess = guessTraj;
+    setup.guessMetrics = guessMetrics;
+    setup.model = model;
+    setup.profile = profile;
+    setup.injectedOsimPath = injectedOsimPath;
+    if skipSolve
+        moco_WoC_Solution = [];
+        return;
     end
     moco_WoC_Solution = study.solve();
 
@@ -506,12 +594,14 @@ end
 
 
 function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
-        gateThreshold, impulseScale, includeMeanForce, metabolicRatePath)
+        gateThreshold, impulseScale, includeMeanForce, metabolicRatePath, profile)
 % Add the plugin component that integrates the effort rate and the gated
-% propulsive impulse rate of each foot (sum of its heel/front sphere_force
-% x-components, as in addPropulsionGoal and MeanPropulsiveForce), plus the
-% mean propulsive force states when includeMeanForce is true and the
-% metabolic energy state (input connected to metabolicRatePath, e.g.
+% propulsive impulse rate of each foot (sum of the sphere_force x-components
+% of all the foot's contact forces in profile.contactPaths: heel/front for
+% the 2D model, six spheres for rajagopal_AFO; the component sums the list
+% input per foot first and then applies the gate, as MeanPropulsiveForce),
+% plus the mean propulsive force states when includeMeanForce is true and
+% the metabolic energy state (input connected to metabolicRatePath, e.g.
 % /metabolics|total_metabolic_rate) when metabolicRatePath is not empty.
     import org.opensim.modeling.*
 
@@ -530,11 +620,13 @@ function addEffortPropulsionIntegrator(model, componentPath, gateSigma, ...
     if ~isempty(metabolicRatePath)
         component.updInput('metabolic_rate').setConnecteePath(metabolicRatePath);
     end
-    sides = {'r', 'right_contact_forces'; 'l', 'left_contact_forces'};
+    sides = {profile.contactPaths.r, 'right_contact_forces'; ...
+             profile.contactPaths.l, 'left_contact_forces'};
     for k = 1:size(sides, 1)
         input = component.updInput(sides{k, 2});
-        input.appendConnecteePath(['/contactHeel_' sides{k, 1} '|sphere_force']);
-        input.appendConnecteePath(['/contactFront_' sides{k, 1} '|sphere_force']);
+        for j = 1:numel(sides{k, 1})
+            input.appendConnecteePath([sides{k, 1}{j} '|sphere_force']);
+        end
     end
     model.addComponent(component);
     model.finalizeConnections();
@@ -542,7 +634,7 @@ end
 
 
 function addStateFixedGoals(problem, componentPath, energyMetric, energyTarget, ...
-        propulsionTarget, speedWeight, useMeanForce)
+        propulsionTarget, speedWeight, useMeanForce, coordinatePath)
 % Add the v_avg cost (weight speedWeight, negative to maximize), the energy
 % endpoint equality constraint (E = effort or metabolic CoT, energyMetric)
 % and either the P endpoint equality constraint or (useMeanForce) the
@@ -553,7 +645,7 @@ function addStateFixedGoals(problem, componentPath, energyMetric, energyTarget, 
         OpenSimObject.newInstanceOfType('MocoCoordinateAverageSpeedGoal'));
     speedGoal.setName('average_speed');
     speedGoal.setWeight(speedWeight);
-    PropertyHelper.setValueString('/jointset/groundPelvis/pelvis_tx', ...
+    PropertyHelper.setValueString(coordinatePath, ...
         speedGoal.updPropertyByName('coordinate_path'));
     problem.addGoal(speedGoal);
 
@@ -616,7 +708,7 @@ end
 
 
 function [guessTraj, m] = matchIntegratorGuess(guessTraj, model, problem, ...
-        componentPath, useIntegrator, modelPath, guessPath, meanForceTarget, useCoT)
+        componentPath, useIntegrator, modelPath, guessPath, meanForceTarget, useCoT, solver)
 % Make the guess match the integral states of the problem. Integral states
 % already in the guess (from a min/maxSpeedStateFixed solution with either
 % energy metric, including the earlier softplus version) are dropped; when
@@ -628,8 +720,19 @@ function [guessTraj, m] = matchIntegratorGuess(guessTraj, model, problem, ...
 % running integral of the guess's own metabolic rate (moco_WoC_evalGaitMetrics,
 % same metabolics as the problem). m returns the guess metrics ([] when the
 % integrator is not used).
+% When the guess has Lagrange multipliers or slacks, or the problem has
+% kinematic constraints (rajagopal_AFO patella couplers), the guess is
+% rebuilt by name in the problem's variable order (buildGuessByName) so
+% that states, controls, multipliers and slacks are kept and no column is
+% matched by position. Otherwise the previous (2D) path is used unchanged.
     import org.opensim.modeling.*
     m = [];
+
+    [srcHeader, ~] = readStoText(guessPath, false);
+    numSlacks = headerCount(srcHeader, 'num_slacks');
+    rep = problem.createRep();
+    useNames = guessTraj.getNumMultipliers() > 0 || numSlacks > 0 || ...
+        rep.getNumKinematicConstraintEquations() > 0;
 
     statesTable = guessTraj.exportToStatesTable();
     labels = statesTable.getColumnLabels();
@@ -639,13 +742,15 @@ function [guessTraj, m] = matchIntegratorGuess(guessTraj, model, problem, ...
             oldStates{end+1} = char(labels.get(k)); %#ok<AGROW>
         end
     end
-    if ~useIntegrator && isempty(oldStates)
+    if ~useIntegrator && isempty(oldStates) && ~useNames
         return;
     end
     for k = 1:numel(oldStates)
         statesTable.removeColumn(oldStates{k});
     end
 
+    statePaths = {};
+    values = zeros(numel(guessTraj.getTimeMat()), 0);
     if useIntegrator
         component = model.getComponent(componentPath);
         m = moco_WoC_evalGaitMetrics(modelPath, guessPath, 1, ...
@@ -671,7 +776,16 @@ function [guessTraj, m] = matchIntegratorGuess(guessTraj, model, problem, ...
                      'CoT = %.6g J/kg/m (Simpson %.6g)\n'], values(end, end), m.mass_kg, ...
                      m.com_displacement, m.CoT_trapz, m.CoT_simpson);
         end
+    end
 
+    if useNames
+        % 이름 기준 재구성 (states, controls, multipliers, slacks; 적분 상태는 위 값).
+        guessTraj = buildGuessByName(guessPath, solver, rep, statePaths, values, ...
+            [componentPath '/'], fullfile(fileparts(modelPath), 'moco_WoC_guess_problem_order.sto'));
+        return;
+    end
+
+    if useIntegrator
         % Moco 4.5 maps guess states to the problem by position. The guess
         % columns are in system order and the component's states come last,
         % so append them in their system order.
@@ -853,7 +967,7 @@ function checkMetabolicEnergyRate(model, state, componentPath, metabolicsInfo)
 end
 
 
-function checkConstraintOutputsOnGuess(study, problem, model, guessTraj, componentPath, ...
+function out = checkConstraintOutputsOnGuess(study, problem, model, guessTraj, componentPath, ...
         energyMetric, useMeanForce, impulseScale, guessMetrics, metabolicRatePath)
 % Evaluate the constrained outputs along the guess on the model Moco
 % solves (MocoStudy.analyze): each output must equal its state column of
@@ -865,9 +979,23 @@ function checkConstraintOutputsOnGuess(study, problem, model, guessTraj, compone
 % controller (PrescribedController AFO) controls added; the solver keeps
 % the original guess.
     import org.opensim.modeling.*
+    out = struct();
     guessTraj = MocoTrajectory.createFromStatesControlsTables(problem.createRep(), ...
         guessTraj.exportToStatesTable(), guessTraj.exportToControlsTable());
     guessTraj.generateControlsFromModelControllers(model);
+    % controller(AFO_controller)가 정하는 AFO control (modeOff에서는 전 구간 0)
+    controlNames = guessTraj.getControlNames();
+    out.afoControlMaxAbs = 0;
+    out.afoControls = {};
+    for k = 0:controlNames.size()-1
+        name = char(controlNames.get(k));
+        if any(strcmp(regexprep(name, '^.*/', ''), {'AFO_r', 'AFO_l'}))
+            out.afoControls{end+1} = name;
+            out.afoControlMaxAbs = max(out.afoControlMaxAbs, max(abs(guessTraj.getControlMat(name))));
+        end
+    end
+    fprintf('  guess AFO controls from AFO_controller (%s): max |u| = %g\n', ...
+        strjoin(out.afoControls, ', '), out.afoControlMaxAbs);
     isCoT = strcmp(energyMetric, 'metabolicCoT');
     checks = {[componentPath '|effort_integral'], [componentPath '/effort_integral'], 1};
     if isCoT
@@ -891,6 +1019,7 @@ function checkConstraintOutputsOnGuess(study, problem, model, guessTraj, compone
         err = max(abs(value - expected));
         fprintf('  guess %s: tf value %.6g, max |output - %g*state| %.3g\n', ...
             checks{k, 1}, value(end), checks{k, 3}, err);
+        out.(matlab.lang.makeValidName(regexprep(checks{k, 1}, '^.*\|', ''))) = value(end);
         if err > 1e-9 * max(1, max(abs(expected))) || ~(value(end) > value(1))
             error('moco_WoC_loop: %s 가 guess 상태와 다르거나 phase 동안 증가하지 않습니다.', ...
                 checks{k, 1});
@@ -941,6 +1070,391 @@ function level = stageLevel(stage)
         level = level + 1;
         stage = stage.prev();
     end
+end
+
+
+function checkProfileOnModel(model, profile)
+% The model must have the profile's forward coordinate and contact forces.
+    import org.opensim.modeling.*
+    if ~model.hasComponent(profile.pelvisCoordinatePath)
+        error('moco_WoC_loop: %s profile의 전진 좌표 %s 가 모델에 없습니다.', ...
+            profile.name, profile.pelvisCoordinatePath);
+    end
+    paths = [profile.contactPaths.r, profile.contactPaths.l];
+    for k = 1:numel(paths)
+        if ~model.hasComponent(paths{k}) || isempty(SmoothSphereHalfSpaceForce.safeDownCast( ...
+                model.getComponent(paths{k})))
+            error('moco_WoC_loop: %s profile의 접촉력 %s 가 모델에 없거나 SmoothSphereHalfSpaceForce가 아닙니다.', ...
+                profile.name, paths{k});
+        end
+    end
+end
+
+
+function names = dependentCoordinateStates(model)
+% value/speed state paths of the dependent coordinate of every
+% CoordinateCouplerConstraint (rajagopal_AFO: knee_angle_*_beta).
+    import org.opensim.modeling.*
+    names = {};
+    cs = model.getConstraintSet();
+    for k = 0:cs.getSize()-1
+        coupler = CoordinateCouplerConstraint.safeDownCast(cs.get(k));
+        if isempty(coupler), continue; end
+        coord = model.getCoordinateSet().get(char(coupler.getDependentCoordinateName()));
+        path = char(coord.getAbsolutePathString());
+        names = [names, {[path '/value'], [path '/speed']}]; %#ok<AGROW>
+    end
+end
+
+
+function info = applyProfileBounds(problem, model, profile)
+% Coordinate value bounds [deg -> rad], torque actuator control and
+% activation bounds [-b, b] (b = torque limit / optimal_force), and the
+% MocoFrameDistanceConstraint path constraint of a non-2D profile. Only
+% explicit setStateInfo/setControlInfo calls are used, so no muscle bound
+% pattern can override the actuators' negative range.
+    import org.opensim.modeling.*
+    info = struct('coordinates', {cell(0, 3)}, 'torque', {cell(0, 6)}, 'framePairs', {cell(0, 2)});
+    cs = model.getCoordinateSet();
+    rows = profile.coordinateBoundsDeg;
+    for r = 1:size(rows, 1)
+        name = rows{r, 1};
+        if cs.contains(name)
+            targets = {name};
+        else
+            targets = {[name '_r'], [name '_l']};
+        end
+        for t = 1:numel(targets)
+            if ~cs.contains(targets{t})
+                error('moco_WoC_loop: bound 대상 좌표 %s 가 모델에 없습니다.', targets{t});
+            end
+            path = [char(cs.get(targets{t}).getAbsolutePathString()) '/value'];
+            bounds = rows{r, 2} * pi / 180;
+            problem.setStateInfo(path, bounds);
+            info.coordinates(end+1, :) = {path, rows{r, 2}, bounds};
+        end
+    end
+
+    limits = profile.torqueLimits;
+    used = false(size(limits, 1), 1);
+    list = model.getComponentsList();
+    it = list.begin();
+    while ~it.equals(list.end())
+        actuator = CoordinateActuator.safeDownCast(it.deref());
+        if ~isempty(actuator)
+            path = char(actuator.getAbsolutePathString());
+            coordinate = char(actuator.get_coordinate());
+            row = find(strcmp(limits(:, 1), regexprep(coordinate, '_[rl]$', '')), 1);
+            if isempty(row)
+                error('moco_WoC_loop: 토크 구동기 %s (%s)의 토크 범위가 profile에 없습니다.', path, coordinate);
+            end
+            used(row) = true;
+            optimalForce = actuator.getOptimalForce();
+            b = limits{row, 2} / optimalForce;
+            problem.setControlInfo(path, [-b, b]);
+            hasActivation = ~isempty(ActivationCoordinateActuator.safeDownCast(it.deref()));
+            if hasActivation
+                problem.setStateInfo([path '/activation'], [-b, b]);
+            end
+            info.torque(end+1, :) = {path, coordinate, limits{row, 2}, optimalForce, b, hasActivation};
+        end
+        it.next();
+    end
+    if ~all(used)
+        error('moco_WoC_loop: 모델에 없는 토크 범위 항목: %s', strjoin(limits(~used, 1)', ', '));
+    end
+
+    fd = profile.frameDistance;
+    if ~isempty(fd)
+        constraint = MocoFrameDistanceConstraint();
+        constraint.setName(fd.name);
+        for k = 1:size(fd.pairs, 1)
+            for f = 1:2
+                if ~model.hasComponent(fd.pairs{k, f})
+                    error('moco_WoC_loop: 거리 제약 frame %s 가 모델에 없습니다.', fd.pairs{k, f});
+                end
+            end
+            constraint.addFramePair(MocoFrameDistanceConstraintPair(fd.pairs{k, 1}, ...
+                fd.pairs{k, 2}, fd.minimumDistance, fd.maximumDistance));
+            info.framePairs(end+1, :) = fd.pairs(k, :);
+        end
+        constraint.setProjection(fd.projection);
+        constraint.setProjectionVector(Vec3(fd.projectionVector(1), fd.projectionVector(2), ...
+            fd.projectionVector(3)));
+        problem.addPathConstraint(constraint);
+    end
+    fprintf(['Profile %s bounds: %d coordinate bounds, %d torque actuators (control and ', ...
+             'activation [-b, b], b = limit/optimal_force), %d frame distance pairs (%s %s, min %g m)\n'], ...
+             profile.name, size(info.coordinates, 1), size(info.torque, 1), size(info.framePairs, 1), ...
+             fd.projection, mat2str(fd.projectionVector), fd.minimumDistance);
+end
+
+
+function checks = checkProfileProblem(problem, model, profile, pelvisTxValue, integratorPath)
+% On the problem Moco solves (createRep): periodicity pairs (all states
+% except pelvis_tx/value, integral states and dependent coordinates; every
+% optimization control), torque actuator and coordinate bounds, the frame
+% distance path constraint, and no AFO among the optimization controls.
+    import org.opensim.modeling.*
+    rep = problem.createRep();
+    states = cellFromStdVec(rep.createStateInfoNames());
+    controls = cellFromStdVec(rep.createControlInfoNames());
+    groups = moco_WoC_controlGroups(model, profile);
+    dependent = dependentCoordinateStates(model);
+
+    periodic = MocoPeriodicityGoal.safeDownCast(rep.getEndpointConstraint('periodicGoal'));
+    statePairs = pairNames(periodic.getPropertyByName('state_pairs'));
+    controlPairs = pairNames(periodic.getPropertyByName('control_pairs'));
+    expectedStates = states(~strcmp(states, pelvisTxValue) & ...
+        ~startsWith(states, [integratorPath '/']) & ~ismember(states, dependent));
+    problems = {};
+    if ~isequal(sort(statePairs(:, 1)), sort(expectedStates(:))) || ...
+            ~isequal(statePairs(:, 1), statePairs(:, 2))
+        problems{end+1} = 'periodic state pairs';
+    end
+    if ~isequal(sort(controlPairs(:, 1)), sort(controls(:))) || ...
+            ~isequal(sort(controls(:)), sort(groups.optimizationControls(:)))
+        problems{end+1} = 'periodic control pairs / optimization controls';
+    end
+    if any(contains(controls, 'AFO'))
+        problems{end+1} = 'AFO is an optimization control';
+    end
+
+    torqueRows = cell(0, 4);
+    list = model.getComponentsList();
+    it = list.begin();
+    while ~it.equals(list.end())
+        actuator = ActivationCoordinateActuator.safeDownCast(it.deref());
+        if ~isempty(actuator)
+            path = char(actuator.getAbsolutePathString());
+            c = bounds2(rep.getControlInfo(path).getBounds());
+            a = bounds2(rep.getStateInfo([path '/activation']).getBounds());
+            torqueRows(end+1, :) = {path, c, a, actuator.getOptimalForce()}; %#ok<AGROW>
+            if c(1) >= 0 || ~isequal(c, a) || c(1) ~= -c(2)
+                problems{end+1} = sprintf('torque bounds %s', path); %#ok<AGROW>
+            end
+        end
+        it.next();
+    end
+
+    pathConstraints = cellFromStdVec(rep.createPathConstraintNames());
+    fd = MocoFrameDistanceConstraint.safeDownCast(rep.getPathConstraint(profile.frameDistance.name));
+    numPairs = fd.getPropertyByName('frame_pairs').size();
+    if numPairs ~= size(profile.frameDistance.pairs, 1) || ...
+            ~strcmp(char(fd.getProjection()), profile.frameDistance.projection)
+        problems{end+1} = 'frame distance constraint';
+    end
+    pv = fd.getProjectionVector();
+    checks = struct('numStates', numel(states), 'numControls', numel(controls), ...
+        'numMultipliers', rep.createMultiplierInfoNames().size(), ...
+        'numKinematicConstraintEquations', rep.getNumKinematicConstraintEquations(), ...
+        'numPeriodicStatePairs', size(statePairs, 1), 'numPeriodicControlPairs', size(controlPairs, 1), ...
+        'excludedFromPeriodicity', {[{pelvisTxValue}, dependent, states(startsWith(states, [integratorPath '/']))']}, ...
+        'pathConstraints', {pathConstraints}, 'framePairs', numPairs, ...
+        'projection', char(fd.getProjection()), 'projectionVector', [pv.get(0), pv.get(1), pv.get(2)], ...
+        'torqueBounds', {torqueRows}, 'costs', {cellFromStdVec(rep.createCostNames())}, ...
+        'endpointConstraints', {cellFromStdVec(rep.createEndpointConstraintNames())}, ...
+        'problems', {problems});
+    fprintf(['Profile %s problem: %d states, %d optimization controls, %d multipliers, ', ...
+             '%d periodic state pairs, %d periodic control pairs, path constraints %s (%d pairs)\n'], ...
+             profile.name, checks.numStates, checks.numControls, checks.numMultipliers, ...
+             checks.numPeriodicStatePairs, checks.numPeriodicControlPairs, ...
+             strjoin(pathConstraints, ', '), numPairs);
+    fprintf('  excluded from periodicity: %s\n', strjoin(checks.excludedFromPeriodicity, ', '));
+    if ~isempty(problems)
+        error('moco_WoC_loop: %s profile 문제 구성 검사 실패: %s', profile.name, strjoin(problems, '; '));
+    end
+end
+
+
+function out = reportGuessBounds(problem, guess)
+% Report guess values outside the problem's state/control bounds (incl.
+% initial/final bounds). Not an error: IPOPT pushes the initial point inside.
+    import org.opensim.modeling.*
+    rep = problem.createRep();
+    rows = cell(0, 4);
+    kinds = {'state', rep.createStateInfoNames(); 'control', rep.createControlInfoNames()};
+    for q = 1:size(kinds, 1)
+        names = cellFromStdVec(kinds{q, 2});
+        for k = 1:numel(names)
+            if strcmp(kinds{q, 1}, 'state')
+                vinfo = rep.getStateInfo(names{k});
+                v = guess.getStateMat(names{k});
+            else
+                vinfo = rep.getControlInfo(names{k});
+                v = guess.getControlMat(names{k});
+            end
+            b = bounds2(vinfo.getBounds());
+            excess = max([b(1) - min(v), max(v) - b(2), 0]);
+            if vinfo.getInitialBounds().isSet()
+                bi = bounds2(vinfo.getInitialBounds());
+                excess = max([excess, bi(1) - v(1), v(1) - bi(2)]);
+            end
+            if vinfo.getFinalBounds().isSet()
+                bf = bounds2(vinfo.getFinalBounds());
+                excess = max([excess, bf(1) - v(end), v(end) - bf(2)]);
+            end
+            if excess > 1e-12
+                rows(end+1, :) = {kinds{q, 1}, names{k}, excess, [min(v), max(v)]}; %#ok<AGROW>
+            end
+        end
+    end
+    out = struct('violations', {rows});
+    if isempty(rows)
+        fprintf('Guess within all state/control bounds (incl. initial/final bounds).\n');
+    else
+        fprintf('Guess outside bounds for %d variables (IPOPT moves the start inside):\n', size(rows, 1));
+        [~, order] = sort(cell2mat(rows(:, 3)), 'descend');
+        for k = order(1:min(10, end))'
+            fprintf('  %s %s: excess %.4g (guess range %s)\n', rows{k, 1}, rows{k, 2}, rows{k, 3}, ...
+                mat2str(rows{k, 4}, 4));
+        end
+    end
+end
+
+
+function guess = buildGuessByName(sourcePath, solver, rep, extraNames, extraValues, ...
+        droppedPrefix, outPath)
+% Build the guess in the problem's variable order by name: the column
+% names and their order (states, controls, multipliers, derivatives,
+% slacks) come from solver.createGuess() written to a file, the values come
+% from the source guess file by name (extraNames: computed integral states
+% on the source time grid). Source columns that the problem does not have
+% are an error, except old integral states (droppedPrefix). The result is
+% written to outPath and read back with MocoTrajectory, which keeps the
+% multipliers and slacks.
+    import org.opensim.modeling.*
+    template = solver.createGuess();
+    templatePath = [tempname '.sto'];
+    template.write(templatePath);
+    cleanup = onCleanup(@() deleteIfExists(templatePath));
+    [templateHeader, templateLabels] = readStoText(templatePath, false);
+    [~, sourceLabels, sourceData] = readStoText(sourcePath, true);
+
+    targets = templateLabels(2:end);
+    n = size(sourceData, 1);
+    data = zeros(n, numel(targets) + 1);
+    data(:, 1) = sourceData(:, 1);
+    used = false(1, numel(sourceLabels));
+    used(1) = true;
+    missing = {};
+    fromExtra = 0;
+    for k = 1:numel(targets)
+        e = find(strcmp(extraNames, targets{k}), 1);
+        if ~isempty(e)
+            data(:, k+1) = extraValues(:, e);
+            fromExtra = fromExtra + 1;
+            continue;
+        end
+        j = find(strcmp(sourceLabels, targets{k}));
+        if numel(j) ~= 1
+            missing{end+1} = targets{k}; %#ok<AGROW>
+            continue;
+        end
+        data(:, k+1) = sourceData(:, j);
+        used(j) = true;
+    end
+    unused = sourceLabels(~used);
+    unused = unused(~startsWith(unused, droppedPrefix));
+    if ~isempty(missing) || ~isempty(unused)
+        error(['moco_WoC_loop: guess 열이 문제 변수와 이름으로 맞지 않습니다.\n', ...
+               '  문제에 있고 guess에 없음: %s\n  guess에 있고 문제에 없음: %s'], ...
+               strjoin(missing, ', '), strjoin(unused, ', '));
+    end
+
+    fid = fopen(outPath, 'w');
+    if fid < 0, error('moco_WoC_loop: guess 파일을 쓸 수 없습니다: %s', outPath); end
+    fprintf(fid, '%s\n', templateHeader{:});
+    fprintf(fid, 'endheader\n');
+    fprintf(fid, '%s\n', strjoin(templateLabels, '\t'));
+    fprintf(fid, [strjoin(repmat({'%.17g'}, 1, size(data, 2)), '\t') '\n'], data');
+    fclose(fid);
+
+    guess = MocoTrajectory(outPath);
+    guess.isCompatible(rep, false, true);
+    % 순서 기준은 solver의 createGuess (상태는 system order). 이름 집합은 rep와 같아야 한다.
+    checkOrder = {'states', guess.getStateNames(), template.getStateNames(), rep.createStateInfoNames()
+                  'controls', guess.getControlNames(), template.getControlNames(), rep.createControlInfoNames()
+                  'multipliers', guess.getMultiplierNames(), template.getMultiplierNames(), rep.createMultiplierInfoNames()};
+    for k = 1:size(checkOrder, 1)
+        names = cellFromStdVec(checkOrder{k, 2});
+        if ~isequal(names, cellFromStdVec(checkOrder{k, 3})) || ...
+                ~isequal(sort(names), sort(cellFromStdVec(checkOrder{k, 4})))
+            error('moco_WoC_loop: 재구성한 guess의 %s 이름/순서가 문제와 다릅니다.', checkOrder{k, 1});
+        end
+    end
+    if ~isequal(cellFromStdVec(guess.getStateNames()), cellFromStdVec( ...
+            opensimSimulation.createStateVariableNamesInSystemOrder(rep.getModelBase())))
+        error('moco_WoC_loop: 재구성한 guess의 상태가 system order가 아닙니다.');
+    end
+    fprintf(['Guess rebuilt by name in problem order (%s): %d times, %d states (%d computed), ', ...
+             '%d controls, %d multipliers, %d slacks; dropped source columns: %d\n'], outPath, n, ...
+             headerCount(templateHeader, 'num_states'), fromExtra, ...
+             headerCount(templateHeader, 'num_controls'), headerCount(templateHeader, 'num_multipliers'), ...
+             headerCount(templateHeader, 'num_slacks'), ...
+             sum(~used & startsWith(sourceLabels, droppedPrefix)));
+end
+
+
+function [header, labels, data] = readStoText(path, readData)
+% Header lines (before endheader), column labels and (optionally) data of a .sto file.
+    fid = fopen(path);
+    if fid < 0, error('moco_WoC_loop: 파일을 열 수 없습니다: %s', path); end
+    cleaner = onCleanup(@() fclose(fid));
+    header = {};
+    while true
+        line = fgetl(fid);
+        if ~ischar(line), error('moco_WoC_loop: endheader가 없습니다: %s', path); end
+        if strcmp(strtrim(line), 'endheader'), break; end
+        header{end+1} = line; %#ok<AGROW>
+    end
+    labels = strsplit(strtrim(fgetl(fid)), '\t');
+    data = [];
+    if readData
+        data = textscan(fid, repmat('%f', 1, numel(labels)), 'CollectOutput', true);
+        data = data{1};
+        if isempty(data) || any(~isfinite(data(:)))
+            error('moco_WoC_loop: 데이터가 비었거나 유한하지 않습니다: %s', path);
+        end
+    end
+end
+
+
+function n = headerCount(header, key)
+    n = 0;
+    line = header(startsWith(header, [key '=']));
+    if ~isempty(line)
+        n = str2double(extractAfter(line{1}, '='));
+    end
+end
+
+
+function pairs = pairNames(prop)
+    import org.opensim.modeling.*
+    pairs = cell(prop.size(), 2);
+    for p = 0:prop.size()-1
+        pair = prop.getValueAsObject(p);
+        pairs{p+1, 1} = char(PropertyHelper.getValueString(pair.getPropertyByName('initial_variable')));
+        pairs{p+1, 2} = char(PropertyHelper.getValueString(pair.getPropertyByName('final_variable')));
+    end
+end
+
+
+function b = bounds2(bounds)
+    b = [bounds.getLower(), bounds.getUpper()];
+end
+
+
+function c = cellFromStdVec(v)
+    c = cell(v.size(), 1);
+    for k = 0:v.size()-1
+        c{k+1} = char(v.get(k));
+    end
+end
+
+
+function deleteIfExists(p)
+    if isfile(p), delete(p); end
 end
 
 
