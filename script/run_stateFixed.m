@@ -57,35 +57,26 @@ addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
 
 %% ===== 사용자 입력 ===== %%
 Index = 'H';                   % 결과 폴더 접두어. 같은 Index의 마지막 번호 다음부터 이어간다
-% 목적함수 mode
-%   'minSpeedStateFixed' / 'maxSpeedStateFixed' : E = E0 (E0_effort/E0_CoT), J 제약에서 평균속도 최소/최대화
-%   'minEnergySpeedFixed' : v_COM = v0 (v0_list), J 제약에서 E (cfg.energyMetric) 최소화 (E0는 쓰지 않음)
-cfg.objectiveMode = 'maxSpeedStateFixed';
 
-% Energy 설정 (min/maxSpeedStateFixed: E0로 고정하는 지표, minEnergySpeedFixed: 최소화하는 지표)
+% 목적함수 설정
+%   에너지 고정 모드 : 'minSpeedStateFixed' | 'maxSpeedStateFixed' : E = E0 (E0_effort/E0_CoT), J 제약에서 평균속도 최소/최대화
+%   속도 고정 모드 : 'minEnergySpeedFixed' : v_COM = v0 (v0_list), J 제약에서 E (cfg.energyMetric) 최소화 (E0는 쓰지 않음)
+cfg.objectiveMode = 'minEnergySpeedFixed';
+
+% 에너지 항 설정 (Effort / CoT)
 cfg.energyMetric = 'metabolicCoT';  % 'effort' | 'metabolicCoT'
 E0_effort = [0.08, 0.10, 0.12];     % effort target들 (weight 곱하기 전 effort metric, 무차원)
 E0_CoT = [3.0, 3.25, 3.5];          % metabolic CoT target들 [J/kg/m]:
 
 % Speed Fixed 설정 (minEnergySpeedFixed 전용)
-%   v_COM = |r_COM(tf) - r_COM(t0)| / (tf - t0) [m/s]: MocoAverageSpeedGoal이 고정하는 질량중심 평균속도
-%   (CoT의 d_COM과 같은 변위, modeSym은 반주기). 각 v0가 독립 sweep이고, v0마다 J case를 모두 푼다.
-v0_list = [];                   % 평균속도 target들 [m/s] (직접 입력, 예: v0_list = [1.0, 1.3, 1.6];)
+v0_list = [0.8, 1, 1.2];                   % 평균속도 target들 [m/s] (예: v0_list = [1.0, 1.3, 1.6];)
 cfg.speedTol = 1e-4;            % |v_COM - v0| 검증 허용오차 [m/s] (SpeedPass)
 
-% State Fixed 설정 - Target J
-% cfg.propulsionMetric = 'meanForce';   % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
-% cfg.J_targets = [50, 65, 80];       % [J1, J2, J3]
-cfg.propulsionMetric = 'impulse';   % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
-% J 제약 형태 (propulsionMetric 단위: impulse N*s 한 보행주기 양발 합, meanForce N)
-%   'equality' : J_actual = J_k. cfg.J_targets의 각 값이 독립 case (cfg.J_bounds = [])
-%   'range'    : lower_k <= J_actual <= upper_k. cfg.J_bounds의 각 행 [lower, upper]가 독립 case
-%                (cfg.J_targets = []). 닫힌 구간이며 구간 중심을 target으로 쓰지 않는다.
-%                예) cfg.J_bounds = [25, 35; 35, 45];   (사용법 예시, 실제 값은 직접 입력)
-%   minEnergySpeedFixed도 같은 설정을 쓴다 (range면 v0마다 J_bounds의 행이 독립 case)
-cfg.propulsionConstraintMode = 'equality';
-cfg.J_targets = [30, 40, 50];   % equality 전용 [J1, J2, J3]
-cfg.J_bounds = [];              % range 전용 n x 2
+% State(Target J) Fixed 설정
+cfg.propulsionMetric = 'impulse'; % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
+cfg.propulsionConstraintMode = 'range'; % J 제약 형태 : 'equality' | 'range' , minEnergySpeedFixed도 같은 설정을 쓴다 (range면 v0마다 J_bounds의 행이 독립 case)
+% cfg.J_targets = [30, 40, 50];   % equality 전용 [J1, J2, J3]
+cfg.J_bounds = [30 40; 40 50; 50 60;];              % range 전용 n x 2
 
 % Bound 및 Initial guess 설정
 if strcmp(cfg.objectiveMode, 'maxSpeedStateFixed')
