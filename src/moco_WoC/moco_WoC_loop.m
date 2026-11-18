@@ -24,7 +24,12 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
 %                            propulsion을 endpoint equality로 고정한다
 %                            (플러그인 osimFixedEffortPropulsion 필요).
 %                            'maxSpeedStateFixed'은 같은 제약에서 평균속도를 최대화한다.
+%                            'minEnergySpeedFixed'은 평균속도를 v_COM = mocoSpeedTarget
+%                            (MocoAverageSpeedGoal endpoint constraint)로 고정하고 같은 J
+%                            제약에서 E (mocoEnergyMetric)를 cost로 최소화한다.
+%       .mocoSpeedTarget : 'minEnergySpeedFixed'의 평균속도 v0 [m/s] (질량중심 변위 / phase 시간)
 %       .mocoEnergyMetric : min/maxSpeedStateFixed에서 E가 고정하는 에너지 지표
+%                            (minEnergySpeedFixed에서는 최소화하는 지표)
 %                            'effort' (default): (1/d_COM) int sum_c u_c^2 dt [-]
 %                            'metabolicCoT': Bhargava2004 total_metabolic_rate의
 %                            적분 / (mass * d_COM) [J/kg/m]
@@ -70,21 +75,34 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
     propulsionReferenceDuration = getOpt(opts, ...
         'mocoPropulsionReferenceDuration', []);
     objectiveMode = getOpt(opts, 'mocoObjectiveMode', 'weighted');
-    if ~ismember(objectiveMode, {'weighted', 'minSpeedStateFixed', 'maxSpeedStateFixed'})
+    if ~ismember(objectiveMode, {'weighted', 'minSpeedStateFixed', 'maxSpeedStateFixed', 'minEnergySpeedFixed'})
         error(['opts.mocoObjectiveMode 는 ''weighted'', ''minSpeedStateFixed'', ', ...
-               '''maxSpeedStateFixed'' 중 하나여야 합니다.']);
+               '''maxSpeedStateFixed'', ''minEnergySpeedFixed'' 중 하나여야 합니다.']);
     end
-    useStateFixed = ismember(objectiveMode, {'minSpeedStateFixed', 'maxSpeedStateFixed'});
+    % 적분 상태 플러그인과 J 제약을 쓰는 모드: min/maxSpeedStateFixed (E = E0, 평균속도 cost)와
+    % minEnergySpeedFixed (v_COM = v0, E cost).
+    isSpeedFixed = strcmp(objectiveMode, 'minEnergySpeedFixed');
+    useIntegrator = isSpeedFixed || ismember(objectiveMode, {'minSpeedStateFixed', 'maxSpeedStateFixed'});
     propulsionMetric = getOpt(opts, 'mocoPropulsionMetric', 'impulse');
-    useMeanForce = useStateFixed && strcmp(propulsionMetric, 'meanForce');
+    useMeanForce = useIntegrator && strcmp(propulsionMetric, 'meanForce');
     energyMetric = getOpt(opts, 'mocoEnergyMetric', 'effort');
     if ~ismember(energyMetric, {'effort', 'metabolicCoT'})
         error('opts.mocoEnergyMetric 는 ''effort'' 또는 ''metabolicCoT'' 여야 합니다.');
     end
-    useCoT = useStateFixed && strcmp(energyMetric, 'metabolicCoT');
+    useCoT = useIntegrator && strcmp(energyMetric, 'metabolicCoT');
     energyTarget = getOpt(opts, 'mocoEnergyTarget', []);
     if isempty(energyTarget) && strcmp(energyMetric, 'effort')
         energyTarget = getOpt(opts, 'mocoEffortTarget', []);
+    end
+    speedTarget = [];
+    if isSpeedFixed
+        speedTarget = getOpt(opts, 'mocoSpeedTarget', []);
+        if ~isscalar(speedTarget) || ~isnumeric(speedTarget) || ~isfinite(speedTarget) || speedTarget <= 0
+            error('moco_WoC_loop: minEnergySpeedFixed 의 mocoSpeedTarget이 양의 유한 scalar가 아닙니다.');
+        end
+        if ~isempty(energyTarget)
+            error('moco_WoC_loop: minEnergySpeedFixed 에서는 E가 cost이므로 mocoEnergyTarget을 쓰지 않습니다.');
+        end
     end
     metabolicRatePath = '';
     gateSigma = getOpt(opts, 'mocoPropulsionGateSigma', 1.0);
@@ -99,7 +117,7 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
     % J 제약: equality (default, opts.mocoPropulsionTarget) 또는 range
     % (opts.mocoPropulsionBounds = [lower, upper]). 둘 다 [lower, upper]로 정규화한다.
     propSpec = [];
-    if useStateFixed
+    if useIntegrator
         propSpec = propulsionSpec(opts, propulsionMetric);
     end
     setup = struct();
@@ -228,7 +246,7 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
     modelProcessor = ModelProcessor(injectedOsimPath);
     problem.setModelProcessor(modelProcessor);
     model = modelProcessor.process();
-    if useStateFixed
+    if useIntegrator
         % 적분 상태 component는 Moco 문제의 모델에만 추가한다.
         % 저장되는 injected osim은 플러그인 없이도 읽을 수 있게 유지된다.
         moco_WoC_loadFixedEffortPropulsionPlugin();
@@ -323,7 +341,36 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
         error('moco_WoC_loop: 알 수 없는 gaitMode = ''%s''. modeSym 또는 modeAsym 이어야 합니다.', gaitMode);
     end
 
-    if useStateFixed
+    if useIntegrator && isSpeedFixed
+        % Minimum energy (minEnergySpeedFixed) at a fixed average speed.
+        %
+        %   minimize   E  (effort z_E(tf) / d_COM or metabolic CoT
+        %                  z_met(tf) / (mass * d_COM) [J/kg/m], mocoEnergyMetric)
+        %   subject to v_COM = d_COM / (tf - t0) = mocoSpeedTarget,
+        %              the J constraint of propSpec (equality or range)
+        %
+        % E is the same integral state, output and normalization as the
+        % E = E0 constraint of min/maxSpeedStateFixed below, here a
+        % MocoFinalOutputGoal cost with weight 1. The speed is the
+        % MocoAverageSpeedGoal endpoint constraint v_des - d_COM/(tf - t0) = 0
+        % with d_COM = |r_COM(tf) - r_COM(t0)|, the same displacement that
+        % normalizes E (modeSym: half stride). No other cost is added.
+        addStateFixedGoals(problem, integratorPath, energyMetric, [], ...
+            propSpec, [], useMeanForce, speedTarget);
+        energyText = 'E = effort z_E(tf)/d_COM';
+        if useCoT, energyText = 'E = metabolic CoT z_met(tf)/(mass d_COM) [J/kg/m]'; end
+        if useMeanForce
+            gateText = sprintf('mean propulsive force, gate sigma %.4g N, F0 %.4g N', gateSigma, gateThreshold);
+        else
+            gateText = sprintf('impulse scale %d, gate sigma %.4g N, F0 %.4g N', ...
+                impulseScale, gateSigma, gateThreshold);
+        end
+        fprintf(['Moco %s: minimize %s (weight 1), v_COM = %.6g m/s (MocoAverageSpeedGoal ', ...
+                 'endpoint constraint), %s (%s)\n'], objectiveMode, energyText, speedTarget, ...
+                 propSpec.text, gateText);
+        setup.propulsion = propSpec;
+        setup.speedTarget = speedTarget;
+    elseif useIntegrator
         % Minimum (minSpeedStateFixed) or maximum (maxSpeedStateFixed) average
         % speed at fixed effort and propulsion.
         %
@@ -489,7 +536,7 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
     meanForceSpec = [];
     if useMeanForce, meanForceSpec = propSpec; end
     [guessTraj, guessMetrics] = matchIntegratorGuess(guessTraj, model, problem, integratorPath, ...
-        useStateFixed, injectedOsimPath, guessStoPath, meanForceSpec, useCoT);
+        useIntegrator, injectedOsimPath, guessStoPath, meanForceSpec, useCoT);
     solver.setGuess(guessTraj);
     if useMeanForce
         setup.propulsion.guessMeanForce = guessMetrics.guess_mean_force;
@@ -499,9 +546,9 @@ function [moco_WoC_Solution, setup] = moco_WoC_loop(controlInitStoPath, guessSto
     %--------------------------------------------------------------
     % 5. 문제 풀기
     %--------------------------------------------------------------
-    if useStateFixed
+    if useIntegrator
         setup.propulsionChecks = checkStateFixedGoals(problem, integratorPath, propSpec, ...
-            useMeanForce, energyMetric, energyTarget, metabolicRatePath);
+            useMeanForce, energyMetric, energyTarget, metabolicRatePath, speedTarget);
         checkConstraintOutputsOnGuess(study, problem, model, guessTraj, integratorPath, ...
             energyMetric, useMeanForce, impulseScale, guessMetrics, metabolicRatePath);
     end
@@ -577,7 +624,7 @@ end
 
 
 function addStateFixedGoals(problem, componentPath, energyMetric, energyTarget, ...
-        propSpec, speedWeight, useMeanForce)
+        propSpec, speedWeight, useMeanForce, speedTarget)
 % Add the v_avg cost (weight speedWeight, negative to maximize), the energy
 % endpoint equality constraint (E = effort or metabolic CoT, energyMetric)
 % and the propulsion constraint of propSpec (propulsionSpec):
@@ -587,18 +634,32 @@ function addStateFixedGoals(problem, componentPath, energyMetric, energyTarget, 
 %               [lower, upper] (MocoBounds(lower, upper));
 %   meanForce : initial bounds of the constant state m: equality m(t0) = J,
 %               range lower <= m(t0) <= upper (m' = 0, r(t0) = r(tf) = 0).
+% With speedTarget (minEnergySpeedFixed; energyTarget and speedWeight unused)
+% the speed and energy swap roles: the MocoAverageSpeedGoal
+% average_speed_constraint v_des - d_COM/(tf - t0) = 0 (v_des = speedTarget)
+% replaces the v_avg cost, and the energy output becomes a MocoFinalOutputGoal
+% cost (weight 1, same output and normalization) instead of E = E0.
 % No penalty, center-tracking or slack cost is added.
     import org.opensim.modeling.*
+    isSpeedFixed = nargin >= 8 && ~isempty(speedTarget);
 
-    speedGoal = MocoGoal.safeDownCast( ...
-        OpenSimObject.newInstanceOfType('MocoCoordinateAverageSpeedGoal'));
-    speedGoal.setName('average_speed');
-    speedGoal.setWeight(speedWeight);
-    PropertyHelper.setValueString('/jointset/groundPelvis/pelvis_tx', ...
-        speedGoal.updPropertyByName('coordinate_path'));
-    problem.addGoal(speedGoal);
-
-    energyGoal = MocoFinalOutputGoal(energyConstraintName(energyMetric));
+    if isSpeedFixed
+        speedGoal = MocoAverageSpeedGoal('average_speed_constraint');
+        speedGoal.set_desired_average_speed(speedTarget);
+        speedGoal.setMode('endpoint_constraint');
+        speedGoal.setEndpointConstraintBounds(equalityBounds(0));
+        problem.addGoal(speedGoal);
+        energyGoal = MocoFinalOutputGoal(energyCostName(energyMetric), 1);
+    else
+        speedGoal = MocoGoal.safeDownCast( ...
+            OpenSimObject.newInstanceOfType('MocoCoordinateAverageSpeedGoal'));
+        speedGoal.setName('average_speed');
+        speedGoal.setWeight(speedWeight);
+        PropertyHelper.setValueString('/jointset/groundPelvis/pelvis_tx', ...
+            speedGoal.updPropertyByName('coordinate_path'));
+        problem.addGoal(speedGoal);
+        energyGoal = MocoFinalOutputGoal(energyConstraintName(energyMetric));
+    end
     if strcmp(energyMetric, 'metabolicCoT')
         % CoT = z_met(tf) / (mass * d_COM) [J/kg/m] (MocoGoal mass and COM
         % displacement of the solved phase; no g, no duration).
@@ -610,8 +671,12 @@ function addStateFixedGoals(problem, componentPath, energyMetric, energyTarget, 
         energyGoal.setOutputPath([componentPath '|effort_integral']);
     end
     energyGoal.setDivideByDisplacement(true);
-    energyGoal.setMode('endpoint_constraint');
-    energyGoal.setEndpointConstraintBounds(equalityBounds(energyTarget));
+    if isSpeedFixed
+        energyGoal.setMode('cost');
+    else
+        energyGoal.setMode('endpoint_constraint');
+        energyGoal.setEndpointConstraintBounds(equalityBounds(energyTarget));
+    end
     problem.addGoal(energyGoal);
 
     if useMeanForce
@@ -653,6 +718,16 @@ function name = energyConstraintName(energyMetric)
         name = 'metabolic_cot_constraint';
     else
         name = 'effort_constraint';
+    end
+end
+
+
+function name = energyCostName(energyMetric)
+% minEnergySpeedFixed의 E cost 이름 (요약은 header의 objective_<이름>으로 읽는다).
+    if strcmp(energyMetric, 'metabolicCoT')
+        name = 'metabolic_cot_cost';
+    else
+        name = 'effort_cost';
     end
 end
 
@@ -808,7 +883,7 @@ end
 
 
 function checks = checkStateFixedGoals(problem, componentPath, propSpec, useMeanForce, ...
-        energyMetric, energyTarget, metabolicRatePath)
+        energyMetric, energyTarget, metabolicRatePath, speedTarget)
 % Check on the problem Moco solves that v_avg is the only cost, that the
 % energy (effort E or metabolic CoT) and P are endpoint constraints
 % (createRep initializes the goals, so an unsupported endpoint constraint
@@ -826,46 +901,89 @@ function checks = checkStateFixedGoals(problem, componentPath, propSpec, useMean
 % no periodicity pair may contain an integral state. With the
 % metabolic CoT, every Muscle of the Moco model must be registered in its
 % metabolics, whose total_metabolic_rate drives the integrator.
+% With speedTarget (minEnergySpeedFixed) the only cost is the energy cost
+% (same output and normalization, cost mode, weight 1), no energy constraint
+% exists, and the MocoAverageSpeedGoal average_speed_constraint must have
+% desired speed speedTarget, endpoint constraint mode and bounds [0, 0].
     import org.opensim.modeling.*
+    isSpeedFixed = nargin >= 8 && ~isempty(speedTarget);
     names = @(v) arrayfun(@(k) char(v.get(k)), 0:v.size()-1, 'UniformOutput', false);
     rep = problem.createRep();
     costs = names(rep.createCostNames());
     constraints = names(rep.createEndpointConstraintNames());
     fprintf('Moco costs: %s | endpoint constraints: %s\n', ...
         strjoin(costs, ', '), strjoin(constraints, ', '));
-    energyName = energyConstraintName(energyMetric);
-    otherEnergyName = setdiff({'effort_constraint', 'metabolic_cot_constraint'}, energyName);
-    expected = {energyName, 'propulsion_constraint'};
-    if useMeanForce
-        expected = {energyName};
+    if isSpeedFixed
+        energyName = energyCostName(energyMetric);
+        expectedCosts = {energyName};
+        expected = {'average_speed_constraint', 'propulsion_constraint'};
+    else
+        energyName = energyConstraintName(energyMetric);
+        expectedCosts = {'average_speed'};
+        expected = {energyName, 'propulsion_constraint'};
     end
-    if ~isequal(costs, {'average_speed'}) || ~all(ismember(expected, constraints)) || ...
-            any(ismember(otherEnergyName, constraints)) || ...
-            (useMeanForce && ismember('propulsion_constraint', constraints))
-        error('moco_WoC_loop: min/maxSpeedStateFixed 문제의 cost/endpoint constraint 구성이 예상과 다릅니다.');
+    otherEnergyName = setdiff({'effort_constraint', 'metabolic_cot_constraint', 'effort_cost', ...
+        'metabolic_cot_cost'}, energyName);
+    if useMeanForce
+        expected = expected(1);
+    end
+    if ~isequal(costs, expectedCosts) || ~all(ismember(expected, constraints)) || ...
+            any(ismember(otherEnergyName, [costs, constraints])) || ...
+            (useMeanForce && ismember('propulsion_constraint', constraints)) || ...
+            (~isSpeedFixed && ismember('average_speed_constraint', constraints))
+        error('moco_WoC_loop: stateFixed/speedFixed 문제의 cost/endpoint constraint 구성이 예상과 다릅니다.');
     end
     checks = struct('costs', {costs}, 'endpointConstraints', {constraints}, ...
-        'speedWeight', rep.getCost('average_speed').getWeight(), ...
+        'speedWeight', NaN, 'speedTarget', NaN, ...
         'propulsionMode', propSpec.mode, 'requestedBounds', [propSpec.lower, propSpec.upper]);
 
-    % Energy constraint definition on the problem Moco solves.
-    goal = MocoFinalOutputGoal.safeDownCast(rep.getEndpointConstraint(energyName));
-    bounds = constraintBounds(goal);
+    % Energy constraint (stateFixed) or energy cost (speedFixed) definition
+    % on the problem Moco solves.
     isCoT = strcmp(energyMetric, 'metabolicCoT');
     expectedOutput = [componentPath '|effort_integral'];
     if isCoT, expectedOutput = [componentPath '|metabolic_energy']; end
-    fprintf(['  %s: output %s, divide_by_mass %d, divide_by_displacement %d, ', ...
-             'endpoint constraint %d, bounds %s (E0 %g)\n'], energyName, ...
-             char(goal.getOutputPath()), goal.getDivideByMass(), goal.getDivideByDisplacement(), ...
-             goal.getModeIsEndpointConstraint(), mat2str(bounds), energyTarget);
+    if isSpeedFixed
+        goal = MocoFinalOutputGoal.safeDownCast(rep.getCost(energyName));
+        fprintf(['  %s: output %s, divide_by_mass %d, divide_by_displacement %d, ', ...
+                 'cost %d, weight %g\n'], energyName, char(goal.getOutputPath()), ...
+                 goal.getDivideByMass(), goal.getDivideByDisplacement(), goal.getModeIsCost(), ...
+                 goal.getWeight());
+        modeOk = goal.getModeIsCost() && goal.getWeight() == 1;
+        bounds = [NaN, NaN];
+    else
+        goal = MocoFinalOutputGoal.safeDownCast(rep.getEndpointConstraint(energyName));
+        bounds = constraintBounds(goal);
+        fprintf(['  %s: output %s, divide_by_mass %d, divide_by_displacement %d, ', ...
+                 'endpoint constraint %d, bounds %s (E0 %g)\n'], energyName, ...
+                 char(goal.getOutputPath()), goal.getDivideByMass(), goal.getDivideByDisplacement(), ...
+                 goal.getModeIsEndpointConstraint(), mat2str(bounds), energyTarget);
+        modeOk = goal.getModeIsEndpointConstraint() && isequal(bounds, [energyTarget, energyTarget]);
+        checks.speedWeight = rep.getCost('average_speed').getWeight();
+    end
     if ~strcmp(char(goal.getOutputPath()), expectedOutput) || ...
             goal.getDivideByMass() ~= isCoT || ~goal.getDivideByDisplacement() || ...
-            goal.getDivideByDuration() || ~goal.getModeIsEndpointConstraint() || ...
-            ~isequal(bounds, [energyTarget, energyTarget])
-        error('moco_WoC_loop: %s 의 output/정규화/bound가 %s 정의와 다릅니다.', ...
+            goal.getDivideByDuration() || ~modeOk
+        error('moco_WoC_loop: %s 의 output/정규화/mode/bound가 %s 정의와 다릅니다.', ...
             energyName, energyMetric);
     end
     checks.energyBounds = bounds;
+    if isSpeedFixed
+        % v_des - d_COM/(tf - t0) = 0: desired speed, endpoint constraint, bounds [0, 0], no
+        % extra normalization of the constraint value.
+        speedGoal = MocoAverageSpeedGoal.safeDownCast(rep.getEndpointConstraint('average_speed_constraint'));
+        if isempty(speedGoal)
+            error('moco_WoC_loop: average_speed_constraint 가 MocoAverageSpeedGoal이 아닙니다.');
+        end
+        sBounds = constraintBounds(speedGoal);
+        fprintf('  average_speed_constraint: MocoAverageSpeedGoal desired %.6g m/s, endpoint constraint %d, bounds %s\n', ...
+            speedGoal.get_desired_average_speed(), speedGoal.getModeIsEndpointConstraint(), mat2str(sBounds));
+        if speedGoal.get_desired_average_speed() ~= speedTarget || ~speedGoal.getModeIsEndpointConstraint() || ...
+                ~isequal(sBounds, [0, 0]) || speedGoal.getDivideByDisplacement() || ...
+                speedGoal.getDivideByDuration() || speedGoal.getDivideByMass()
+            error('moco_WoC_loop: average_speed_constraint 가 v_COM = %.6g m/s equality 정의와 다릅니다.', speedTarget);
+        end
+        checks.speedTarget = speedGoal.get_desired_average_speed();
+    end
     integralStates = {[componentPath '/effort_integral'], [componentPath '/propulsive_impulse']};
     if isCoT, integralStates{end+1} = [componentPath '/metabolic_energy']; end
     for k = 1:numel(integralStates)
@@ -941,8 +1059,14 @@ function checks = checkStateFixedGoals(problem, componentPath, propSpec, useMean
     end
     stageNames = {'Topology', 'Model (or lower)', 'Instance', 'Time', 'Position', 'Velocity', ...
                   'Dynamics', 'Acceleration', 'Report'};
-    for name = expected
-        level = stageLevel(rep.getEndpointConstraint(name{1}).getStageDependency());
+    stageGoals = expected;
+    if isSpeedFixed, stageGoals{end+1} = energyName; end   % energy cost reads the state output
+    for name = stageGoals
+        if ismember(name{1}, costs)
+            level = stageLevel(rep.getCost(name{1}).getStageDependency());
+        else
+            level = stageLevel(rep.getEndpointConstraint(name{1}).getStageDependency());
+        end
         fprintf('  %s stage dependency: %s\n', name{1}, stageNames{level});
         if level < 4
             error('moco_WoC_loop: %s 의 stage dependency(%s)가 Stage::Time보다 낮습니다.', ...

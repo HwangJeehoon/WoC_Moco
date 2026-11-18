@@ -47,7 +47,14 @@ function WoC_moco_main(model, iter, optMode, result_name, opts, optResume)
 %         'maxSpeedStateFixed' : minSpeedStateFixed와 같은 제약에서 v_avg를 최대화한다
 %                             (Moco cost = -mocoSpeedWeight * v_avg).
 %                             아래의 'minSpeedStateFixed' 옵션은 이 모드에도 같이 쓰인다.
+%         'minEnergySpeedFixed' : 평균속도를 v_COM = |r_COM(tf)-r_COM(t0)|/(tf-t0) =
+%                             mocoSpeedTarget (MocoAverageSpeedGoal endpoint constraint)로
+%                             고정하고, 같은 J 제약(mocoPropulsion*)에서 E (mocoEnergyMetric)를
+%                             유일한 cost(weight 1)로 최소화한다. mocoEnergyTarget,
+%                             mocoEffort / mocoFinalTime / mocoPropulsionWeight 는 쓰지 않는다.
+%     .mocoSpeedTarget : 'minEnergySpeedFixed'의 평균속도 v0 [m/s] (필수, 양수)
 %     .mocoEnergyMetric : min/maxSpeedStateFixed에서 E0로 고정하는 에너지 지표
+%                         (minEnergySpeedFixed에서는 최소화하는 지표)
 %         'effort' (default)  : weighted 모드 effort goal과 같은 정의의 weight 곱하기 전 값
 %                               E = (1/d_COM) * int sum_c u_c^2 dt [-]
 %                               (AFO_r/AFO_l 제외, 근육 excitation과 lumbarAct, weight 1)
@@ -199,18 +206,25 @@ else
 end
 
 mocoObjectiveMode = getOpt(opts, 'mocoObjectiveMode', 'weighted');
-if ~ismember(mocoObjectiveMode, {'weighted', 'minSpeedStateFixed', 'maxSpeedStateFixed'})
+if ~ismember(mocoObjectiveMode, {'weighted', 'minSpeedStateFixed', 'maxSpeedStateFixed', 'minEnergySpeedFixed'})
     error(['opts.mocoObjectiveMode 는 ''weighted'', ''minSpeedStateFixed'', ', ...
-           '''maxSpeedStateFixed'' 중 하나여야 합니다.']);
+           '''maxSpeedStateFixed'', ''minEnergySpeedFixed'' 중 하나여야 합니다.']);
 end
 % minSpeedStateFixed와 maxSpeedStateFixed는 평균속도 cost의 부호만 다르다.
 isStateFixed = ismember(mocoObjectiveMode, {'minSpeedStateFixed', 'maxSpeedStateFixed'});
-if isStateFixed
-    % 목적함수는 평균속도 하나뿐이다. 기존 비용항 weight를 조용히 무시하지 않는다.
+% minEnergySpeedFixed: v_COM = mocoSpeedTarget, J 제약에서 E (mocoEnergyMetric)를 최소화한다.
+isSpeedFixed = strcmp(mocoObjectiveMode, 'minEnergySpeedFixed');
+% 적분 상태 플러그인, J 제약, 에너지 지표를 쓰는 모드
+usesIntegrator = isStateFixed || isSpeedFixed;
+if usesIntegrator
+    % 목적함수는 하나뿐이다 (stateFixed: 평균속도, speedFixed: E). 기존 비용항 weight를
+    % 조용히 무시하지 않는다.
+    objectiveText = '평균속도';
+    if isSpeedFixed, objectiveText = 'E'; end
     for f = {'mocoEffort', 'mocoFinalTime', 'mocoPropulsionWeight'}
         if getOpt(opts, f{1}, 0) ~= 0
             error(['opts.mocoObjectiveMode = ''%s'' 에서는 opts.%s 를 ', ...
-                   '지정하지 마세요 (목적함수는 평균속도뿐입니다).'], mocoObjectiveMode, f{1});
+                   '지정하지 마세요 (목적함수는 %s뿐입니다).'], mocoObjectiveMode, f{1}, objectiveText);
         end
     end
     opts.mocoEffort = 0;
@@ -263,11 +277,14 @@ if ~ismember(mocoPropulsionConstraintMode, {'equality', 'range'})
     error('opts.mocoPropulsionConstraintMode 는 ''equality'' 또는 ''range'' 여야 합니다 (입력: %s).', ...
         mocoPropulsionConstraintMode);
 end
-if isStateFixed
-    if ~isscalar(mocoEnergyTarget) || ~isnumeric(mocoEnergyTarget) || ...
-            ~isfinite(mocoEnergyTarget) || mocoEnergyTarget <= 0
+if usesIntegrator
+    if isStateFixed && (~isscalar(mocoEnergyTarget) || ~isnumeric(mocoEnergyTarget) || ...
+            ~isfinite(mocoEnergyTarget) || mocoEnergyTarget <= 0)
         error('opts.mocoEnergyTarget (E0, %s [%s]) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.', ...
             mocoEnergyMetric, energyUnit);
+    elseif isSpeedFixed && ~isempty(mocoEnergyTarget)
+        error(['opts.mocoObjectiveMode = ''minEnergySpeedFixed'' 에서는 E를 최소화하므로 ', ...
+               'opts.mocoEnergyTarget / opts.mocoEffortTarget 을 지정하지 마세요.']);
     end
     if strcmp(mocoPropulsionConstraintMode, 'equality')
         if ~isempty(mocoPropulsionBounds)
@@ -296,11 +313,11 @@ if isStateFixed
     end
 elseif ~strcmp(mocoPropulsionConstraintMode, 'equality') || ~isempty(mocoPropulsionBounds)
     error(['opts.mocoPropulsionConstraintMode = ''range'' / opts.mocoPropulsionBounds 는 ', ...
-           'min/maxSpeedStateFixed 모드에서만 씁니다.']);
+           'min/maxSpeedStateFixed, minEnergySpeedFixed 모드에서만 씁니다.']);
 elseif strcmp(mocoPropulsionMetric, 'meanForce')
-    error('opts.mocoPropulsionMetric = ''meanForce'' 는 min/maxSpeedStateFixed 모드에서만 씁니다.');
+    error('opts.mocoPropulsionMetric = ''meanForce'' 는 min/maxSpeedStateFixed, minEnergySpeedFixed 모드에서만 씁니다.');
 elseif strcmp(mocoEnergyMetric, 'metabolicCoT')
-    error('opts.mocoEnergyMetric = ''metabolicCoT'' 는 min/maxSpeedStateFixed 모드에서만 씁니다.');
+    error('opts.mocoEnergyMetric = ''metabolicCoT'' 는 min/maxSpeedStateFixed, minEnergySpeedFixed 모드에서만 씁니다.');
 end
 
 % minSpeedStateFixed propulsion gate (meanPropPerVel MeanPropulsiveForce와 같은 기본값).
@@ -319,6 +336,16 @@ mocoSpeedWeight = getOpt(opts, 'mocoSpeedWeight', 1.0);
 if ~isscalar(mocoSpeedWeight) || ~isnumeric(mocoSpeedWeight) || ...
         ~isfinite(mocoSpeedWeight) || mocoSpeedWeight <= 0
     error('opts.mocoSpeedWeight 는 양의 유한 scalar여야 합니다.');
+end
+% minEnergySpeedFixed의 평균속도 target v0 [m/s] (MocoAverageSpeedGoal: 질량중심 변위 / phase 시간).
+mocoSpeedTarget = getOpt(opts, 'mocoSpeedTarget', []);
+if isSpeedFixed
+    if ~isscalar(mocoSpeedTarget) || ~isnumeric(mocoSpeedTarget) || ...
+            ~isfinite(mocoSpeedTarget) || mocoSpeedTarget <= 0
+        error('opts.mocoSpeedTarget (v0, m/s) 가 입력되지 않았거나 양의 유한 scalar가 아닙니다.');
+    end
+elseif ~isempty(mocoSpeedTarget)
+    error('opts.mocoSpeedTarget 은 minEnergySpeedFixed 모드에서만 씁니다.');
 end
 mocoLumbarControlBound = getOpt(opts, 'mocoLumbarControlBound', []);
 if ~isempty(mocoLumbarControlBound) && (~isnumeric(mocoLumbarControlBound) || ...
@@ -402,9 +429,20 @@ else
 end
 
 % E는 질량중심 변위로 나누므로 전진 변위가 양수여야 한다.
-if isStateFixed && min(mocoDistBound) <= 0
+if usesIntegrator && min(mocoDistBound) <= 0
     error('opts.mocoObjectiveMode = ''%s'' 이면 mocoDistBound 하한이 양수여야 합니다.', ...
         mocoObjectiveMode);
+end
+% v0는 time/dist bound로 만들 수 있는 평균속도여야 한다 (거리 = v0 * 시간; modeAsym은 두 bound가
+% 같이 2배라 비율이 같다. dist bound는 pelvis_tx 최종값이지만 대칭/주기 해에서 COM 변위와 같다).
+if isSpeedFixed
+    tb = [min(mocoTimeBound), max(mocoTimeBound)];
+    db = [min(mocoDistBound), max(mocoDistBound)];
+    if max(tb(1), db(1) / mocoSpeedTarget) > min(tb(2), db(2) / mocoSpeedTarget)
+        error(['opts.mocoSpeedTarget = %.4g m/s 는 mocoTimeBound %s s, mocoDistBound %s m로 ', ...
+               '만들 수 없습니다 (가능 범위 %.4g-%.4g m/s).'], mocoSpeedTarget, mat2str(mocoTimeBound), ...
+               mat2str(mocoDistBound), db(1) / tb(2), db(2) / tb(1));
+    end
 end
 
 % Solver 설정: 기본값은 기존 고정값(mesh 300, tolerance 1e-3, 최대 반복 1000)과 같다.
@@ -482,7 +520,15 @@ if mocoPropulsionWeight > 0
     fprintf('  propulsion body weight: %.4g N\n', propulsionBodyWeight);
 end
 fprintf('  mocoObjectiveMode: %s\n', mocoObjectiveMode);
-if isStateFixed
+if isSpeedFixed
+    if strcmp(mocoEnergyMetric, 'metabolicCoT')
+        fprintf('  objective: minimize metabolic CoT [J/kg/m] (weight 1, Bhargava2004 incl. basal)\n');
+    else
+        fprintf('  objective: minimize effort E = int sum_c u_c^2 dt / d_COM (weight 1)\n');
+    end
+    fprintf(['  speed constraint: v_COM = |r_COM(tf) - r_COM(t0)| / (tf - t0) = %.6g m/s ', ...
+             '(MocoAverageSpeedGoal endpoint constraint)\n'], mocoSpeedTarget);
+elseif isStateFixed
     speedVerb = 'minimize';
     if strcmp(mocoObjectiveMode, 'maxSpeedStateFixed'), speedVerb = 'maximize'; end
     fprintf('  objective: %s %.4g * v_avg, v_avg = (pelvis_tx(tf) - pelvis_tx(t0)) / (tf - t0)\n', ...
@@ -493,6 +539,8 @@ if isStateFixed
     else
         fprintf('  mocoEnergyTarget E0: %.6g (effort metric before weight)\n', mocoEnergyTarget);
     end
+end
+if usesIntegrator
     if ~isempty(mocoLumbarControlBound)
         fprintf('  lumbarAct control bound: %s N*m\n', mat2str(mocoLumbarControlBound));
     end
@@ -566,6 +614,7 @@ MocoOpts.mocoObjectiveMode = mocoObjectiveMode;
 MocoOpts.mocoEffortTarget = mocoEffortTarget;   % effort 지표일 때만 (이전 결과와 같은 열)
 MocoOpts.mocoEnergyMetric = mocoEnergyMetric;
 MocoOpts.mocoEnergyTarget = mocoEnergyTarget;
+MocoOpts.mocoSpeedTarget = mocoSpeedTarget;   % minEnergySpeedFixed 전용 (다른 모드는 [])
 MocoOpts.mocoLumbarControlBound = mocoLumbarControlBound;
 MocoOpts.mocoPropulsionTarget = mocoPropulsionTarget;   % equality 전용 (range는 [])
 MocoOpts.mocoPropulsionConstraintMode = mocoPropulsionConstraintMode;
@@ -604,15 +653,31 @@ runParams = [runParams; ...
      'effective_final_pelvis_tx_bound_m', mocoDistBound * boundScale; ...
      'results_root', resultsRoot; ...
      'effort_definition', 'int sum_c u_c^2 dt / d_COM; excludes AFO_r and AFO_l; includes lumbarAct'}];
-if isStateFixed
-    % E0가 고정한 에너지 지표. 이 항목이 없는 이전 결과는 effort 지표로 읽는다.
+if usesIntegrator
+    % E0가 고정한(stateFixed) 또는 최소화한(speedFixed) 에너지 지표. 이 항목이 없는 이전 결과는
+    % effort 지표로 읽는다.
     runParams = [runParams; {'energy_metric', mocoEnergyMetric; 'energy_unit', energyUnit; ...
                              'energy_definition', energyDefinition}];
     if strcmp(mocoEnergyMetric, 'metabolicCoT')
         [~, metabolicsInfo] = moco_WoC_addMetabolics([]);
-        runParams = [runParams; {'metabolics_settings', metabolicsInfo.settings; ...
-            'cot_constraint', ['MocoFinalOutputGoal metabolic_cot_constraint: ', ...
-            '/effortPropulsion|metabolic_energy, divide_by_mass, divide_by_displacement, endpoint_constraint']}];
+        runParams(end+1, :) = {'metabolics_settings', metabolicsInfo.settings};
+        if isStateFixed
+            runParams(end+1, :) = {'cot_constraint', ['MocoFinalOutputGoal metabolic_cot_constraint: ', ...
+                '/effortPropulsion|metabolic_energy, divide_by_mass, divide_by_displacement, endpoint_constraint']};
+        end
+    end
+    if isSpeedFixed
+        energyOutput = '/effortPropulsion|effort_integral, divide_by_displacement';
+        energyCost = 'effort_cost';
+        if strcmp(mocoEnergyMetric, 'metabolicCoT')
+            energyOutput = '/effortPropulsion|metabolic_energy, divide_by_mass, divide_by_displacement';
+            energyCost = 'metabolic_cot_cost';
+        end
+        runParams = [runParams; ...
+            {'energy_cost', sprintf('MocoFinalOutputGoal %s: %s, cost, weight 1', energyCost, energyOutput); ...
+             'speed_constraint', sprintf(['MocoAverageSpeedGoal average_speed_constraint: ', ...
+                'v_des - |r_COM(tf) - r_COM(t0)| / (tf - t0) = 0, v_des = %.10g m/s, endpoint_constraint'], ...
+                mocoSpeedTarget)}];
     end
     % 결과를 다시 요약할 때 실행 당시 propulsion 정의를 구분하기 위한 메타데이터.
     if strcmp(mocoPropulsionMetric, 'meanForce')

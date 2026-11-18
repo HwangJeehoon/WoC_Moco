@@ -10,6 +10,12 @@
 % 같은 J 색을 쓴다. 각 case의 평균속도는 범례에 숫자로 적는다 (OK가 아닌 case는 점선).
 % 실행 묶음(runGroups)마다 두 그림을 따로 그린다 (예: J = P_gate 묶음, J = 평균 추진력 묶음).
 %
+% minEnergySpeedFixed 묶음 (run_stateFixed의 speedFixed_min_* 실행, bound 세트 S1):
+%   첫 번째 그림은 x = 목표 평균속도 v0 (실행 당시 mocoSpeedTarget, 요약의 SpeedTarget_mps),
+%   y = 최소화한 E (E_actual; metabolicCoT면 CoT)로, 같은 J 구간(range) 또는 target(equality)의
+%   점을 v0 순서로 잇는다 (J별 색, 범례에 구간; connectBy는 쓰지 않는다). 측정 v_COM은 표에 남긴다.
+%   두 번째 그림은 v0마다 한 행에 J별 오른발 AP-GRF를 겹치고 범례에 E 값을 적는다.
+%
 % 데이터: <resultsDir>/<runTag>_bounds_summary.csv (run_stateFixed가 쓰는 E0 x 세트 전체 요약),
 %         <resultsDir>/<Case>/result_1/moco_result/moco_WoC_Solution_iter01_GRF.sto (case별 GRF)
 % 그림:   <resultsDir>/stateFixed_plots/<시각>/ (묶음별 png, fig, 그린 데이터 csv;
@@ -23,11 +29,13 @@ resultsDir = fullfile(thisScriptDir, '..', 'results');
 % 같은 objectiveMode, 같은 J 지표여야 한다.
 %   J = P_gate:  stateFixed_max_20261101_160827 (E0 = 0.10), stateFixed_max_20261102_002630 (E0 = 0.08, 0.12)
 %   J = 평균 추진력: stateFixed_max_mpf_20261102_164708 (E0 = 0.08, 0.10, 0.12)
+%   minEnergySpeedFixed: 예) runGroups = {{'speedFixed_min_jrange_cot_<시각>'}}; boundSet = 'S1';
 runGroups = { ...
     {'stateFixed_max_20261101_160827', 'stateFixed_max_20261102_002630'}, ...
     {'stateFixed_max_mpf_20261102_164708'}};
 boundSet = 'X3';
 connectBy = 'E0';   % 'E0': 같은 E0의 J1-J2-J3를 잇는다 | 'J': 같은 J의 점을 E0 순서로 잇는다
+                    % (minEnergySpeedFixed는 항상 같은 J를 v0 순서로 잇는다)
 
 %% ===== 묶음별 그림과 저장 =====
 outDir = fullfile(resultsDir, 'stateFixed_plots', char(datetime('now', 'Format', 'yyyyMMdd_HHmmss')));
@@ -37,27 +45,34 @@ for g = 1:numel(runGroups)
     data = readRuns(resultsDir, runGroups{g}, boundSet);
     spec = metricSpec(data);
     figTag = sprintf('%s_%s%s_%s', spec.modeTag, spec.metricTag, spec.energyTag, boundSet);
-    names = {['E0_vs_speed_' figTag], ['apgrf_r_' figTag]};
+    names = {[spec.fig1Prefix '_' figTag], ['apgrf_r_' figTag]};
     % 같은 objectiveMode, 같은 J 지표의 묶음이 둘이면 파일 이름이 겹친다.
     if isfile(fullfile(outDir, [names{1} '.png']))
         error('plot_stateFixed:SameGroupTag', '묶음 %d의 그림 이름(%s)이 앞 묶음과 겹칩니다.', g, figTag);
     end
-    figs = {plotSpeed(data, spec, connectBy), plotApGrf(data, spec, resultsDir)};
+    if spec.isSpeedFixed
+        figs = {plotMinEnergy(data, spec), plotApGrf(data, spec, resultsDir)};
+        levelColumns = {'SpeedTarget_mps', 'SpeedCOM_mps'};
+    else
+        figs = {plotSpeed(data, spec, connectBy), plotApGrf(data, spec, resultsDir)};
+        levelColumns = {'E0'};
+    end
     for i = 1:numel(figs)
         exportgraphics(figs{i}, fullfile(outDir, [names{i} '.png']), 'Resolution', 150);
         savefig(figs{i}, fullfile(outDir, [names{i} '.fig']));
     end
     writetable(data, fullfile(outDir, [names{1} '_data.csv']));
     fprintf('\n##### 묶음 %d (%s): %s #####\n', g, figTag, strjoin(runGroups{g}, ', '));
-    disp(data(:, {'EnergyMetric', 'E0', 'PropulsionConstraintMode', 'PropulsionLower', 'PropulsionUpper', ...
+    disp(data(:, [{'EnergyMetric'}, levelColumns, {'PropulsionConstraintMode', 'PropulsionLower', 'PropulsionUpper', ...
         'Verdict', 'v_avg_mps', 'E_actual', 'P_gate_actual', ...
-        'MeanPropulsiveForce_N', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}));
+        'MeanPropulsiveForce_N', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}]));
 end
 fprintf('저장: %s\n', outDir);
 
 
 function data = readRuns(resultsDir, runTags, boundSet)
-% 실행들의 bounds_summary에서 boundSet 행만 모아 (E0, J) 순으로 정렬한다.
+% 실행들의 bounds_summary에서 boundSet 행만 모아 (sweep 수준, J) 순으로 정렬한다.
+% sweep 수준 Level: stateFixed는 E0, minEnergySpeedFixed는 실행 당시 v0 (SpeedTarget_mps).
     cols = {'Case', 'ObjectiveMode', 'PropulsionDefinition', 'GaitMode', 'Verdict', 'BoundSet', ...
         'E_target', 'RunPropulsionTarget', 'v_avg_mps', 'E_actual', 'P_gate_actual', ...
         'MeanPropulsiveForce_N', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'};
@@ -94,7 +109,12 @@ function data = readRuns(resultsDir, runTags, boundSet)
             t.PropulsionLower = t.RunPropulsionTarget;
             t.PropulsionUpper = t.RunPropulsionTarget;
         end
-        parts{r} = t(:, [cols, {'EnergyMetric', 'PropulsionConstraintMode', 'PropulsionLower', 'PropulsionUpper'}]);
+        % 속도 열은 minEnergySpeedFixed 이전 요약에 없다 (stateFixed 행은 NaN).
+        for c = {'SpeedTarget_mps', 'SpeedCOM_mps'}
+            if ~ismember(c{1}, t.Properties.VariableNames), t.(c{1}) = NaN(height(t), 1); end
+        end
+        parts{r} = t(:, [cols, {'EnergyMetric', 'PropulsionConstraintMode', 'PropulsionLower', ...
+            'PropulsionUpper', 'SpeedTarget_mps', 'SpeedCOM_mps'}]);
     end
     data = vertcat(parts{:});
     data.BoundHits = fillmissing(data.BoundHits, 'constant', "");
@@ -111,6 +131,13 @@ function data = readRuns(resultsDir, runTags, boundSet)
             'equality 결과와 range 결과가 한 묶음에 섞여 있습니다. runGroups를 나누세요.');
     end
     data.E0 = round(data.E_target, 10);
+    data.Level = data.E0;
+    isSpeedFixed = data.ObjectiveMode == "minEnergySpeedFixed";
+    data.Level(isSpeedFixed) = round(data.SpeedTarget_mps(isSpeedFixed), 10);
+    if any(isSpeedFixed & ~isfinite(data.Level))
+        error('plot_stateFixed:NoSpeedTarget', ['실행 당시 v0 (SpeedTarget_mps)가 없는 minEnergySpeedFixed ', ...
+            'case가 있습니다 (Verdict "Speed metadata ..."). 그 실행은 묶음에서 빼세요.']);
+    end
     if modes == "range"
         [~, ~, idx] = unique([data.PropulsionLower, data.PropulsionUpper], 'rows');
         data.J = idx;
@@ -119,14 +146,14 @@ function data = readRuns(resultsDir, runTags, boundSet)
         data.J = data.RunPropulsionTarget;
         data.JText = compose("= %g", data.J);
     end
-    % 같은 (E0, J)가 두 번 나오면 어느 해를 그릴지 정할 수 없으므로 멈춘다.
-    [~, firstIdx, grp] = unique([data.E0, data.J], 'rows');
+    % 같은 (E0 또는 v0, J)가 두 번 나오면 어느 해를 그릴지 정할 수 없으므로 멈춘다.
+    [~, firstIdx, grp] = unique([data.Level, data.J], 'rows');
     if numel(firstIdx) < height(data)
         dup = data(ismember(grp, find(accumarray(grp, 1) > 1)), :);
-        disp(dup(:, {'Case', 'E0', 'J'}));
-        error('plot_stateFixed:Duplicate', '같은 E0, J의 case가 여러 실행에 있습니다. runGroups를 줄여주세요.');
+        disp(dup(:, {'Case', 'Level', 'J'}));
+        error('plot_stateFixed:Duplicate', '같은 E0(또는 v0), J의 case가 여러 실행에 있습니다. runGroups를 줄여주세요.');
     end
-    data = sortrows(data, {'E0', 'J'});
+    data = sortrows(data, {'Level', 'J'});
 end
 
 
@@ -162,11 +189,80 @@ function spec = metricSpec(data)
     else
         spec.jName = 'Propulsion'; spec.jUnit = 'N\cdots'; spec.metricTag = 'pgate';
     end
-    spec.modeTag = char(erase(objectiveMode, 'SpeedStateFixed'));
     spec.targetText = sprintf('Target(J) : %s', spec.jName);   % 예: 'Target(J) : Propulsion'
     if all(data.PropulsionConstraintMode == "range")
         spec.targetText = sprintf('Range(J) : %s', spec.jName);   % 허용 구간 제약 (단일 target 아님)
     end
+    % minEnergySpeedFixed: 행/수준은 v0, y는 최소화한 E (target 없음).
+    spec.isSpeedFixed = objectiveMode == "minEnergySpeedFixed";
+    if spec.isSpeedFixed
+        spec.modeTag = 'speedFixed_min';
+        spec.fig1Prefix = 'minE_vs_speed';
+        spec.levelRowText = 'v_0 = %g m/s';
+        if energyMetric == "metabolicCoT"
+            spec.energyLabel = 'Minimum Metabolic CoT (J kg^{-1} m^{-1})';
+            spec.energyName = 'Metabolic CoT';
+            spec.energyValueText = 'CoT %.3f J/kg/m';
+        else
+            spec.energyLabel = 'Minimum Sum of Efforts per distance';
+            spec.energyName = 'Effort';
+            spec.energyValueText = 'E %.4g';
+        end
+    else
+        spec.modeTag = char(erase(objectiveMode, 'SpeedStateFixed'));
+        spec.fig1Prefix = 'E0_vs_speed';
+        spec.levelRowText = spec.energyRowText;
+    end
+end
+
+
+function fig = plotMinEnergy(data, spec)
+% minEnergySpeedFixed: x = 목표 평균속도 v0, y = 최소화한 E. 같은 J 수준(range 구간 또는
+% equality target)의 점을 v0 순서로 선으로 잇고 J별 색과 범례를 쓴다 (plotSpeed와 같은 마커 규칙).
+    [ink, jColor, J_levels] = plotColors(data);
+    nJ = numel(J_levels);
+    v0_levels = unique(data.Level);
+    ok = data.Verdict == "OK";
+
+    fig = figure('Color', 'w', 'Position', [100 100 680 440]);
+    ax = axes(fig); hold(ax, 'on');
+    styleAxes(ax, ink);
+    hJ = gobjects(nJ, 1);
+    for j = 1:nJ
+        rows = find(data.J == J_levels(j));
+        [~, order] = sort(data.Level(rows));
+        rows = rows(order);
+        plot(ax, data.Level(rows), data.E_actual(rows), '-', 'Color', jColor(j, :), ...
+            'LineWidth', 2, 'HandleVisibility', 'off');
+        hJ(j) = plot(ax, NaN, NaN, 'o', 'MarkerSize', 10, ...
+            'LineWidth', 1.5, 'MarkerEdgeColor', 'w', 'MarkerFaceColor', jColor(j, :), ...
+            'DisplayName', sprintf('J%d %s %s', j, data.JText(rows(1)), spec.jUnit));
+        plot(ax, data.Level(rows(ok(rows))), data.E_actual(rows(ok(rows))), 'o', 'MarkerSize', 10, ...
+            'LineWidth', 1.5, 'MarkerEdgeColor', 'w', 'MarkerFaceColor', jColor(j, :), ...
+            'HandleVisibility', 'off');
+        plot(ax, data.Level(rows(~ok(rows))), data.E_actual(rows(~ok(rows))), 'o', 'MarkerSize', 9, ...
+            'LineWidth', 1.5, 'MarkerEdgeColor', jColor(j, :), 'MarkerFaceColor', 'w', ...
+            'HandleVisibility', 'off');
+    end
+    hLegend = hJ;
+    if any(~ok)
+        hLegend(end + 1) = plot(ax, NaN, NaN, 'o', 'MarkerSize', 9, 'LineWidth', 1.5, ...
+            'MarkerEdgeColor', ink(2, :), 'MarkerFaceColor', 'w', 'DisplayName', 'Verdict not OK');
+    end
+    legend(ax, hLegend, 'Location', 'best', 'Box', 'off');
+
+    xlabel(ax, 'Target average speed v_0 (m/s)');
+    ylabel(ax, spec.energyLabel);
+    xticks(ax, v0_levels);
+    vPad = max(0.1 * (max(v0_levels) - min(v0_levels)), 0.05);
+    xlim(ax, [min(v0_levels) - vPad, max(v0_levels) + vPad]);
+    e = data.E_actual(isfinite(data.E_actual));
+    if ~isempty(e)
+        ePad = max(0.15 * (max(e) - min(e)), 0.02 * max(abs(e)));
+        ylim(ax, [min(e) - ePad, max(e) + ePad]);
+    end
+    title(ax, ['Minimum ' spec.energyName ' at Fixed Speed - ' spec.targetText], ...
+        'Color', ink(1, :), 'FontSize', 14);
 end
 
 
@@ -234,11 +330,11 @@ end
 
 
 function fig = plotApGrf(data, spec, resultsDir)
-% E0별 한 행에 J1-J3의 오른발 AP-GRF를 겹친다.
+% E0별 (minEnergySpeedFixed는 v0별) 한 행에 J1-J3의 오른발 AP-GRF를 겹친다.
 % x축은 GRF 파일의 시간 그대로 [s] (한 보행주기), 값은 오른발에 작용하는 AP-GRF (heel + front).
 % 같은 시간축, 같은 힘 축으로 맞춰 행끼리 비교할 수 있게 한다.
     [ink, jColor, J_levels] = plotColors(data);
-    E0_levels = unique(data.E0);
+    E0_levels = unique(data.Level);   % 행 수준: E0 또는 v0
     ok = data.Verdict == "OK";
 
     fig = figure('Color', 'w', 'Position', [100 100 720 840]);
@@ -250,7 +346,7 @@ function fig = plotApGrf(data, spec, resultsDir)
         styleAxes(axs(e), ink);
         yline(axs(e), 0, 'Color', ink(2, :), 'HandleVisibility', 'off');
         for j = 1:numel(J_levels)
-            row = find(data.E0 == E0_levels(e) & data.J == J_levels(j));
+            row = find(data.Level == E0_levels(e) & data.J == J_levels(j));
             if isempty(row), continue; end
             [grf, labels] = readGrf(fullfile(resultsDir, data.Case(row)));
             if isempty(grf)
@@ -259,12 +355,17 @@ function fig = plotApGrf(data, spec, resultsDir)
             end
             style = '-'; note = '';
             if ~ok(row), style = '--'; note = sprintf(' (%s)', data.Verdict(row)); end
+            if spec.isSpeedFixed
+                valueText = sprintf(spec.energyValueText, data.E_actual(row));   % 속도는 행 제목(v0)
+            else
+                valueText = sprintf('%.3f m/s', data.v_avg_mps(row));
+            end
             plot(axs(e), grf(:, 1), grf(:, strcmp(labels, 'ground_force_r_vx')), 'Color', jColor(j, :), ...
-                'LineWidth', 2, 'LineStyle', style, 'DisplayName', sprintf('J%d %s %s - %.3f m/s%s', ...
-                j, data.JText(row), spec.jUnit, data.v_avg_mps(row), note));
+                'LineWidth', 2, 'LineStyle', style, 'DisplayName', sprintf('J%d %s %s - %s%s', ...
+                j, data.JText(row), spec.jUnit, valueText, note));
             tRange = [min(tRange(1), grf(1, 1)), max(tRange(2), grf(end, 1))];
         end
-        title(axs(e), sprintf(spec.energyRowText, E0_levels(e)), 'Color', ink(1, :), 'FontWeight', 'normal');
+        title(axs(e), sprintf(spec.levelRowText, E0_levels(e)), 'Color', ink(1, :), 'FontWeight', 'normal');
         % 오른쪽 아래는 유각기(0 N) 아래라 비어 있다 (오른쪽 위는 0 N 선과 겹친다).
         legend(axs(e), 'Location', 'southeast', 'Box', 'off');
         % 시간 눈금 숫자는 맨 아래 행에만 둔다 (세로 grid는 모든 행에 남는다).

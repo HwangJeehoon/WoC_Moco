@@ -9,6 +9,12 @@
 %   cfg.propulsionConstraintMode = 'range'이면 J 지표 = J_k 대신 lower_k <= J 지표 <= upper_k
 %   (cfg.J_bounds의 각 행이 한 case, 닫힌 구간, 구간 중심 target 없음)이며 나머지는 같다.
 %
+%   cfg.objectiveMode = 'minEnergySpeedFixed'이면 E0_list 대신 v0_list의 각 v0와 J case마다:
+%   minimize    E (cfg.energyMetric, 유일한 cost, weight 1; metabolicCoT면 CoT 최소화)
+%   subject to  v_COM = |r_COM(tf) - r_COM(t0)| / (tf - t0) = v0  (MocoAverageSpeedGoal endpoint
+%               constraint, CoT의 d_COM과 같은 질량중심 변위), J 제약 (equality 또는 range),
+%               기존 동역학/주기성/대칭성/상태·제어 bounds
+%
 %   E (cfg.energyMetric):
 %     'effort'       : weighted 모드 effort goal의 weight 곱하기 전 값 [-]
 %                      (1/d_COM) * int sum_c u_c^2 dt, c = 근육 excitation 18개 + lumbarAct
@@ -33,8 +39,10 @@
 % 한 J나 한 세트가 수렴하지 않아도 기록만 하고 다음을 계속 푼다
 % (target, bound, equality는 바꾸지 않는다).
 %
-% baseTag = stateFixed_<min|max>[_mpf][_cot]_<시각> (_mpf: meanForce 지표, _cot: metabolicCoT 지표),
-% E0 태그 = E<E0의 '.'을 'p'로> (0.12 -> E0p12)
+% baseTag = stateFixed_<min|max>[_mpf][_jrange][_cot]_<시각> (_mpf: meanForce 지표, _cot: metabolicCoT 지표),
+%           minEnergySpeedFixed는 speedFixed_min[_mpf][_jrange][_cot]_<시각>
+% E0 태그 = E<E0의 '.'을 'p'로> (0.12 -> E0p12), minEnergySpeedFixed는 v0 태그 V<v0> (1.3 -> V1p3)
+% (아래 경로의 <E0 태그> 자리에 v0 태그가 들어간다)
 % 결과: <resultsDir>/<Index><번호>_<baseTag>_<E0 태그>_<세트>_<sym|asym>_J<k>/ (case별),
 %       <resultsDir>/<baseTag>_<E0 태그>_<세트>_<mode>_summary/<시각>/ (세트별 summary.csv, 그림),
 %       <resultsDir>/<baseTag>_bounds_summary.csv (전체 E0 x 세트 비교).
@@ -49,12 +57,21 @@ addpath(genpath(fullfile(thisScriptDir, '..', 'src')));
 
 %% ===== 사용자 입력 ===== %%
 Index = 'H';                   % 결과 폴더 접두어. 같은 Index의 마지막 번호 다음부터 이어간다
-cfg.objectiveMode = 'maxSpeedStateFixed';   % 'minSpeedStateFixed' | 'maxSpeedStateFixed'
+% 목적함수 mode
+%   'minSpeedStateFixed' / 'maxSpeedStateFixed' : E = E0 (E0_effort/E0_CoT), J 제약에서 평균속도 최소/최대화
+%   'minEnergySpeedFixed' : v_COM = v0 (v0_list), J 제약에서 E (cfg.energyMetric) 최소화 (E0는 쓰지 않음)
+cfg.objectiveMode = 'maxSpeedStateFixed';
 
-% State Fixed 설정 - Energy
+% Energy 설정 (min/maxSpeedStateFixed: E0로 고정하는 지표, minEnergySpeedFixed: 최소화하는 지표)
 cfg.energyMetric = 'metabolicCoT';  % 'effort' | 'metabolicCoT'
 E0_effort = [0.08, 0.10, 0.12];     % effort target들 (weight 곱하기 전 effort metric, 무차원)
 E0_CoT = [3.0, 3.25, 3.5];          % metabolic CoT target들 [J/kg/m]:
+
+% Speed Fixed 설정 (minEnergySpeedFixed 전용)
+%   v_COM = |r_COM(tf) - r_COM(t0)| / (tf - t0) [m/s]: MocoAverageSpeedGoal이 고정하는 질량중심 평균속도
+%   (CoT의 d_COM과 같은 변위, modeSym은 반주기). 각 v0가 독립 sweep이고, v0마다 J case를 모두 푼다.
+v0_list = [];                   % 평균속도 target들 [m/s] (직접 입력, 예: v0_list = [1.0, 1.3, 1.6];)
+cfg.speedTol = 1e-4;            % |v_COM - v0| 검증 허용오차 [m/s] (SpeedPass)
 
 % State Fixed 설정 - Target J
 % cfg.propulsionMetric = 'meanForce';   % 'impulse' (J = inte(positive apGRF)) | 'meanForce' (J = impulse를 propulsive time으로 나눈 것)
@@ -65,6 +82,7 @@ cfg.propulsionMetric = 'impulse';   % 'impulse' (J = inte(positive apGRF)) | 'me
 %   'range'    : lower_k <= J_actual <= upper_k. cfg.J_bounds의 각 행 [lower, upper]가 독립 case
 %                (cfg.J_targets = []). 닫힌 구간이며 구간 중심을 target으로 쓰지 않는다.
 %                예) cfg.J_bounds = [25, 35; 35, 45];   (사용법 예시, 실제 값은 직접 입력)
+%   minEnergySpeedFixed도 같은 설정을 쓴다 (range면 v0마다 J_bounds의 행이 독립 case)
 cfg.propulsionConstraintMode = 'equality';
 cfg.J_targets = [30, 40, 50];   % equality 전용 [J1, J2, J3]
 cfg.J_bounds = [];              % range 전용 n x 2
@@ -75,6 +93,11 @@ if strcmp(cfg.objectiveMode, 'maxSpeedStateFixed')
         'name',      {'X3'}, ...
         'timeBound', {[0.25, 0.8]}, ...   % 최고 6.00 m/s
         'distBound', {[0.4, 1.5]});
+elseif strcmp(cfg.objectiveMode, 'minEnergySpeedFixed')
+    boundSets = struct( ...
+        'name',      {'S1'}, ...
+        'timeBound', {[0.25, 0.8]}, ...   % v0 가능 범위 0.25-6.00 m/s (거리 = v0 * 시간)
+        'distBound', {[0.2, 1.5]});
 else
     boundSets = struct( ...
         'name',      {'B3'}, ...
@@ -84,7 +107,7 @@ end
 stateFixedGuess = fullfile(thisScriptDir, '..', 'inputs', 'guess_init_stateFixed.sto');
 % propulsion 입력을 실행 전에 검사하고 case 목록을 만든다 (equality: J_targets 값, range: J_bounds 행)
 propCases = WoC_moco_propulsionCases(cfg);
-guessFor = @(E0, setName) repmat({stateFixedGuess}, 1, numel(propCases));
+guessFor = @(target, setName) repmat({stateFixedGuess}, 1, numel(propCases));   % target: E0 또는 v0
 
 % 기타 설정
 
@@ -109,6 +132,13 @@ else
     E0_list = E0_effort;
     cfg.energyTol = 1e-3;           % |E - E0| 검증 허용오차 [-]
 end
+% sweep 대상: min/maxSpeedStateFixed는 E0_list, minEnergySpeedFixed는 v0_list
+isSpeedFixed = strcmp(cfg.objectiveMode, 'minEnergySpeedFixed');
+if isSpeedFixed
+    targetList = v0_list;
+else
+    targetList = E0_list;
+end
 cfg.resultsDir = fullfile(thisScriptDir, '..', 'results');   % 실제 저장 루트
 cfg.Index = Index;
 cfg.continuation = false;       % true: case k가 직전 수렴 case의 해에서 시작 (CSV Guess 열에 기록)
@@ -124,7 +154,23 @@ fprintf(['\n공통 initial guess (%s): effort E = %.6g, metabolic CoT = %.6g J/k
     stateFixedGuess, guessMetrics.E_simpson, guessMetrics.CoT_simpson, ...
     guessMetrics.metabolic_energy_simpson, guessMetrics.mass_kg, guessMetrics.com_displacement, ...
     guessMetrics.v_avg, guessMetrics.basal_rate_W);
-if strcmp(cfg.energyMetric, 'metabolicCoT')
+if isSpeedFixed
+    % v0는 사용자가 직접 넣는다. bound 세트로 만들 수 없는 속도는 실행 전에 멈춘다.
+    guessSpeedCOM = guessMetrics.com_displacement / guessMetrics.duration;
+    if isempty(targetList)
+        error('run_stateFixed:NoSpeedTarget', ['cfg.objectiveMode = ''minEnergySpeedFixed'' 인데 ', ...
+            'v0_list가 비어 있습니다.\n공통 guess의 평균속도는 v_COM %.4g m/s (pelvis %.4g m/s) 입니다. ', ...
+            'v0_list에 평균속도 target [m/s]을 직접 입력하세요.'], guessSpeedCOM, guessMetrics.v_avg);
+    end
+    for b = 1:numel(boundSets)
+        vFloor = boundSets(b).distBound(1) / boundSets(b).timeBound(2);
+        vCeil = boundSets(b).distBound(2) / boundSets(b).timeBound(1);
+        if any(~isfinite(targetList) | targetList < vFloor | targetList > vCeil)
+            error('run_stateFixed:SpeedTargetOutOfBounds', ['v0_list %s 중 bound 세트 %s로 만들 수 없는 ', ...
+                '값이 있습니다 (가능 범위 %.4g-%.4g m/s).'], mat2str(targetList), boundSets(b).name, vFloor, vCeil);
+        end
+    end
+elseif strcmp(cfg.energyMetric, 'metabolicCoT')
     if isempty(E0_list)
         error('run_stateFixed:NoCoTTarget', ['cfg.energyMetric = ''metabolicCoT'' 인데 E0_CoT가 비어 있습니다.\n', ...
             '공통 guess의 CoT는 %.4g J/kg/m 입니다. E0_CoT에 CoT target [J/kg/m]을 직접 입력한 뒤 ', ...
@@ -144,27 +190,39 @@ if strcmp(cfg.energyMetric, 'metabolicCoT')
     end
 end
 
-%% ===== E0 x bound 세트별 실행 =====
+%% ===== target (E0 또는 v0) x bound 세트별 실행 =====
 metricTag = '';
 if strcmp(cfg.propulsionMetric, 'meanForce'), metricTag = '_mpf'; end
 if strcmp(propCases(1).mode, 'range'), metricTag = [metricTag '_jrange']; end
 energyTag = '';
 if strcmp(cfg.energyMetric, 'metabolicCoT'), energyTag = '_cot'; end
-baseTag = sprintf('stateFixed_%s%s%s_%s', erase(cfg.objectiveMode, 'SpeedStateFixed'), metricTag, ...
-    energyTag, char(datetime('now', 'Format', 'yyyyMMdd_HHmmss')));
-summaries = cell(numel(E0_list), numel(boundSets));
-for e = 1:numel(E0_list)
-    cfg.E0 = E0_list(e);
-    e0Tag = ['E' strrep(sprintf('%g', cfg.E0), '.', 'p')];
+runTime = char(datetime('now', 'Format', 'yyyyMMdd_HHmmss'));
+if isSpeedFixed
+    baseTag = sprintf('speedFixed_min%s%s_%s', metricTag, energyTag, runTime);
+else
+    baseTag = sprintf('stateFixed_%s%s%s_%s', erase(cfg.objectiveMode, 'SpeedStateFixed'), metricTag, ...
+        energyTag, runTime);
+end
+summaries = cell(numel(targetList), numel(boundSets));
+for e = 1:numel(targetList)
+    if isSpeedFixed
+        cfg.speedTarget = targetList(e);
+        targetTag = ['V' strrep(sprintf('%g', cfg.speedTarget), '.', 'p')];
+        targetText = sprintf('v0 = %g m/s (minimize %s)', cfg.speedTarget, cfg.energyMetric);
+    else
+        cfg.E0 = targetList(e);
+        targetTag = ['E' strrep(sprintf('%g', cfg.E0), '.', 'p')];
+        targetText = sprintf('E0 = %g (%s)', cfg.E0, cfg.energyMetric);
+    end
     for b = 1:numel(boundSets)
         cfg.timeBound = boundSets(b).timeBound;
         cfg.distBound = boundSets(b).distBound;
-        cfg.guessSto = guessFor(cfg.E0, boundSets(b).name);
-        cfg.runTag = sprintf('%s_%s_%s', baseTag, e0Tag, boundSets(b).name);
+        cfg.guessSto = guessFor(targetList(e), boundSets(b).name);
+        cfg.runTag = sprintf('%s_%s_%s', baseTag, targetTag, boundSets(b).name);
         vFloor = cfg.distBound(1) / cfg.timeBound(2);
         vCeil = cfg.distBound(2) / cfg.timeBound(1);
-        fprintf('\n##### %s E0 = %g (%s), bound set %s: time %s s, dist %s m (v range %.3f-%.3f m/s) #####\n', ...
-            cfg.objectiveMode, cfg.E0, cfg.energyMetric, boundSets(b).name, mat2str(cfg.timeBound), ...
+        fprintf('\n##### %s %s, bound set %s: time %s s, dist %s m (v range %.3f-%.3f m/s) #####\n', ...
+            cfg.objectiveMode, targetText, boundSets(b).name, mat2str(cfg.timeBound), ...
             mat2str(cfg.distBound), vFloor, vCeil);
         for k = 1:numel(propCases)
             [~, guessName, guessExt] = fileparts(cfg.guessSto{k});
@@ -179,8 +237,8 @@ for e = 1:numel(E0_list)
             summaries{e, b} = s;
         catch ME
             % 한 세트가 실패해도 다음 세트를 계속 돌린다.
-            warning('run_stateFixed:BoundSetFailed', 'E0 = %g, bound set %s failed: %s', ...
-                cfg.E0, boundSets(b).name, ME.message);
+            warning('run_stateFixed:BoundSetFailed', '%s, bound set %s failed: %s', ...
+                targetText, boundSets(b).name, ME.message);
         end
     end
 end
@@ -191,8 +249,13 @@ if isempty(summaries)
 else
     allSummary = vertcat(summaries{:});
     writetable(allSummary, fullfile(cfg.resultsDir, [baseTag '_bounds_summary.csv']));
-    disp(allSummary(:, {'EnergyMetric', 'E_target', 'E_actual', 'BoundSet', 'Case', 'Verdict', ...
+    if isSpeedFixed
+        targetColumns = {'EnergyMetric', 'SpeedTarget_mps', 'SpeedCOM_mps', 'SpeedPass', 'E_actual'};
+    else
+        targetColumns = {'EnergyMetric', 'E_target', 'E_actual'};
+    end
+    disp(allSummary(:, [targetColumns, {'BoundSet', 'Case', 'Verdict', ...
         'PropulsionConstraintMode', 'PropulsionLower', 'PropulsionUpper', 'PropulsionActual', ...
         'PropulsionPass', 'PropulsionBoundHits', 'P_gate_actual', 'MeanPropulsiveForce_N', ...
-        'v_avg_mps', 'VFloor_mps', 'VCeil_mps', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}));
+        'v_avg_mps', 'VFloor_mps', 'VCeil_mps', 'PhaseDuration_s', 'PhaseDistance_m', 'BoundHits'}]));
 end
