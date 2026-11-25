@@ -11,9 +11,14 @@
 % 실행 묶음(runGroups)마다 두 그림을 따로 그린다 (예: J = P_gate 묶음, J = 평균 추진력 묶음).
 %
 % minEnergySpeedFixed 묶음 (run_stateFixed의 speedFixed_min_* 실행, bound 세트 S1):
-%   첫 번째 그림은 x = 목표 평균속도 v0 (실행 당시 mocoSpeedTarget, 요약의 SpeedTarget_mps),
-%   y = 최소화한 E (E_actual; metabolicCoT면 CoT)로, 같은 J 구간(range) 또는 target(equality)의
-%   점을 v0 순서로 잇는다 (J별 색, 범례에 구간; connectBy는 쓰지 않는다). 측정 v_COM은 표에 남긴다.
+%   첫 번째 그림은 x = 평균속도 (실행 당시 v0 = mocoSpeedTarget, 요약의 SpeedTarget_mps),
+%   y = 최소화한 E (E_actual; metabolicCoT면 CoT), 점 색은 J (stateFixed 그림과 같은 축·색).
+%   connectBy = 'E0'이면 같은 v0의 J1-J2-J3를 회색 선으로, 'J'이면 같은 J의 점을 v0 순서로
+%   J 색 선으로 잇는다. 측정 v_COM은 표에 남긴다.
+%
+% J가 range 제약이면 두 그림 모두 해가 고른 J 값(PropulsionActual)을 적는다: 첫 번째 그림은
+% 각 점 옆 글자(구간 경계에 붙었으면 "(lower)"/"(upper)"), 두 번째 그림은 범례.
+% 글자가 겹치면 벌리고 옮긴 글자는 가는 선으로 점과 잇는다.
 %   두 번째 그림은 v0마다 한 행에 J별 오른발 AP-GRF를 겹치고 범례에 E 값을 적는다.
 %
 % 데이터: <resultsDir>/<runTag>_bounds_summary.csv (run_stateFixed가 쓰는 E0 x 세트 전체 요약),
@@ -29,13 +34,16 @@ resultsDir = fullfile(thisScriptDir, '..', 'results');
 % 같은 objectiveMode, 같은 J 지표여야 한다.
 %   J = P_gate:  stateFixed_max_20261101_160827 (E0 = 0.10), stateFixed_max_20261102_002630 (E0 = 0.08, 0.12)
 %   J = 평균 추진력: stateFixed_max_mpf_20261102_164708 (E0 = 0.08, 0.10, 0.12)
-%   minEnergySpeedFixed: 예) runGroups = {{'speedFixed_min_jrange_cot_<시각>'}}; boundSet = 'S1';
-runGroups = { ...
-    {'stateFixed_max_20261101_160827', 'stateFixed_max_20261102_002630'}, ...
-    {'stateFixed_max_mpf_20261102_164708'}};
-boundSet = 'X3';
-connectBy = 'E0';   % 'E0': 같은 E0의 J1-J2-J3를 잇는다 | 'J': 같은 J의 점을 E0 순서로 잇는다
-                    % (minEnergySpeedFixed는 항상 같은 J를 v0 순서로 잇는다)
+%     (boundSet = 'X3')
+%   minEnergySpeedFixed (boundSet = 'S1'):
+%     effort, J = 평균 추진력 구간: speedFixed_min_mpf_jrange_20261124_151249 (v0 = 0.8, 1.0, 1.2)
+% runGroups = { ...
+%     {'stateFixed_max_20261101_160827', 'stateFixed_max_20261102_002630'}, ...
+%     {'stateFixed_max_mpf_20261102_164708'}};
+runGroups = {{'speedFixed_min_mpf_jrange_20261124_151249'}};
+boundSet = 'S1';
+connectBy = 'E0';   % 'E0': 같은 E0 (minEnergySpeedFixed는 같은 v0)의 J1-J2-J3를 회색 선으로 잇는다
+                    % 'J': 같은 J의 점을 E0 (v0) 순서로 J 색 선으로 잇는다
 
 %% ===== 묶음별 그림과 저장 =====
 outDir = fullfile(resultsDir, 'stateFixed_plots', char(datetime('now', 'Format', 'yyyyMMdd_HHmmss')));
@@ -51,7 +59,7 @@ for g = 1:numel(runGroups)
         error('plot_stateFixed:SameGroupTag', '묶음 %d의 그림 이름(%s)이 앞 묶음과 겹칩니다.', g, figTag);
     end
     if spec.isSpeedFixed
-        figs = {plotMinEnergy(data, spec), plotApGrf(data, spec, resultsDir)};
+        figs = {plotMinEnergy(data, spec, connectBy), plotApGrf(data, spec, resultsDir)};
         levelColumns = {'SpeedTarget_mps', 'SpeedCOM_mps'};
     else
         figs = {plotSpeed(data, spec, connectBy), plotApGrf(data, spec, resultsDir)};
@@ -110,14 +118,19 @@ function data = readRuns(resultsDir, runTags, boundSet)
             t.PropulsionUpper = t.RunPropulsionTarget;
         end
         % 속도 열은 minEnergySpeedFixed 이전 요약에 없다 (stateFixed 행은 NaN).
-        for c = {'SpeedTarget_mps', 'SpeedCOM_mps'}
+        % 해가 고른 J (PropulsionActual)와 구간 경계 접촉은 range 제약 이전 요약에 없다.
+        for c = {'SpeedTarget_mps', 'SpeedCOM_mps', 'PropulsionActual'}
             if ~ismember(c{1}, t.Properties.VariableNames), t.(c{1}) = NaN(height(t), 1); end
         end
+        if ~ismember('PropulsionBoundHits', t.Properties.VariableNames)
+            t.PropulsionBoundHits = strings(height(t), 1);
+        end
         parts{r} = t(:, [cols, {'EnergyMetric', 'PropulsionConstraintMode', 'PropulsionLower', ...
-            'PropulsionUpper', 'SpeedTarget_mps', 'SpeedCOM_mps'}]);
+            'PropulsionUpper', 'PropulsionActual', 'PropulsionBoundHits', 'SpeedTarget_mps', 'SpeedCOM_mps'}]);
     end
     data = vertcat(parts{:});
     data.BoundHits = fillmissing(data.BoundHits, 'constant', "");
+    data.PropulsionBoundHits = fillmissing(data.PropulsionBoundHits, 'constant', "");
     data = data(data.BoundSet == boundSet, :);
     if isempty(data)
         error('plot_stateFixed:NoRows', '%s에 bound 세트 %s의 case가 없습니다.', strjoin(runTags, ', '), boundSet);
@@ -190,7 +203,8 @@ function spec = metricSpec(data)
         spec.jName = 'Propulsion'; spec.jUnit = 'N\cdots'; spec.metricTag = 'pgate';
     end
     spec.targetText = sprintf('Target(J) : %s', spec.jName);   % 예: 'Target(J) : Propulsion'
-    if all(data.PropulsionConstraintMode == "range")
+    spec.isRange = all(data.PropulsionConstraintMode == "range");   % 해가 고른 J를 그림에 적는다
+    if spec.isRange
         spec.targetText = sprintf('Range(J) : %s', spec.jName);   % 허용 구간 제약 (단일 target 아님)
     end
     % minEnergySpeedFixed: 행/수준은 v0, y는 최소화한 E (target 없음).
@@ -216,9 +230,10 @@ function spec = metricSpec(data)
 end
 
 
-function fig = plotMinEnergy(data, spec)
-% minEnergySpeedFixed: x = 목표 평균속도 v0, y = 최소화한 E. 같은 J 수준(range 구간 또는
-% equality target)의 점을 v0 순서로 선으로 잇고 J별 색과 범례를 쓴다 (plotSpeed와 같은 마커 규칙).
+function fig = plotMinEnergy(data, spec, connectBy)
+% minEnergySpeedFixed: x = 평균속도 v0, y = 최소화한 E, 점 색 = J (plotSpeed와 같은 축·색·마커 규칙).
+% connectBy 'E0': 같은 v0의 J1-J2-J3를 회색 선으로 | 'J': 같은 J 수준(range 구간 또는 equality
+% target)의 점을 v0 순서로 J 색 선으로 잇는다.
     [ink, jColor, J_levels] = plotColors(data);
     nJ = numel(J_levels);
     v0_levels = unique(data.Level);
@@ -227,13 +242,28 @@ function fig = plotMinEnergy(data, spec)
     fig = figure('Color', 'w', 'Position', [100 100 680 440]);
     ax = axes(fig); hold(ax, 'on');
     styleAxes(ax, ink);
+
+    % 선을 먼저 그리고 점을 위에 올린다 (data는 v0, J 순으로 정렬되어 있다).
+    switch connectBy
+        case 'E0'
+            for v = 1:numel(v0_levels)
+                rows = data.Level == v0_levels(v);
+                plot(ax, data.Level(rows), data.E_actual(rows), '-', 'Color', ink(3, :), ...
+                    'LineWidth', 2, 'HandleVisibility', 'off');
+            end
+        case 'J'
+            for j = 1:nJ
+                rows = data.J == J_levels(j);
+                plot(ax, data.Level(rows), data.E_actual(rows), '-', 'Color', jColor(j, :), ...
+                    'LineWidth', 2, 'HandleVisibility', 'off');
+            end
+        otherwise
+            error('plot_stateFixed:ConnectBy', 'connectBy는 ''E0'' 또는 ''J''입니다: %s', connectBy);
+    end
+
     hJ = gobjects(nJ, 1);
     for j = 1:nJ
         rows = find(data.J == J_levels(j));
-        [~, order] = sort(data.Level(rows));
-        rows = rows(order);
-        plot(ax, data.Level(rows), data.E_actual(rows), '-', 'Color', jColor(j, :), ...
-            'LineWidth', 2, 'HandleVisibility', 'off');
         hJ(j) = plot(ax, NaN, NaN, 'o', 'MarkerSize', 10, ...
             'LineWidth', 1.5, 'MarkerEdgeColor', 'w', 'MarkerFaceColor', jColor(j, :), ...
             'DisplayName', sprintf('J%d %s %s', j, data.JText(rows(1)), spec.jUnit));
@@ -251,7 +281,7 @@ function fig = plotMinEnergy(data, spec)
     end
     legend(ax, hLegend, 'Location', 'best', 'Box', 'off');
 
-    xlabel(ax, 'Target average speed v_0 (m/s)');
+    xlabel(ax, 'Velocity (m/s)');
     ylabel(ax, spec.energyLabel);
     xticks(ax, v0_levels);
     vPad = max(0.1 * (max(v0_levels) - min(v0_levels)), 0.05);
@@ -261,7 +291,10 @@ function fig = plotMinEnergy(data, spec)
         ePad = max(0.15 * (max(e) - min(e)), 0.02 * max(abs(e)));
         ylim(ax, [min(e) - ePad, max(e) + ePad]);
     end
-    title(ax, ['Minimum ' spec.energyName ' at Fixed Speed - ' spec.targetText], ...
+    if spec.isRange   % 같은 v0 열의 글자는 세로로 벌린다
+        labelChosenJ(ax, data.Level, data.E_actual, data.Level, chosenJText(data, spec), 'y', ink);
+    end
+    title(ax, ['Minimum ' spec.energyName ' - ' spec.targetText], ...
         'Color', ink(1, :), 'FontSize', 14);
 end
 
@@ -325,6 +358,9 @@ function fig = plotSpeed(data, spec, connectBy)
     xlim(ax, [min(data.v_avg_mps) - vPad, max(data.v_avg_mps) + vPad]);
     ePad = max(0.15 * (max(E0_levels) - min(E0_levels)), 0.005);
     ylim(ax, [min(E0_levels) - ePad, max(E0_levels) + ePad]);
+    if spec.isRange   % 같은 E0 행의 글자는 점 위에서 가로로 벌린다
+        labelChosenJ(ax, data.v_avg_mps, data.E0, data.E0, chosenJText(data, spec), 'x', ink);
+    end
     title(ax, ['Average Velocity - ' spec.targetText], 'Color', ink(1, :), 'FontSize', 14);
 end
 
@@ -360,9 +396,13 @@ function fig = plotApGrf(data, spec, resultsDir)
             else
                 valueText = sprintf('%.3f m/s', data.v_avg_mps(row));
             end
+            jText = sprintf('%s %s', data.JText(row), spec.jUnit);
+            if spec.isRange   % 해가 고른 J
+                jText = sprintf('%s \\rightarrow %.1f %s', jText, data.PropulsionActual(row), spec.jUnit);
+            end
             plot(axs(e), grf(:, 1), grf(:, strcmp(labels, 'ground_force_r_vx')), 'Color', jColor(j, :), ...
-                'LineWidth', 2, 'LineStyle', style, 'DisplayName', sprintf('J%d %s %s - %s%s', ...
-                j, data.JText(row), spec.jUnit, valueText, note));
+                'LineWidth', 2, 'LineStyle', style, 'DisplayName', sprintf('J%d %s - %s%s', ...
+                j, jText, valueText, note));
             tRange = [min(tRange(1), grf(1, 1)), max(tRange(2), grf(end, 1))];
         end
         title(axs(e), sprintf(spec.levelRowText, E0_levels(e)), 'Color', ink(1, :), 'FontWeight', 'normal');
@@ -376,6 +416,94 @@ function fig = plotApGrf(data, spec, resultsDir)
     xlabel(tl, 'Time (s)', 'Color', ink(2, :), 'FontSize', 13);
     ylabel(tl, 'Force (N)', 'Color', ink(2, :), 'FontSize', 13);
     title(tl, ['Right apGRF - ' spec.targetText], 'Color', ink(1, :), 'FontSize', 14);
+end
+
+
+function labels = chosenJText(data, spec)
+% range 제약에서 해가 고른 J 값과 단위. 구간 경계에 붙었으면 그 경계를 덧붙인다.
+    labels = compose("%.1f %s", data.PropulsionActual, string(spec.jUnit));
+    hit = data.PropulsionBoundHits ~= "";
+    labels(hit) = labels(hit) + " (" + data.PropulsionBoundHits(hit) + ")";
+end
+
+
+function labelChosenJ(ax, x, y, group, labels, spreadDim, ink)
+% 점 (x, y)마다 labels를 쓴다. spreadDim 'y': 점 오른쪽에 쓰고 같은 group(v0 열) 안에서 세로로
+% 벌린다 | 'x': 점 위에 쓰고 같은 group(E0 행) 안에서 가로로 벌린다. 원래 자리에서 옮긴 글자는
+% 가는 회색 선으로 점과 잇고, 글자가 축 밖으로 나가면 축 범위를 넓힌다.
+    keep = isfinite(x) & isfinite(y);
+    x = x(keep); y = y(keep); group = group(keep); labels = labels(keep);
+    if isempty(x), return; end
+    xl = xlim(ax); yl = ylim(ax);
+    h = gobjects(numel(x), 1);
+    if spreadDim == 'y'
+        off = 0.035 * diff(xl);
+        for i = 1:numel(x)
+            h(i) = text(ax, x(i) + off, y(i), labels(i), 'FontSize', 9, 'Color', ink(2, :), ...
+                'HorizontalAlignment', 'left', 'VerticalAlignment', 'middle');
+        end
+    else
+        off = 0.06 * diff(yl);
+        for i = 1:numel(x)
+            h(i) = text(ax, x(i), y(i) + off, labels(i), 'FontSize', 9, 'Color', ink(2, :), ...
+                'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom');
+        end
+    end
+    groups = unique(group);
+    for g = 1:numel(groups)
+        idx = find(group == groups(g));
+        if spreadDim == 'y', anchor = y(idx); else, anchor = x(idx); end
+        [anchor, order] = sort(anchor);
+        idx = idx(order);
+        ext = vertcat(h(idx).Extent);   % [left bottom width height], data 단위
+        if spreadDim == 'y', sz = ext(:, 4); else, sz = ext(:, 3); end
+        pos = spreadLabels(anchor, sz);
+        for k = 1:numel(idx)
+            p = h(idx(k)).Position;
+            if spreadDim == 'y'
+                p(2) = pos(k);
+            else
+                p(1) = pos(k);
+            end
+            h(idx(k)).Position = p;
+            if abs(pos(k) - anchor(k)) > 0.25 * sz(k)
+                if spreadDim == 'y'
+                    plot(ax, x(idx(k)) + [0.35, 0.9] * off, [anchor(k), pos(k)], '-', ...
+                        'Color', ink(3, :), 'LineWidth', 0.75, 'HandleVisibility', 'off');
+                else
+                    plot(ax, [anchor(k), pos(k)], y(idx(k)) + [0.35, 0.9] * off, '-', ...
+                        'Color', ink(3, :), 'LineWidth', 0.75, 'HandleVisibility', 'off');
+                end
+            end
+        end
+    end
+    ext = vertcat(h.Extent);
+    xlim(ax, [min(xl(1), min(ext(:, 1))), max(xl(2), max(ext(:, 1) + ext(:, 3)) + 0.01 * diff(xl))]);
+    ylim(ax, [min(yl(1), min(ext(:, 2))), max(yl(2), max(ext(:, 2) + ext(:, 4)))]);
+end
+
+
+function pos = spreadLabels(anchor, sz)
+% 오름차순 anchor에 크기 sz인 글자를 겹치지 않게 둔다 (간격은 두 글자 크기 평균의 1.1배).
+% 겹치는 글자들은 한 묶음으로 쌓아 그 점들의 가운데에 두고, 묶음끼리 다시 겹치면 합친다.
+    pos = anchor(:); sz = sz(:);
+    first = (1:numel(pos))'; last = first;   % 묶음마다 시작/끝 index
+    merged = true;
+    while merged
+        merged = false;
+        for c = 1:numel(first) - 1
+            if pos(first(c + 1)) - pos(last(c)) < 0.55 * (sz(last(c)) + sz(first(c + 1)))
+                k = (first(c):last(c + 1))';
+                stack = [0; cumsum(0.55 * (sz(k(1:end - 1)) + sz(k(2:end))))];
+                pos(k) = stack - mean(stack) + mean(anchor(k));
+                last(c) = last(c + 1);
+                first(c + 1) = [];
+                last(c + 1) = [];
+                merged = true;
+                break;
+            end
+        end
+    end
 end
 
 
